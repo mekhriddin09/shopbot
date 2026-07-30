@@ -1,0 +1,100 @@
+"""Background task that polls pending crypto invoices and auto-delivers
+paid orders — no webhook server required.
+
+Runs as an asyncio task alongside the bot's polling loop (see main.py).
+Each iteration opens its own short-lived DB session so it never competes
+with request-handling sessions for a single connection.
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+
+from aiogram import Bot
+
+from app.config.settings import settings
+from app.database.engine import async_session_maker
+from app.keyboards.admin_kb import admin_write_manual_kb
+from app.repositories.order_repo import OrderRepository
+from app.services.crypto.registry import get_crypto_provider
+from app.services.delivery_service import DeliveryService
+from app.services.exceptions import DeliveryFailedError, InvalidOrderStateError
+from app.services.notify import notify_admins_text
+from app.utils.formatting import build_delivered_message
+
+logger = logging.getLogger("providers")
+order_logger = logging.getLogger("orders")
+
+
+async def crypto_poller_loop(bot: Bot) -> None:
+    logger.info("Crypto payment poller started (interval=%ss)", settings.CRYPTO_POLL_INTERVAL_SECONDS)
+    while True:
+        try:
+            await _poll_once(bot)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - poller must never die silently crash the bot
+            logger.exception("Crypto poller iteration failed")
+        await asyncio.sleep(settings.CRYPTO_POLL_INTERVAL_SECONDS)
+
+
+async def _poll_once(bot: Bot) -> None:
+    async with async_session_maker() as session:
+        orders_repo = OrderRepository(session)
+        pending = await orders_repo.list_awaiting_crypto_payment()
+        if not pending:
+            return
+
+        for order in pending:
+            provider = get_crypto_provider(order.crypto_provider)
+            if provider is None or not order.crypto_invoice_id:
+                continue
+
+            status = await provider.check_invoice(order.crypto_invoice_id)
+            if not status.success or not status.paid:
+                continue
+
+            order_logger.info("crypto_payment_confirmed order=%s provider=%s", order.order_uuid, order.crypto_provider)
+
+            delivery = DeliveryService(session)
+            try:
+                result = await delivery.auto_deliver_crypto(order.id)
+            except (InvalidOrderStateError, DeliveryFailedError) as exc:
+                logger.error("crypto auto-delivery failed for order=%s: %s", order.order_uuid, exc)
+                await notify_admins_text(
+                    bot, session,
+                    f"⚠️ Kripto to'lov tasdiqlandi, lekin yetkazishda xatolik: <code>{order.order_uuid}</code>\n{exc}",
+                )
+                continue
+
+            lang = order.user.language
+            if result.delivered_now and result.payload:
+                await bot.send_message(
+                    order.user.telegram_id,
+                    build_delivered_message(lang, order, result.payload),
+                )
+            elif result.needs_manual_message:
+                # Crypto payment confirmed, but this product is delivered
+                # manually — give admins a one-tap way to write the message.
+                await _notify_admins_with_manual_button(bot, session, order.id, order.order_uuid, order.product.name)
+
+
+async def _notify_admins_with_manual_button(
+    bot: Bot, session, order_id: int, order_uuid: str, product_name: str
+) -> None:
+    from app.config.settings import settings as cfg
+    from app.repositories.admin_repo import AdminRepository
+
+    ids = set(cfg.admin_ids)
+    for admin in await AdminRepository(session).list_active():
+        ids.add(admin.telegram_id)
+
+    text = (
+        f"💰 Kripto to'lov tasdiqlandi: <code>{order_uuid}</code> ({product_name}).\n"
+        f"Bu mahsulot qo'lda yetkaziladi — mijozga yuboriladigan xabarni yozing:"
+    )
+    for admin_id in ids:
+        try:
+            await bot.send_message(admin_id, text, reply_markup=admin_write_manual_kb(order_id))
+        except Exception:  # noqa: BLE001
+            logger.warning("Failed to notify admin %s about manual crypto delivery", admin_id)

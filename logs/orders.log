@@ -1,0 +1,12 @@
+2026-07-30 18:43:40,670 | INFO     | orders | order_created id=8AA8FADFF7FE user=1403306196 product=gemini pro price=39000.00
+2026-07-30 18:43:53,569 | INFO     | orders | order_approved id=8AA8FADFF7FE admin=1403306196 product=1
+2026-07-30 18:44:14,501 | INFO     | orders | order_delivered id=8AA8FADFF7FE mode=manual admin=1403306196
+2026-07-31 01:08:30,072 | INFO     | orders | order_created id=3F0C83122946 user=1403306196 product=gemini pro price=39000.00
+2026-07-31 01:08:45,819 | INFO     | orders | order_approved id=3F0C83122946 admin=1403306196 product=1
+2026-07-31 01:19:14,670 | INFO     | orders | order_created id=A524FA98311B user=1403306196 product=gemini pro price=39000.00
+2026-07-31 01:19:38,080 | INFO     | orders | order_rejected id=A524FA98311B admin=1403306196 reason=xato
+2026-07-31 01:28:45,313 | INFO     | orders | order_created id=8CA38BAC16D8 user=1403306196 product=gemini pro price=39000.00
+2026-07-31 01:28:58,351 | INFO     | orders | order_approved id=8CA38BAC16D8 admin=1403306196 product=1
+2026-07-31 01:28:58,369 | INFO     | orders | order_delivered id=8CA38BAC16D8 mode=inventory
+2026-07-31 02:58:12,889 | INFO     | orders | order_created id=63CAAD39CE38 user=1403306196 product=gemini pro price=39000.00
+2026-07-31 02:58:28,168 | INFO     | orders | order_rejected id=63CAAD39CE38 admin=1403306196 reason=xato
