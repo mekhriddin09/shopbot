@@ -162,6 +162,17 @@ class OrderRepository:
         )
         return float(result.scalar_one())
 
+    async def list_buyer_user_ids(self, product_id: int | None = None) -> set[int]:
+        """Distinct `user_id`s that have at least one successfully DELIVERED
+        order — the definition of "a customer" used by the broadcast
+        audience filter (task: xarid qilgan/qilmagan). Optionally scoped to
+        a single product for the "by product" filter."""
+        stmt = select(Order.user_id).where(Order.status == OrderStatus.DELIVERED).distinct()
+        if product_id is not None:
+            stmt = stmt.where(Order.product_id == product_id)
+        result = await self.session.execute(stmt)
+        return set(result.scalars().all())
+
     async def most_sold_products(self, limit: int = 5) -> list[tuple[str, int]]:
         result = await self.session.execute(
             select(Product.name, func.count(Order.id).label("cnt"))

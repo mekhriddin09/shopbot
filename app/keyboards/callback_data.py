@@ -39,7 +39,7 @@ class LangCB(CallbackData, prefix="lang"):
 
 
 class CryptoCB(CallbackData, prefix="crypto"):
-    action: str  # buy | check
+    action: str  # buy | check | cancel
     product_id: int = 0
     order_id: int = 0
     provider: str | None = None
@@ -63,7 +63,7 @@ class AdminInventoryCB(CallbackData, prefix="ainv"):
 
 
 class AdminOrderListCB(CallbackData, prefix="aordl"):
-    action: str  # pending | approved | rejected | search_menu | search_by_id | search_by_user | search_by_product
+    action: str  # pending | approved | delivered | failed | rejected
 
 
 class AdminSettingsCB(CallbackData, prefix="aset"):
@@ -74,6 +74,11 @@ class AdminSettingsCB(CallbackData, prefix="aset"):
 class AdminAdminsCB(CallbackData, prefix="aadm"):
     action: str  # list | add | remove
     telegram_id: int = 0
+
+
+class AdminBroadcastCB(CallbackData, prefix="abcast"):
+    action: str  # menu | all | bought | not_bought | by_product | product_pick | product_bought | product_not_bought | confirm | cancel
+    product_id: int = 0
 
 
 class ConfirmCB(CallbackData, prefix="confirm"):

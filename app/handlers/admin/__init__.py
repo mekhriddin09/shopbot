@@ -1,6 +1,7 @@
 from aiogram import Router
 
 from app.handlers.admin import (
+    broadcast,
     generic_input,
     inventory,
     menu,
@@ -17,6 +18,7 @@ admin_router.include_router(products.router)
 admin_router.include_router(inventory.router)
 admin_router.include_router(orders.router)
 admin_router.include_router(admin_settings.router)
+admin_router.include_router(broadcast.router)
 admin_router.include_router(stats.router)
 admin_router.include_router(generic_input.router)
 # Registered last: broadly matches any admin "reply" — more specific,

@@ -277,6 +277,22 @@ async def crypto_buy(
     await callback.answer()
 
 
+@router.callback_query(CryptoCB.filter(F.action == "cancel"))
+async def crypto_cancel(callback: CallbackQuery, callback_data: CryptoCB, session: AsyncSession, lang: str) -> None:
+    order_service = OrderService(session)
+    order = await OrderRepository(session).get_by_id(callback_data.order_id)
+    if order is None:
+        await callback.answer(t(lang, "msg_order_not_found"), show_alert=True)
+        return
+    cancelled = await order_service.cancel_pending(callback_data.order_id)
+    if not cancelled:
+        # Already paid/confirmed/cancelled in the meantime — nothing to undo.
+        await callback.answer(t(lang, "msg_crypto_already_processed"), show_alert=True)
+        return
+    await callback.message.edit_text(t(lang, "msg_crypto_cancelled_by_user", order_uuid=order.order_uuid))
+    await callback.answer()
+
+
 @router.callback_query(CryptoCB.filter(F.action == "check"))
 async def crypto_check(callback: CallbackQuery, callback_data: CryptoCB, session: AsyncSession, lang: str) -> None:
     orders = OrderRepository(session)

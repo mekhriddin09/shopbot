@@ -26,6 +26,7 @@ admin_actions_logger = logging.getLogger("admin_actions")
 _STATUS_MAP = {
     "pending": OrderStatus.PENDING_APPROVAL,
     "approved": OrderStatus.APPROVED,
+    "delivered": OrderStatus.DELIVERED,
     "failed": OrderStatus.FAILED,
     "rejected": OrderStatus.REJECTED,
 }
@@ -56,6 +57,8 @@ async def list_orders(callback: CallbackQuery, callback_data: AdminOrderListCB, 
         await callback.message.answer("Bu bo'limda buyurtmalar yo'q.")
         await callback.answer()
         return
+    if len(orders) == 50:
+        await callback.message.answer("ℹ️ Faqat so'nggi 50 ta buyurtma ko'rsatilmoqda.")
     for order in orders:
         if status in _NEEDS_MANUAL_BUTTON:
             await callback.message.answer(_order_line(order), reply_markup=admin_write_manual_kb(order.id))
@@ -103,6 +106,7 @@ async def approve_order(callback: CallbackQuery, callback_data: OrderCB, session
             build_delivered_message(lang, order, result.payload),
         )
         await callback.message.edit_text(callback.message.text + "\n\n✅ TASDIQLANDI VA YETKAZILDI")
+        await callback.message.edit_reply_markup(reply_markup=None)
     elif result.needs_manual_message:
         await state.set_state(AdminInput.waiting_text)
         await state.update_data(action="manual_deliver", order_id=order.id)

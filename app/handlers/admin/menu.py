@@ -7,9 +7,11 @@ from aiogram.types import Message
 
 from app.filters.is_admin import IsAdmin
 from app.keyboards.admin_kb import (
+    ADMIN_BTN_BROADCAST,
     ADMIN_BTN_EXIT,
     ADMIN_BTN_ORDERS,
     ADMIN_BTN_SETTINGS,
+    admin_broadcast_menu_kb,
     admin_main_menu_kb,
     admin_orders_menu_kb,
     admin_settings_menu_kb,
@@ -36,6 +38,12 @@ async def goto_orders(message: Message) -> None:
 @router.message(F.text == ADMIN_BTN_SETTINGS)
 async def goto_settings(message: Message) -> None:
     await message.answer("⚙️ Sozlamalar:", reply_markup=admin_settings_menu_kb())
+
+
+@router.message(F.text == ADMIN_BTN_BROADCAST)
+async def goto_broadcast(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer("\U0001F4E2 Kimga xabar yubormoqchisiz?", reply_markup=admin_broadcast_menu_kb())
 
 
 @router.message(F.text == ADMIN_BTN_EXIT)

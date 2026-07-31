@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
 
 from aiogram import Bot
 
@@ -20,10 +21,22 @@ from app.services.crypto.registry import get_crypto_provider
 from app.services.delivery_service import DeliveryService
 from app.services.exceptions import DeliveryFailedError, InvalidOrderStateError
 from app.services.notify import notify_admins_text
+from app.services.order_service import OrderService
 from app.utils.formatting import build_delivered_message
+from app.utils.i18n import t
 
 logger = logging.getLogger("providers")
 order_logger = logging.getLogger("orders")
+
+
+def _age_minutes(created_at: datetime) -> float:
+    """Minutes elapsed since `created_at`, tolerant of both naive and
+    timezone-aware datetimes (SQLite/aiosqlite may hand back either
+    depending on how the row was written)."""
+    now = datetime.now(timezone.utc)
+    if created_at.tzinfo is None:
+        now = now.replace(tzinfo=None)
+    return (now - created_at).total_seconds() / 60.0
 
 
 async def crypto_poller_loop(bot: Bot) -> None:
@@ -46,6 +59,25 @@ async def _poll_once(bot: Bot) -> None:
             return
 
         for order in pending:
+            if _age_minutes(order.created_at) >= settings.CRYPTO_PAYMENT_TIMEOUT_MINUTES:
+                # Abandoned invoice: give up on it instead of holding a
+                # reserved inventory code hostage forever. Release the
+                # reservation, mark the order cancelled, and let the
+                # customer know so they can start over if they still want it.
+                cancelled = await OrderService(session).cancel_pending(order.id)
+                if cancelled:
+                    order_logger.info(
+                        "crypto_payment_timeout order=%s provider=%s", order.order_uuid, order.crypto_provider
+                    )
+                    try:
+                        await bot.send_message(
+                            order.user.telegram_id,
+                            t(order.user.language, "msg_crypto_payment_timeout", order_uuid=order.order_uuid),
+                        )
+                    except Exception:  # noqa: BLE001 - user may have blocked the bot
+                        logger.warning("Failed to notify user %s about crypto timeout", order.user.telegram_id)
+                continue
+
             provider = get_crypto_provider(order.crypto_provider)
             if provider is None or not order.crypto_invoice_id:
                 continue

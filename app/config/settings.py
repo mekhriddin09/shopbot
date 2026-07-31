@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     # token xRocket supports.
     XROCKET_CURRENCY: str = "USDT"
     CRYPTO_POLL_INTERVAL_SECONDS: float = 20.0
+    # If a crypto invoice isn't paid within this many minutes, the order is
+    # auto-cancelled and any reserved inventory code is released back to
+    # stock — otherwise an abandoned invoice would hold a code hostage
+    # forever (see crypto_poller.py).
+    CRYPTO_PAYMENT_TIMEOUT_MINUTES: float = 10.0
 
     # --- External reseller API (Mode 3 delivery) ---
     RESELLER_API_BASE_URL: str = "http://2.26.230.116:8080"

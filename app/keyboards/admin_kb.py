@@ -10,6 +10,7 @@ from aiogram.types import (
 from app.database.models import Product
 from app.database.models.enums import DeliveryMode
 from app.keyboards.callback_data import (
+    AdminBroadcastCB,
     AdminInventoryCB,
     AdminMenuCB,
     AdminOrderListCB,
@@ -23,6 +24,7 @@ ADMIN_BTN_PRODUCTS = "\U0001F6CD️ Mahsulotlar"
 ADMIN_BTN_ORDERS = "\U0001F4E5 Buyurtmalar"
 ADMIN_BTN_STATS = "\U0001F4CA Statistika"
 ADMIN_BTN_SETTINGS = "⚙️ Sozlamalar"
+ADMIN_BTN_BROADCAST = "\U0001F4E2 Xabar yuborish"
 ADMIN_BTN_EXIT = "\U0001F6AA Admin paneldan chiqish"
 
 
@@ -31,6 +33,7 @@ def admin_main_menu_kb() -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text=ADMIN_BTN_PRODUCTS), KeyboardButton(text=ADMIN_BTN_ORDERS)],
             [KeyboardButton(text=ADMIN_BTN_STATS), KeyboardButton(text=ADMIN_BTN_SETTINGS)],
+            [KeyboardButton(text=ADMIN_BTN_BROADCAST)],
             [KeyboardButton(text=ADMIN_BTN_EXIT)],
         ],
         resize_keyboard=True,
@@ -221,6 +224,7 @@ def admin_orders_menu_kb() -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton(text="⏳ Kutilayotgan", callback_data=AdminOrderListCB(action="pending").pack())],
         [InlineKeyboardButton(text="✅ Tasdiqlangan", callback_data=AdminOrderListCB(action="approved").pack())],
+        [InlineKeyboardButton(text="📦 Yetkazilgan", callback_data=AdminOrderListCB(action="delivered").pack())],
         [InlineKeyboardButton(text="⚠️ Yetkazilmagan", callback_data=AdminOrderListCB(action="failed").pack())],
         [InlineKeyboardButton(text="❌ Rad etilgan", callback_data=AdminOrderListCB(action="rejected").pack())],
     ]
@@ -294,6 +298,64 @@ def product_lang_pick_kb(product_id: int, field_base: str) -> InlineKeyboardMark
         ],
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_broadcast_menu_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="\U0001F465 Barchaga", callback_data=AdminBroadcastCB(action="all").pack())],
+            [InlineKeyboardButton(text="✅ Xarid qilganlarga", callback_data=AdminBroadcastCB(action="bought").pack())],
+            [InlineKeyboardButton(text="\U0001F6AB Xarid qilmaganlarga", callback_data=AdminBroadcastCB(action="not_bought").pack())],
+            [InlineKeyboardButton(text="\U0001F4E6 Mahsulot bo'yicha", callback_data=AdminBroadcastCB(action="by_product").pack())],
+        ]
+    )
+
+
+def admin_broadcast_product_pick_kb(products: list[Product]) -> InlineKeyboardMarkup:
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=f"{p.emoji} {p.name}",
+                callback_data=AdminBroadcastCB(action="product_pick", product_id=p.id).pack(),
+            )
+        ]
+        for p in products
+    ]
+    rows.append(
+        [InlineKeyboardButton(text="\U0001F519 Orqaga", callback_data=AdminBroadcastCB(action="menu").pack())]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_broadcast_product_audience_kb(product_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Shuni xarid qilganlarga",
+                    callback_data=AdminBroadcastCB(action="product_bought", product_id=product_id).pack(),
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="\U0001F6AB Shuni xarid qilmaganlarga",
+                    callback_data=AdminBroadcastCB(action="product_not_bought", product_id=product_id).pack(),
+                )
+            ],
+            [InlineKeyboardButton(text="\U0001F519 Orqaga", callback_data=AdminBroadcastCB(action="by_product").pack())],
+        ]
+    )
+
+
+def admin_broadcast_confirm_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Ha, yuborish", callback_data=AdminBroadcastCB(action="confirm").pack()),
+                InlineKeyboardButton(text="❌ Bekor qilish", callback_data=AdminBroadcastCB(action="cancel").pack()),
+            ]
+        ]
+    )
 
 
 def confirm_kb(context: str, target_id: int = 0) -> InlineKeyboardMarkup:

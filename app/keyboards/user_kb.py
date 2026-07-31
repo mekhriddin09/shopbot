@@ -87,6 +87,12 @@ def crypto_invoice_kb(lang: str, pay_url: str, order_id: int) -> InlineKeyboardM
                     callback_data=CryptoCB(action="check", order_id=order_id).pack(),
                 )
             ],
+            [
+                InlineKeyboardButton(
+                    text=t(lang, "btn_cancel"),
+                    callback_data=CryptoCB(action="cancel", order_id=order_id).pack(),
+                )
+            ],
         ]
     )
 

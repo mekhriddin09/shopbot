@@ -63,18 +63,24 @@ class OrderService:
         )
         return order
 
-    async def cancel_pending(self, order_id: int) -> None:
-        """Called when a customer backs out before submitting payment proof
-        (the "❌ Cancel" button during the screenshot-upload step). Releases
-        any inventory reservation made in `start_purchase` back to the
-        available pool. No-op if the order has already moved past
-        AWAITING_PROOF (e.g. proof was already submitted)."""
+    _CANCELLABLE_STATUSES = (OrderStatus.AWAITING_PROOF, OrderStatus.AWAITING_CRYPTO_PAYMENT)
+
+    async def cancel_pending(self, order_id: int) -> bool:
+        """Called when a customer backs out before completing payment — the
+        "❌ Cancel" button during the screenshot-upload step (AWAITING_PROOF)
+        or on a still-unpaid crypto invoice (AWAITING_CRYPTO_PAYMENT), and
+        also by the crypto poller's auto-timeout for abandoned invoices.
+        Releases any inventory reservation made in `start_purchase` /
+        `crypto_buy` back to the available pool. No-op (returns False) if
+        the order has already moved past one of those two states (e.g.
+        proof was already submitted, or payment already confirmed)."""
         order = await self.orders.get_by_id(order_id)
-        if order is None or order.status != OrderStatus.AWAITING_PROOF:
-            return
+        if order is None or order.status not in self._CANCELLABLE_STATUSES:
+            return False
         await self.orders.set_status(order, OrderStatus.CANCELLED)
         await self.inventory.release_reservation(order.id)
-        order_logger.info("order_cancelled_by_user id=%s", order.order_uuid)
+        order_logger.info("order_cancelled id=%s", order.order_uuid)
+        return True
 
     async def submit_payment_proof(
         self, order_id: int, screenshot_file_id: str, instructions_snapshot: str | None

@@ -19,7 +19,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
 from app.filters.is_admin import IsAdmin
-from app.keyboards.admin_kb import admin_product_detail_kb, admin_products_list_kb
+from app.keyboards.admin_kb import (
+    admin_broadcast_confirm_kb,
+    admin_product_detail_kb,
+    admin_products_list_kb,
+)
 from app.repositories.inventory_repo import InventoryRepository
 from app.repositories.product_repo import ProductRepository
 from app.repositories.setting_repo import SettingRepository
@@ -167,6 +171,25 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
         )
         await state.clear()
         await message.answer("❌ Buyurtma rad etildi va foydalanuvchiga xabar berildi.")
+        return
+
+    if action == "broadcast_send":
+        from app.handlers.admin.broadcast import _resolve_recipients  # local import avoids a cycle
+
+        audience = data.get("audience")
+        product_id = data.get("product_id", 0)
+        recipients = await _resolve_recipients(session, audience, product_id)
+        await state.update_data(action="broadcast_awaiting_confirm", message_text=text)
+        preview = text if len(text) <= 500 else text[:500] + "…"
+        await message.answer(
+            f"\U0001F4E2 Ushbu xabar <b>{len(recipients)}</b> ta foydalanuvchiga yuboriladi:\n\n"
+            f"{preview}\n\nTasdiqlaysizmi?",
+            reply_markup=admin_broadcast_confirm_kb(),
+        )
+        return
+
+    if action == "broadcast_awaiting_confirm":
+        await message.answer("Iltimos, yuqoridagi tugmalardan birini tanlang (✅ Ha, yuborish / ❌ Bekor qilish).")
         return
 
     if action == "manual_deliver":

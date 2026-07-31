@@ -81,6 +81,8 @@
   "msg_crypto_not_paid_yet": "⏳ Hali to'lov aniqlanmadi. Iltimos, birozdan so'ng qayta urinib ko'ring.",
   "msg_crypto_confirmed_manual_pending": "✅ To'lov tasdiqlandi! Mahsulotingiz admin tomonidan tez orada yuboriladi.",
   "msg_crypto_payment_confirmed_alert": "✅ To'lov tasdiqlandi",
+  "msg_crypto_cancelled_by_user": "🛑 To'lov bekor qilindi.\n\n🆔 Buyurtma: <code>{order_uuid}</code>\n\nMahsulot qayta stokka qaytarildi. Xohlasangiz, qayta xarid qilishingiz mumkin.",
+  "msg_crypto_payment_timeout": "⏰ To'lov vaqti tugadi.\n\n🆔 Buyurtma: <code>{order_uuid}</code>\n\nBelgilangan vaqt ichida to'lov aniqlanmagani uchun buyurtma bekor qilindi va mahsulot qayta stokka qaytarildi. Xohlasangiz, qayta xarid qilishingiz mumkin.",
 
   "msg_support_type_here": "✍️ Savolingizni shu yerga yozing — admin javob beradi. Chiqish uchun menyudan boshqa bo'limni tanlang.",
   "msg_support_sent": "✅ Xabaringiz yuborildi. Admin tez orada javob beradi.",

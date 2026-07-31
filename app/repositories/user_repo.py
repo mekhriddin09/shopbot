@@ -54,3 +54,14 @@ class UserRepository:
     async def count_all(self) -> int:
         result = await self.session.execute(select(func.count(User.id)))
         return int(result.scalar_one())
+
+    async def list_all(self) -> list[User]:
+        """Every non-blocked user — the base pool for broadcast messages.
+        Users blocked by an admin (`is_blocked`) are excluded; users who
+        blocked the *bot* itself aren't tracked here and are instead skipped
+        one-by-one at send time (Telegram raises when we try to message
+        them)."""
+        result = await self.session.execute(
+            select(User).where(User.is_blocked.is_(False))
+        )
+        return list(result.scalars().all())

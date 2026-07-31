@@ -81,6 +81,8 @@
   "msg_crypto_not_paid_yet": "⏳ Payment not detected yet. Please try again shortly.",
   "msg_crypto_confirmed_manual_pending": "✅ Payment confirmed! Your product will be sent shortly by the admin.",
   "msg_crypto_payment_confirmed_alert": "✅ Payment confirmed",
+  "msg_crypto_cancelled_by_user": "🛑 Payment cancelled.\n\n🆔 Order: <code>{order_uuid}</code>\n\nThe product has been returned to stock. You can purchase it again anytime.",
+  "msg_crypto_payment_timeout": "⏰ Payment time expired.\n\n🆔 Order: <code>{order_uuid}</code>\n\nSince payment wasn't detected in time, the order was cancelled and the product returned to stock. You can purchase it again.",
 
   "msg_support_type_here": "✍️ Type your question here — the admin will reply. To exit, choose another section from the menu.",
   "msg_support_sent": "✅ Your message has been sent. The admin will reply shortly.",
