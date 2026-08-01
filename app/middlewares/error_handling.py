@@ -4,7 +4,7 @@ import logging
 from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware
-from aiogram.types import CallbackQuery, Message, TelegramObject
+from aiogram.types import CallbackQuery, Message, TelegramObject, Update
 
 from app.services.exceptions import DomainError
 from app.utils.i18n import t
@@ -41,7 +41,26 @@ class ErrorHandlingMiddleware(BaseMiddleware):
 
     @staticmethod
     async def _notify(event: TelegramObject, text: str) -> None:
+        # This middleware is registered via `dp.update.outer_middleware(...)`
+        # (see main.py), so the `event` aiogram hands us here is always the
+        # raw `Update` envelope — never the unwrapped `CallbackQuery` /
+        # `Message` directly. The isinstance checks below used to compare
+        # against `CallbackQuery`/`Message` without ever unwrapping the
+        # `Update` first, so they never matched anything: every unhandled
+        # exception during a callback-query handler was logged but the
+        # callback was never answered, leaving the button stuck on
+        # Telegram's "loading" spinner forever instead of showing the
+        # friendly error alert. Unwrap `Update.callback_query`/`.message`
+        # first so the alert actually reaches the user.
         try:
+            if isinstance(event, Update):
+                if event.callback_query is not None:
+                    await event.callback_query.answer(text, show_alert=True)
+                    return
+                if event.message is not None:
+                    await event.message.answer(text)
+                    return
+                return
             if isinstance(event, CallbackQuery):
                 await event.answer(text, show_alert=True)
             elif isinstance(event, Message):
