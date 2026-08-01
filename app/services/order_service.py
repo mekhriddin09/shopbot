@@ -28,42 +28,70 @@ class OrderService:
         self.products = ProductRepository(session)
         self.inventory = InventoryRepository(session)
 
-    async def start_purchase(self, user: User, product_id: int) -> Order:
+    async def start_purchase(self, user: User, product_id: int, quantity: int = 1) -> Order:
+        quantity = max(1, quantity)
         product = await self.products.get_by_id(product_id)
         if product is None or not product.is_visible:
             raise ProductUnavailableError("msg_product_unavailable")
 
         if product.delivery_mode == DeliveryMode.INVENTORY:
             stock = await self.products.available_stock(product.id)
-            if stock <= 0:
+            if stock < quantity:
                 raise OutOfStockError("msg_out_of_stock")
+
+        order = await self.orders.create(
+            user_id=user.id,
+            product_id=product.id,
+            price=float(product.price) * quantity,
+            currency=product.currency,
+            quantity=quantity,
+        )
+
+        if product.delivery_mode == DeliveryMode.INVENTORY:
+            # Reserve the actual codes right now — not just a count check —
+            # so they can't also be promised to another customer while this
+            # order is still awaiting proof/approval. Rare race: stock
+            # passed the check above but got claimed by someone else a
+            # moment later; if so, cancel this order immediately instead of
+            # leaving a phantom order with nothing behind it.
+            reserved = await self.inventory.reserve_many(product.id, order.id, quantity)
+            if reserved is None:
+                await self.orders.set_status(order, OrderStatus.CANCELLED)
+                raise OutOfStockError("msg_out_of_stock")
+
+        order_logger.info(
+            "order_created id=%s user=%s product=%s price=%s qty=%s",
+            order.order_uuid, user.telegram_id, product.name, product.price, quantity,
+        )
+        return order
+
+    _CANCELLABLE_STATUSES = (OrderStatus.AWAITING_PROOF, OrderStatus.AWAITING_CRYPTO_PAYMENT)
+
+    async def start_preorder(self, user: User, product_id: int) -> Order:
+        """Pay-now-deliver-later path for an out-of-stock product (must be
+        enabled via the "preorder_enabled" setting). Unlike `start_purchase`,
+        this never checks or reserves inventory — there's nothing to reserve
+        yet — and always marks the order `is_preorder=True` so
+        `DeliveryService` routes it to the manual-delivery path regardless
+        of the product's normal delivery mode (see `_run_delivery`), since
+        auto-delivery would just fail with "out of stock" the moment an
+        admin approves it before restocking."""
+        product = await self.products.get_by_id(product_id)
+        if product is None or not product.is_visible:
+            raise ProductUnavailableError("msg_product_unavailable")
 
         order = await self.orders.create(
             user_id=user.id,
             product_id=product.id,
             price=float(product.price),
             currency=product.currency,
+            is_preorder=True,
         )
-
-        if product.delivery_mode == DeliveryMode.INVENTORY:
-            # Reserve an actual code right now — not just a count check —
-            # so this code can't also be promised to another customer while
-            # this order is still awaiting proof/approval. Rare race: stock
-            # passed the check above but got claimed by someone else a
-            # moment later; if so, cancel this order immediately instead of
-            # leaving a phantom order with nothing behind it.
-            reserved = await self.inventory.reserve_one(product.id, order.id)
-            if reserved is None:
-                await self.orders.set_status(order, OrderStatus.CANCELLED)
-                raise OutOfStockError("msg_out_of_stock")
-
         order_logger.info(
-            "order_created id=%s user=%s product=%s price=%s",
+            "preorder_created id=%s user=%s product=%s price=%s",
             order.order_uuid, user.telegram_id, product.name, product.price,
         )
         return order
-
-    _CANCELLABLE_STATUSES = (OrderStatus.AWAITING_PROOF, OrderStatus.AWAITING_CRYPTO_PAYMENT)
 
     async def cancel_pending(self, order_id: int) -> bool:
         """Called when a customer backs out before completing payment — the

@@ -1,25 +1,28 @@
 from __future__ import annotations
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import User
+from app.database.models import Product, User
 from app.database.models.enums import OrderStatus, PaymentMethod
-from app.keyboards.callback_data import CryptoCB, ShopCB
+from app.keyboards.callback_data import CryptoCB, QtyCB, ShopCB, StockNotifyCB
 from app.keyboards.user_kb import (
     cancel_kb,
     crypto_invoice_kb,
     main_menu_kb,
     payment_kb,
     product_detail_kb,
+    qty_picker_kb,
     shop_list_kb,
 )
 from app.repositories.inventory_repo import InventoryRepository
 from app.repositories.order_repo import OrderRepository
 from app.repositories.product_repo import ProductRepository
 from app.repositories.setting_repo import SettingRepository
+from app.repositories.stock_waiter_repo import StockWaiterRepository
 from app.services.crypto.registry import available_crypto_providers, get_crypto_provider
 from app.services.exceptions import (
     InvalidOrderStateError,
@@ -67,6 +70,18 @@ async def open_shop(message: Message, session: AsyncSession, lang: str) -> None:
     )
 
 
+@router.callback_query(StockNotifyCB.filter(F.action == "subscribe"))
+async def stock_notify_subscribe(
+    callback: CallbackQuery, callback_data: StockNotifyCB, session: AsyncSession, user: User, lang: str
+) -> None:
+    product = await ProductRepository(session).get_by_id(callback_data.product_id)
+    if product is None:
+        await callback.answer(t(lang, "msg_product_not_found"), show_alert=True)
+        return
+    await StockWaiterRepository(session).subscribe(user.id, product.id)
+    await callback.answer(t(lang, "msg_stock_notify_subscribed"), show_alert=True)
+
+
 @router.callback_query(ShopCB.filter(F.action == "back_to_list"))
 async def back_to_list(callback: CallbackQuery, session: AsyncSession, lang: str, state: FSMContext) -> None:
     data = await state.get_data()
@@ -105,17 +120,50 @@ async def open_product(callback: CallbackQuery, callback_data: ShopCB, session: 
     crypto_providers = available_crypto_providers() if crypto_enabled and view.product.price_usd is not None else []
     show_crypto = bool(crypto_providers)
 
+    preorder_enabled = not view.in_stock and await settings_repo.get_bool("preorder_enabled", False)
+    show_notify = not view.in_stock and not preorder_enabled
+
     text = _product_card_text(lang, view.product, view.stock)
     if show_crypto:
         text += "\n" + t(lang, "msg_crypto_price_label", price=f"{float(view.product.price_usd):.2f}")
     kb = product_detail_kb(
-        lang, view.product.id, view.in_stock, show_crypto=show_crypto, crypto_providers=crypto_providers
+        lang,
+        view.product.id,
+        view.in_stock,
+        show_crypto=show_crypto,
+        crypto_providers=crypto_providers,
+        max_order_qty=view.product.max_order_qty,
+        show_notify_button=show_notify,
+        show_preorder_button=preorder_enabled,
     )
     if view.product.image_file_id:
         await callback.message.delete()
         await callback.message.answer_photo(view.product.image_file_id, caption=text, reply_markup=kb)
     else:
         await callback.message.edit_text(text, reply_markup=kb)
+    await callback.answer()
+
+
+async def _show_card_payment_instructions(
+    callback: CallbackQuery, session: AsyncSession, product: Product, lang: str, qty: int, preorder: bool = False
+) -> None:
+    settings_repo = SettingRepository(session)
+    instructions = product.payment_instructions or await settings_repo.get(
+        f"payment_instructions_{lang}"
+    )
+    total_price = float(product.price) * qty
+    name = product_name(product, lang) + (f" × {qty}" if qty > 1 else "")
+    key = "msg_preorder_payment_header" if preorder else "msg_payment_header"
+    text = t(
+        lang,
+        key,
+        instructions=instructions,
+        order_uuid="—",
+        product_name=name,
+        price=fmt_price(total_price),
+        currency=product.currency,
+    )
+    await callback.message.answer(text, reply_markup=payment_kb(lang, product.id, qty=qty, preorder=preorder))
     await callback.answer()
 
 
@@ -126,27 +174,74 @@ async def buy_product(callback: CallbackQuery, callback_data: ShopCB, session: A
     if product is None or not product.is_visible:
         await callback.answer(t(lang, "msg_product_not_found"), show_alert=True)
         return
-    if product.delivery_mode.value == "inventory":
+    if not callback_data.preorder and product.delivery_mode.value == "inventory":
         stock = await products.available_stock(product.id)
         if stock <= 0:
             await callback.answer(t(lang, "msg_out_of_stock"), show_alert=True)
             return
+    await _show_card_payment_instructions(callback, session, product, lang, qty=1, preorder=callback_data.preorder)
 
-    settings_repo = SettingRepository(session)
-    instructions = product.payment_instructions or await settings_repo.get(
-        f"payment_instructions_{lang}"
+
+@router.callback_query(QtyCB.filter(F.action == "show"))
+async def qty_show(callback: CallbackQuery, callback_data: QtyCB, session: AsyncSession, lang: str) -> None:
+    product = await ProductRepository(session).get_by_id(callback_data.product_id)
+    if product is None:
+        await callback.answer(t(lang, "msg_product_not_found"), show_alert=True)
+        return
+    await callback.message.edit_reply_markup(
+        reply_markup=qty_picker_kb(
+            lang, product.id, product.min_order_qty, product.min_order_qty, product.max_order_qty,
+            callback_data.flow, callback_data.provider or "",
+        )
     )
-    text = t(
-        lang,
-        "msg_payment_header",
-        instructions=instructions,
-        order_uuid="—",
-        product_name=product_name(product, lang),
-        price=fmt_price(float(product.price)),
-        currency=product.currency,
-    )
-    await callback.message.answer(text, reply_markup=payment_kb(lang, product.id))
     await callback.answer()
+
+
+@router.callback_query(QtyCB.filter(F.action.in_({"inc", "dec", "set"})))
+async def qty_change(callback: CallbackQuery, callback_data: QtyCB, session: AsyncSession, lang: str) -> None:
+    product = await ProductRepository(session).get_by_id(callback_data.product_id)
+    if product is None:
+        await callback.answer(t(lang, "msg_product_not_found"), show_alert=True)
+        return
+    qty = max(product.min_order_qty, min(product.max_order_qty, callback_data.qty))
+    try:
+        await callback.message.edit_reply_markup(
+            reply_markup=qty_picker_kb(
+                lang, product.id, qty, product.min_order_qty, product.max_order_qty,
+                callback_data.flow, callback_data.provider or "",
+            )
+        )
+    except TelegramBadRequest as exc:
+        if "message is not modified" not in str(exc):
+            raise
+    await callback.answer()
+
+
+@router.callback_query(QtyCB.filter(F.action == "noop"))
+async def qty_noop(callback: CallbackQuery) -> None:
+    await callback.answer()
+
+
+@router.callback_query(QtyCB.filter(F.action == "confirm"))
+async def qty_confirm(
+    callback: CallbackQuery, callback_data: QtyCB, session: AsyncSession, user: User, lang: str
+) -> None:
+    products = ProductRepository(session)
+    product = await products.get_by_id(callback_data.product_id)
+    if product is None or not product.is_visible:
+        await callback.answer(t(lang, "msg_product_not_found"), show_alert=True)
+        return
+    qty = max(product.min_order_qty, min(product.max_order_qty, callback_data.qty))
+    if product.delivery_mode.value == "inventory":
+        stock = await products.available_stock(product.id)
+        if stock < qty:
+            await callback.answer(t(lang, "msg_out_of_stock"), show_alert=True)
+            return
+
+    if callback_data.flow == "crypto":
+        await _start_crypto_purchase(callback, session, user, lang, product, callback_data.provider or "", qty)
+    else:
+        await _show_card_payment_instructions(callback, session, product, lang, qty)
 
 
 @router.callback_query(ShopCB.filter(F.action == "paid"))
@@ -160,7 +255,10 @@ async def mark_paid(
 ) -> None:
     order_service = OrderService(session)
     try:
-        order = await order_service.start_purchase(user, callback_data.product_id)
+        if callback_data.preorder:
+            order = await order_service.start_preorder(user, callback_data.product_id)
+        else:
+            order = await order_service.start_purchase(user, callback_data.product_id, quantity=callback_data.qty)
     except (ProductUnavailableError, OutOfStockError) as exc:
         await callback.answer(exc.localized(lang), show_alert=True)
         return
@@ -201,56 +299,60 @@ async def reject_non_photo(message: Message, lang: str) -> None:
     await message.answer(t(lang, "msg_screenshot_required"))
 
 
-@router.callback_query(CryptoCB.filter(F.action == "buy"))
-async def crypto_buy(
-    callback: CallbackQuery, callback_data: CryptoCB, session: AsyncSession, user: User, lang: str
+async def _start_crypto_purchase(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    user: User,
+    lang: str,
+    product: Product,
+    provider_key: str,
+    qty: int,
+    preorder: bool = False,
 ) -> None:
-    products = ProductRepository(session)
-    product = await products.get_by_id(callback_data.product_id)
-    if product is None or not product.is_visible or product.price_usd is None:
-        await callback.answer(t(lang, "msg_product_not_found"), show_alert=True)
-        return
-    if product.delivery_mode.value == "inventory":
-        stock = await products.available_stock(product.id)
-        if stock <= 0:
-            await callback.answer(t(lang, "msg_out_of_stock"), show_alert=True)
-            return
-
     settings_repo = SettingRepository(session)
     if not await settings_repo.get_bool("crypto_payment_enabled", False):
         await callback.answer(t(lang, "msg_crypto_disabled"), show_alert=True)
         return
-    provider_key = callback_data.provider
     provider = get_crypto_provider(provider_key)
     if provider is None or not getattr(provider, "token", None):
         await callback.answer(t(lang, "msg_crypto_provider_not_configured"), show_alert=True)
         return
 
+    total_usd = float(product.price_usd) * qty
     orders = OrderRepository(session)
     order = await orders.create(
         user_id=user.id,
         product_id=product.id,
-        price=float(product.price_usd),
+        price=total_usd,
         currency="USD",
         payment_method=PaymentMethod.CRYPTO,
         status=OrderStatus.AWAITING_CRYPTO_PAYMENT,
         crypto_provider=provider_key,
+        quantity=qty,
+        is_preorder=preorder,
     )
 
-    if product.delivery_mode.value == "inventory":
-        # Reserve an actual code now (not just a count check) so it can't
-        # also be promised to another customer while this crypto payment is
-        # still unconfirmed.
+    if not preorder and product.delivery_mode.value == "inventory":
+        # Reserve the actual code(s) now (not just a count check) so they
+        # can't also be promised to another customer while this crypto
+        # payment is still unconfirmed. Skipped entirely for pre-orders —
+        # there's no stock to reserve yet.
         inventory = InventoryRepository(session)
-        reserved = await inventory.reserve_one(product.id, order.id)
+        reserved = await inventory.reserve_many(product.id, order.id, qty)
         if reserved is None:
             await orders.set_status(order, OrderStatus.CANCELLED)
             await callback.answer(t(lang, "msg_out_of_stock"), show_alert=True)
             return
 
+    description = (
+        product_name(product, lang)
+        + (f" × {qty}" if qty > 1 else "")
+        + (" (pre-order)" if preorder else "")
+        + f" — {order.order_uuid}"
+    )
     invoice = await provider.create_invoice(
-        amount_usd=float(product.price_usd),
-        description=f"{product_name(product, lang)} — {order.order_uuid}",
+        amount_usd=total_usd,
+        description=description,
         payload=str(order.id),
     )
     if not invoice.success or not invoice.pay_url:
@@ -266,15 +368,29 @@ async def crypto_buy(
     await orders.set_crypto_invoice(order, invoice.invoice_id, invoice.pay_url)
 
     await callback.message.answer(
-        t(
-            lang,
-            "msg_crypto_payment_link",
-            amount=f"{float(product.price_usd):.2f}",
-            order_uuid=order.order_uuid,
-        ),
+        t(lang, "msg_crypto_payment_link", amount=f"{total_usd:.2f}", order_uuid=order.order_uuid),
         reply_markup=crypto_invoice_kb(lang, invoice.pay_url, order.id),
     )
     await callback.answer()
+
+
+@router.callback_query(CryptoCB.filter(F.action == "buy"))
+async def crypto_buy(
+    callback: CallbackQuery, callback_data: CryptoCB, session: AsyncSession, user: User, lang: str
+) -> None:
+    products = ProductRepository(session)
+    product = await products.get_by_id(callback_data.product_id)
+    if product is None or not product.is_visible or product.price_usd is None:
+        await callback.answer(t(lang, "msg_product_not_found"), show_alert=True)
+        return
+    if not callback_data.preorder and product.delivery_mode.value == "inventory":
+        stock = await products.available_stock(product.id)
+        if stock <= 0:
+            await callback.answer(t(lang, "msg_out_of_stock"), show_alert=True)
+            return
+    await _start_crypto_purchase(
+        callback, session, user, lang, product, callback_data.provider or "", qty=1, preorder=callback_data.preorder
+    )
 
 
 @router.callback_query(CryptoCB.filter(F.action == "cancel"))
@@ -331,6 +447,9 @@ async def crypto_check(callback: CallbackQuery, callback_data: CryptoCB, session
 
     if result.delivered_now and result.payload:
         await callback.message.answer(build_delivered_message(lang, order, result.payload))
+        from app.services.referral_service import ReferralService
+
+        await ReferralService(session).credit_for_delivered_order(order, callback.bot)
     elif result.needs_manual_message:
         from app.services.crypto_poller import _notify_admins_with_manual_button
 

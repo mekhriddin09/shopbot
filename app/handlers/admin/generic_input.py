@@ -29,6 +29,7 @@ from app.repositories.product_repo import ProductRepository
 from app.repositories.setting_repo import SettingRepository
 from app.services.delivery_service import DeliveryService
 from app.services.exceptions import DeliveryFailedError, InvalidOrderStateError
+from app.services.stock_notify_service import notify_waiters_if_in_stock
 from app.states.admin_states import AdminInput
 from app.utils.formatting import build_delivered_message
 from app.utils.i18n import t
@@ -96,11 +97,14 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
                 except ValueError:
                     await message.answer("Narx noto'g'ri. Faqat raqam yuboring (masalan 4.00) yoki '-' yuboring.")
                     return
-        elif field == "sort_order":
+        elif field in ("sort_order", "min_order_qty", "max_order_qty"):
             try:
                 value = int(text)
             except ValueError:
                 await message.answer("Butun son yuboring.")
+                return
+            if field in ("min_order_qty", "max_order_qty") and value < 1:
+                await message.answer("1 dan kichik bo'lmasligi kerak.")
                 return
         elif field in (
             "payment_instructions",
@@ -141,8 +145,11 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
         product_id = data["product_id"]
         await InventoryRepository(session).add_code(product_id, text)
         admin_actions_logger.info("inventory_code_added product=%s admin=%s", product_id, message.from_user.id)
+        product = await ProductRepository(session).get_by_id(product_id)
+        notified = await notify_waiters_if_in_stock(session, message.bot, product) if product else 0
         await state.clear()
-        await message.answer("✅ Kod qo'shildi.")
+        extra = f"\n🔔 {notified} ta kutayotgan foydalanuvchiga xabar berildi." if notified else ""
+        await message.answer(f"✅ Kod qo'shildi.{extra}")
         return
 
     if action == "settings_edit":
@@ -207,6 +214,9 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
             order.user.telegram_id,
             build_delivered_message(lang, order, text),
         )
+        from app.services.referral_service import ReferralService  # local import avoids a cycle
+
+        await ReferralService(session).credit_for_delivered_order(order, message.bot)
         await state.clear()
         await message.answer("✅ Xabar mijozga yuborildi va buyurtma yakunlandi.")
         return
@@ -256,8 +266,11 @@ async def handle_bulk_document(message: Message, session: AsyncSession, state: F
     codes = [line for line in text.splitlines() if line.strip()]
     count = await InventoryRepository(session).bulk_import(product_id, codes)
     admin_actions_logger.info("inventory_bulk_imported product=%s count=%s admin=%s", product_id, count, message.from_user.id)
+    product = await ProductRepository(session).get_by_id(product_id)
+    notified = await notify_waiters_if_in_stock(session, message.bot, product) if product else 0
     await state.clear()
-    await message.answer(f"✅ {count} ta kod import qilindi.")
+    extra = f"\n🔔 {notified} ta kutayotgan foydalanuvchiga xabar berildi." if notified else ""
+    await message.answer(f"✅ {count} ta kod import qilindi.{extra}")
 
 
 @router.message(AdminInput.waiting_codes_file_or_text, F.text)
@@ -270,5 +283,8 @@ async def handle_bulk_text(message: Message, session: AsyncSession, state: FSMCo
     codes = [line for line in message.text.splitlines() if line.strip()]
     count = await InventoryRepository(session).bulk_import(product_id, codes)
     admin_actions_logger.info("inventory_bulk_imported product=%s count=%s admin=%s", product_id, count, message.from_user.id)
+    product = await ProductRepository(session).get_by_id(product_id)
+    notified = await notify_waiters_if_in_stock(session, message.bot, product) if product else 0
     await state.clear()
-    await message.answer(f"✅ {count} ta kod import qilindi.")
+    extra = f"\n🔔 {notified} ta kutayotgan foydalanuvchiga xabar berildi." if notified else ""
+    await message.answer(f"✅ {count} ta kod import qilindi.{extra}")

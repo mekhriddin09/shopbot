@@ -11,12 +11,15 @@ from app.filters.is_admin import IsAdmin
 from app.keyboards.admin_kb import (
     admin_inventory_menu_kb,
     admin_product_detail_kb,
+    admin_stock_waiters_kb,
     inventory_delete_confirm_kb,
     inventory_delete_pick_kb,
 )
-from app.keyboards.callback_data import AdminInventoryCB
+from app.keyboards.callback_data import AdminInventoryCB, AdminStockWaitersCB
 from app.repositories.inventory_repo import InventoryRepository
 from app.repositories.product_repo import ProductRepository
+from app.repositories.stock_waiter_repo import StockWaiterRepository
+from app.services.stock_notify_service import notify_all_waiters
 from app.states.admin_states import AdminInput
 
 router = Router(name="admin_inventory")
@@ -48,6 +51,42 @@ async def inventory_bulk_start(callback: CallbackQuery, callback_data: AdminInve
     await state.update_data(action="inventory_bulk", product_id=callback_data.product_id)
     await callback.message.answer(
         "Kodlarni yuboring — har bir qatorda bitta kod (matn sifatida yozing yoki .txt fayl yuboring)."
+    )
+    await callback.answer()
+
+
+@router.callback_query(AdminStockWaitersCB.filter(F.action == "list"))
+async def stock_waiters_list(callback: CallbackQuery, callback_data: AdminStockWaitersCB, session: AsyncSession) -> None:
+    waiters = await StockWaiterRepository(session).list_waiting(callback_data.product_id)
+    if not waiters:
+        await callback.message.edit_text(
+            "\U0001F514 Hozircha bu mahsulotni hech kim kutmayapti.",
+            reply_markup=admin_stock_waiters_kb(callback_data.product_id, has_waiters=False),
+        )
+        await callback.answer()
+        return
+    lines = [
+        f"\U0001F464 @{w.user.username or '-'} ({w.user.telegram_id})" for w in waiters
+    ]
+    text = f"\U0001F514 Kutayotganlar ({len(waiters)} ta):\n\n" + "\n".join(lines[:50])
+    if len(waiters) > 50:
+        text += f"\n... va yana {len(waiters) - 50} ta"
+    await callback.message.edit_text(text, reply_markup=admin_stock_waiters_kb(callback_data.product_id, has_waiters=True))
+    await callback.answer()
+
+
+@router.callback_query(AdminStockWaitersCB.filter(F.action == "notify_all"))
+async def stock_waiters_notify_all(
+    callback: CallbackQuery, callback_data: AdminStockWaitersCB, session: AsyncSession
+) -> None:
+    product = await ProductRepository(session).get_by_id(callback_data.product_id)
+    if product is None:
+        await callback.answer("Mahsulot topilmadi", show_alert=True)
+        return
+    count = await notify_all_waiters(session, callback.bot, product)
+    await callback.message.edit_text(
+        f"✅ {count} ta foydalanuvchiga xabar berildi.",
+        reply_markup=admin_stock_waiters_kb(callback_data.product_id, has_waiters=False),
     )
     await callback.answer()
 

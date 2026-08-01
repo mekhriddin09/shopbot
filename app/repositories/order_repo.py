@@ -26,6 +26,8 @@ class OrderRepository:
         crypto_provider: str | None = None,
         crypto_invoice_id: str | None = None,
         crypto_pay_url: str | None = None,
+        quantity: int = 1,
+        is_preorder: bool = False,
     ) -> Order:
         order = Order(
             user_id=user_id,
@@ -37,6 +39,8 @@ class OrderRepository:
             crypto_provider=crypto_provider,
             crypto_invoice_id=crypto_invoice_id,
             crypto_pay_url=crypto_pay_url,
+            quantity=quantity,
+            is_preorder=is_preorder,
         )
         self.session.add(order)
         await self.session.commit()
@@ -161,6 +165,12 @@ class OrderRepository:
             )
         )
         return float(result.scalar_one())
+
+    async def count_delivered_by_user(self, user_id: int) -> int:
+        result = await self.session.execute(
+            select(func.count(Order.id)).where(Order.user_id == user_id, Order.status == OrderStatus.DELIVERED)
+        )
+        return int(result.scalar_one())
 
     async def list_buyer_user_ids(self, product_id: int | None = None) -> set[int]:
         """Distinct `user_id`s that have at least one successfully DELIVERED

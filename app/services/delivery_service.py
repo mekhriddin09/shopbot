@@ -90,23 +90,40 @@ class DeliveryService:
         in APPROVED status and the per-order lock is held by the caller."""
         mode = order.product.delivery_mode
 
+        if order.is_preorder:
+            # Pre-orders are accepted before there's any stock to deliver —
+            # never attempt automatic inventory/API delivery (it would just
+            # fail with "out of stock"). Always route to the manual-message
+            # path so the admin sends it by hand once the product is
+            # actually restocked.
+            return ApprovalResult(order, mode, delivered_now=False, needs_manual_message=True)
+
         if mode == DeliveryMode.INVENTORY:
             if not await self.settings.get_bool("automatic_delivery_enabled", True):
                 return ApprovalResult(order, mode, delivered_now=False, needs_manual_message=True)
-            # Prefer finalizing the code already reserved for this order at
-            # purchase time (see OrderService.start_purchase / crypto_buy);
-            # fall back to claiming a fresh one for orders created before
-            # reservations existed.
-            code = await self.inventory.finalize_reservation(order.id)
-            if code is None:
-                code = await self.inventory.claim_one_unused(order.product_id, order.id)
-            if code is None:
+            # Prefer finalizing the code(s) already reserved for this order
+            # at purchase time (see OrderService.start_purchase / crypto_buy
+            # — one reservation per unit of `order.quantity`); fall back to
+            # claiming fresh ones for orders created before reservations
+            # existed.
+            codes = await self.inventory.finalize_reservation(order.id)
+            if not codes:
+                codes = []
+                for _ in range(order.quantity or 1):
+                    code = await self.inventory.claim_one_unused(order.product_id, order.id)
+                    if code is None:
+                        break
+                    codes.append(code)
+            if not codes:
                 order_logger.error("order_delivery_out_of_stock id=%s", order.order_uuid)
                 await self.orders.set_status(order, OrderStatus.FAILED)
                 raise DeliveryFailedError("msg_out_of_inventory")
-            await self.orders.mark_delivered(order, code.code)
-            order_logger.info("order_delivered id=%s mode=inventory", order.order_uuid)
-            return ApprovalResult(order, mode, delivered_now=True, payload=code.code)
+            payload = "\n".join(c.code for c in codes)
+            await self.orders.mark_delivered(order, payload)
+            order_logger.info(
+                "order_delivered id=%s mode=inventory qty=%s", order.order_uuid, len(codes)
+            )
+            return ApprovalResult(order, mode, delivered_now=True, payload=payload)
 
         if mode == DeliveryMode.API:
             if not await self.settings.get_bool("api_delivery_enabled", True):
@@ -119,28 +136,32 @@ class DeliveryService:
                 await self.orders.set_status(order, OrderStatus.FAILED)
                 raise DeliveryFailedError("msg_provider_not_configured")
 
-            result = await provider.fetch(
-                product_external_ref=order.product.external_product_id or order.product.provider_key,
-                order_uuid=order.order_uuid,
-            )
-            await self.provider_logs.log(
-                provider_key=provider.key,
-                order_id=order.id,
-                request_payload=result.raw_request,
-                response_payload=result.raw_response,
-                success=result.success,
-                error=result.error,
-            )
-            if not result.success or not result.payload:
-                providers_logger.error(
-                    "provider_delivery_failed order=%s error=%s", order.order_uuid, result.error
+            payloads: list[str] = []
+            for _ in range(order.quantity or 1):
+                result = await provider.fetch(
+                    product_external_ref=order.product.external_product_id or order.product.provider_key,
+                    order_uuid=order.order_uuid,
                 )
-                error_text = result.error or "unknown error"
-                await self.orders.set_status(order, OrderStatus.FAILED)
-                raise DeliveryFailedError("msg_provider_fetch_failed", error=error_text)
-            await self.orders.mark_delivered(order, result.payload)
-            order_logger.info("order_delivered id=%s mode=api", order.order_uuid)
-            return ApprovalResult(order, mode, delivered_now=True, payload=result.payload)
+                await self.provider_logs.log(
+                    provider_key=provider.key,
+                    order_id=order.id,
+                    request_payload=result.raw_request,
+                    response_payload=result.raw_response,
+                    success=result.success,
+                    error=result.error,
+                )
+                if not result.success or not result.payload:
+                    providers_logger.error(
+                        "provider_delivery_failed order=%s error=%s", order.order_uuid, result.error
+                    )
+                    error_text = result.error or "unknown error"
+                    await self.orders.set_status(order, OrderStatus.FAILED)
+                    raise DeliveryFailedError("msg_provider_fetch_failed", error=error_text)
+                payloads.append(result.payload)
+            result_payload = "\n\n".join(payloads)
+            await self.orders.mark_delivered(order, result_payload)
+            order_logger.info("order_delivered id=%s mode=api qty=%s", order.order_uuid, len(payloads))
+            return ApprovalResult(order, mode, delivered_now=True, payload=result_payload)
 
         # MANUAL mode: admin must type the message next.
         if not await self.settings.get_bool("manual_delivery_enabled", True):

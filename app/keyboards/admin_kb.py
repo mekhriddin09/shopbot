@@ -15,7 +15,9 @@ from app.keyboards.callback_data import (
     AdminMenuCB,
     AdminOrderListCB,
     AdminProductCB,
+    AdminReferralWithdrawCB,
     AdminSettingsCB,
+    AdminStockWaitersCB,
     ConfirmCB,
     OrderCB,
 )
@@ -109,6 +111,16 @@ def admin_product_detail_kb(product: Product) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="\U0001F4E6 Inventar", callback_data=AdminInventoryCB(action="menu", product_id=pid).pack()),
         ],
         [
+            InlineKeyboardButton(
+                text=("\U0001F91D Referral: yoqilgan ✅" if product.referral_eligible else "\U0001F91D Referral: o'chirilgan"),
+                callback_data=cb("toggle_referral"),
+            ),
+        ],
+        [
+            InlineKeyboardButton(text="\U0001F522 Min. buyurtma soni", callback_data=cb("edit_field", "min_order_qty")),
+            InlineKeyboardButton(text="\U0001F522 Max. buyurtma soni", callback_data=cb("edit_field", "max_order_qty")),
+        ],
+        [
             InlineKeyboardButton(text=visibility_text, callback_data=cb("toggle_visibility")),
             InlineKeyboardButton(text="\U0001F5D1️ O'chirish", callback_data=cb("delete")),
         ],
@@ -157,8 +169,26 @@ def admin_inventory_menu_kb(product_id: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="\U0001F4CB Kodlarni ko'rish", callback_data=AdminInventoryCB(action="view", product_id=product_id).pack())],
         [InlineKeyboardButton(text="\U0001F5D1️ Kod o'chirish", callback_data=AdminInventoryCB(action="pick_delete", product_id=product_id).pack())],
         [InlineKeyboardButton(text="\U0001F4E4 Eksport qilish", callback_data=AdminInventoryCB(action="export", product_id=product_id).pack())],
+        [InlineKeyboardButton(text="\U0001F514 Kutayotganlar", callback_data=AdminStockWaitersCB(action="list", product_id=product_id).pack())],
         [InlineKeyboardButton(text="\U0001F519 Orqaga", callback_data=AdminProductCB(action="open", product_id=product_id).pack())],
     ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_stock_waiters_kb(product_id: int, has_waiters: bool) -> InlineKeyboardMarkup:
+    rows = []
+    if has_waiters:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="📢 Kelganini xabar berish",
+                    callback_data=AdminStockWaitersCB(action="notify_all", product_id=product_id).pack(),
+                )
+            ]
+        )
+    rows.append(
+        [InlineKeyboardButton(text="\U0001F519 Orqaga", callback_data=AdminInventoryCB(action="menu", product_id=product_id).pack())]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -261,8 +291,33 @@ def admin_settings_menu_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="\U0001F310 API orqali yetkazish", callback_data=AdminSettingsCB(action="toggle", key="api_delivery_enabled").pack())],
         [InlineKeyboardButton(text="📢 Isbotlar kanali havolasi", callback_data=AdminSettingsCB(action="edit", key="proof_channel_url").pack())],
         [InlineKeyboardButton(text="\U0001FA99 Kripto to'lov (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="crypto_payment_enabled").pack())],
+        [InlineKeyboardButton(text="\U0001F91D Referral (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="referral_enabled").pack())],
+        [InlineKeyboardButton(text="\U0001F381 1-buyurtma mukofoti (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="referral_first_order_enabled").pack())],
+        [InlineKeyboardButton(text="✏️ 1-buyurtma mukofoti miqdori", callback_data=AdminSettingsCB(action="edit", key="referral_first_order_value").pack())],
+        [InlineKeyboardButton(text="\U0001F501 Doimiy mukofot (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="referral_recurring_enabled").pack())],
+        [InlineKeyboardButton(text="✏️ Doimiy mukofot miqdori", callback_data=AdminSettingsCB(action="edit", key="referral_recurring_value").pack())],
+        [InlineKeyboardButton(text="✏️ Referral valyutasi (UZS/USD/USDT/Ball)", callback_data=AdminSettingsCB(action="edit", key="referral_currency").pack())],
+        [InlineKeyboardButton(text="✏️ Min. pul yechish miqdori", callback_data=AdminSettingsCB(action="edit", key="referral_withdraw_min").pack())],
+        [InlineKeyboardButton(text="\U0001F4E6 Oldindan buyurtma (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="preorder_enabled").pack())],
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_referral_withdraw_kb(withdrawal_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ To'landi",
+                    callback_data=AdminReferralWithdrawCB(action="paid", withdrawal_id=withdrawal_id).pack(),
+                ),
+                InlineKeyboardButton(
+                    text="❌ Rad etish",
+                    callback_data=AdminReferralWithdrawCB(action="reject", withdrawal_id=withdrawal_id).pack(),
+                ),
+            ]
+        ]
+    )
 
 
 def settings_language_pick_kb(base_key: str) -> InlineKeyboardMarkup:

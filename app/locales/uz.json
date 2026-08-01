@@ -18,6 +18,11 @@
   "btn_pay": "💳 To'lash",
   "btn_check_payment": "✅ Tekshirish",
   "btn_proof_channel": "📢 Isbotlar kanali",
+  "btn_referral": "🤝 Referral",
+  "btn_referral_withdraw": "💰 Pulni yechish",
+  "btn_confirm": "✅ Tasdiqlash",
+  "btn_preorder": "📦 Oldindan buyurtma berish",
+  "btn_notify_stock": "🔔 Kelganda ogohlantir",
 
   "msg_choose_language": "🌐 Tilni tanlang:",
   "msg_language_set": "✅ Til o'zbekchaga o'zgartirildi.",
@@ -33,6 +38,7 @@
   "msg_crypto_price_label": "🪙 Kripto narxi: ${price}",
 
   "msg_payment_header": "💳 To'lov ma'lumotlari:\n\n{instructions}\n\n🔹 Buyurtma: <code>{order_uuid}</code>\n🔹 Mahsulot: {product_name}\n🔹 Narxi: {price} {currency}",
+  "msg_preorder_payment_header": "⏳ <b>Oldindan buyurtma</b> (mahsulot hozircha stokda yo'q, kelgach yuboriladi)\n\n💳 To'lov ma'lumotlari:\n\n{instructions}\n\n🔹 Buyurtma: <code>{order_uuid}</code>\n🔹 Mahsulot: {product_name}\n🔹 Narxi: {price} {currency}",
   "msg_send_screenshot": "🖼 To'lov chekini (screenshot) rasm sifatida yuboring.",
   "msg_screenshot_required": "Iltimos, faqat rasm (screenshot) yuboring.",
   "msg_order_sent_to_admin": "✅ Chekingiz qabul qilindi va admin tomonidan tekshirilmoqda. Tez orada javob olasiz!",
@@ -86,6 +92,16 @@
 
   "msg_support_type_here": "✍️ Savolingizni shu yerga yozing — admin javob beradi. Chiqish uchun menyudan boshqa bo'limni tanlang.",
   "msg_support_sent": "✅ Xabaringiz yuborildi. Admin tez orada javob beradi.",
+
+  "msg_stock_notify_subscribed": "🔔 Bo'ldi! Mahsulot stokga kelganda sizga xabar beramiz.",
+  "msg_stock_back_in_stock": "🔔 Xushxabar! \"{name}\" mahsuloti stokga qaytdi — xarid qilishingiz mumkin!",
+  "msg_referral_disabled": "🤝 Referral tizimi hozircha faol emas.",
+  "msg_referral_profile": "🤝 <b>Referral dasturi</b>\n\nSizning havolangiz:\n{link}\n\n👥 Taklif qilinganlar: {invited}\n🛍 Xarid qilganlar: {purchased}\n🎁 1-buyurtma mukofotlari: {first_rewards}\n\n💰 Balans: {balance} {currency}",
+  "msg_referral_withdraw_not_enough": "⚠️ Yechish uchun yetarli balans yo'q yoki bu funksiya hozircha o'chirilgan.",
+  "msg_referral_withdraw_requested": "✅ So'rovingiz qabul qilindi: {amount} {currency}.\n\nAdmin tez orada bog'lanadi.",
+  "msg_referral_reward_received": "🎉 Referral mukofoti olindi: +{amount} {currency}!",
+  "msg_referral_withdraw_paid": "✅ Referral pulingiz ({amount}) to'landi. Rahmat!",
+  "msg_referral_withdraw_rejected": "❌ Referral pul yechish so'rovingiz ({amount}) rad etildi. Aniqlik uchun admin bilan bog'laning.",
 
   "msg_error_generic": "⚠️ Xatolik yuz berdi. Iltimos, birozdan so'ng qayta urinib ko'ring.",
   "msg_not_admin": "⛔ Sizda ushbu bo'limga kirish huquqi yo'q.",

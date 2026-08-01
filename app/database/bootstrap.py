@@ -41,6 +41,15 @@ _NEW_COLUMNS: list[tuple[str, str, str]] = [
     ("products", "delivery_instructions_en", "TEXT"),
     ("inventory_codes", "is_reserved", "BOOLEAN NOT NULL DEFAULT 0"),
     ("inventory_codes", "reserved_by_order_id", "INTEGER"),
+    ("users", "referred_by_id", "INTEGER"),
+    ("users", "referral_balance", "NUMERIC(12, 2) NOT NULL DEFAULT 0"),
+    ("products", "referral_eligible", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("products", "min_order_qty", "INTEGER NOT NULL DEFAULT 1"),
+    ("products", "max_order_qty", "INTEGER NOT NULL DEFAULT 1"),
+    ("orders", "referral_rewarded", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("orders", "referral_is_first_reward", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("orders", "quantity", "INTEGER NOT NULL DEFAULT 1"),
+    ("orders", "is_preorder", "BOOLEAN NOT NULL DEFAULT 0"),
 ]
 
 DEFAULT_SETTINGS: dict[str, str] = {
@@ -100,6 +109,23 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # configures an API token in .env and enables it here.
     "crypto_payment_enabled": "0",
     "crypto_provider": "cryptobot",  # cryptobot | xrocket
+
+    # Referral program. Off by default until the admin sets real reward
+    # values below and flips this on. Reward "value" fields accept either a
+    # plain number ("5000" = fixed amount) or a percent ("5%" = 5% of the
+    # order's price_at_purchase) — parsed in app/services/referral_service.py.
+    "referral_enabled": "0",
+    "referral_currency": "UZS",
+    "referral_first_order_enabled": "1",
+    "referral_first_order_value": "0",
+    "referral_recurring_enabled": "0",
+    "referral_recurring_value": "0",
+    # Minimum balance required before a "💰 Pulni yechish" (withdraw) request
+    # can be made. 0 = withdrawal requests disabled entirely.
+    "referral_withdraw_min": "0",
+
+    # Out-of-stock "notify me" + pre-order toggles.
+    "preorder_enabled": "0",
 }
 
 

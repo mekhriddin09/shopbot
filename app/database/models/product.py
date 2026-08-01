@@ -62,6 +62,20 @@ class Product(TimestampMixin, Base):
     is_visible: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
+    referral_eligible: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="0",
+        doc="Whether purchases of this product count toward referral rewards.",
+    )
+
+    min_order_qty: Mapped[int] = mapped_column(
+        Integer, default=1, server_default="1", doc="Minimum quantity a customer must buy per order."
+    )
+    max_order_qty: Mapped[int] = mapped_column(
+        Integer, default=1, server_default="1", doc="Maximum quantity a customer may buy per order."
+    )
+
     inventory_codes: Mapped[list["InventoryCode"]] = relationship(
         back_populates="product", cascade="all, delete-orphan"
     )

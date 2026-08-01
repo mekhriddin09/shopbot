@@ -14,6 +14,7 @@ from app.keyboards.callback_data import AdminOrderListCB, OrderCB
 from app.repositories.order_repo import OrderRepository
 from app.services.delivery_service import DeliveryService
 from app.services.exceptions import DeliveryFailedError, InvalidOrderStateError
+from app.services.referral_service import ReferralService
 from app.states.admin_states import AdminInput
 from app.utils.formatting import build_delivered_message, fmt_datetime, fmt_price
 
@@ -105,13 +106,15 @@ async def approve_order(callback: CallbackQuery, callback_data: OrderCB, session
             order.user.telegram_id,
             build_delivered_message(lang, order, result.payload),
         )
+        await ReferralService(session).credit_for_delivered_order(order, callback.bot)
         await callback.message.edit_text(callback.message.text + "\n\n✅ TASDIQLANDI VA YETKAZILDI")
         await callback.message.edit_reply_markup(reply_markup=None)
     elif result.needs_manual_message:
         await state.set_state(AdminInput.waiting_text)
         await state.update_data(action="manual_deliver", order_id=order.id)
+        preorder_note = "\n⏳ Bu — oldindan buyurtma edi. Mahsulot stokga kelgach yuboring." if order.is_preorder else ""
         await callback.message.answer(
-            f"✏️ Buyurtma <code>{order.order_uuid}</code> uchun mijozga yuboriladigan xabarni yozing:"
+            f"✏️ Buyurtma <code>{order.order_uuid}</code> uchun mijozga yuboriladigan xabarni yozing:{preorder_note}"
         )
         await callback.message.edit_reply_markup(reply_markup=None)
 

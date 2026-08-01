@@ -42,6 +42,8 @@ FIELD_PROMPTS = {
         "Tashqi provayderdagi ushbu mahsulotning ID'sini yozing "
         "(masalan: gemini). Kerak bo'lmasa '-' yuboring:"
     ),
+    "min_order_qty": "Bitta buyurtmada kamida nechta dona sotib olish kerakligini yozing (butun son, masalan: 1):",
+    "max_order_qty": "Bitta buyurtmada ko'pi bilan nechta dona sotib olish mumkinligini yozing (butun son, masalan: 10):",
     **{
         f"name_{code}": f"Mahsulot nomini {label} tilida yozing. O'chirish uchun '-' yuboring:"
         for code, label in _LANG_LABELS.items()
@@ -86,6 +88,12 @@ def _product_summary(product) -> str:
         if getattr(product, "delivery_instructions", None) or _lang_coverage("delivery_instructions") != "faqat standart"
         else "\U0001F4DD Yetkazishdan keyingi xabar: o'rnatilmagan\n"
     )
+    referral_line = "\U0001F91D Referral: yoqilgan ✅\n" if product.referral_eligible else "\U0001F91D Referral: o'chirilgan\n"
+    qty_line = (
+        f"\U0001F522 Buyurtma miqdori: {product.min_order_qty}–{product.max_order_qty} dona\n"
+        if product.max_order_qty > 1
+        else ""
+    )
     return (
         f"{product.emoji} <b>{product.name}</b>\n\n"
         f"{product.description or '-'}\n\n"
@@ -95,6 +103,8 @@ def _product_summary(product) -> str:
         f"{price_usd_line}"
         f"\U0001F4E6 Yetkazish rejimi: {mode_label}\n"
         f"\U0001F522 Tartib: {product.sort_order}\n"
+        f"{qty_line}"
+        f"{referral_line}"
         f"{delivery_instructions_line}"
         f"{visibility}"
     )
@@ -192,6 +202,18 @@ async def product_toggle_visibility(callback: CallbackQuery, callback_data: Admi
         await callback.answer("Mahsulot topilmadi", show_alert=True)
         return
     await products.set_visibility(product, not product.is_visible)
+    await callback.message.edit_text(_product_summary(product), reply_markup=admin_product_detail_kb(product))
+    await callback.answer()
+
+
+@router.callback_query(AdminProductCB.filter(F.action == "toggle_referral"))
+async def product_toggle_referral(callback: CallbackQuery, callback_data: AdminProductCB, session: AsyncSession) -> None:
+    products = ProductRepository(session)
+    product = await products.get_by_id(callback_data.product_id)
+    if product is None:
+        await callback.answer("Mahsulot topilmadi", show_alert=True)
+        return
+    await products.update(product, referral_eligible=not product.referral_eligible)
     await callback.message.edit_text(_product_summary(product), reply_markup=admin_product_detail_kb(product))
     await callback.answer()
 

@@ -11,9 +11,12 @@ from app.keyboards.admin_kb import (
     admin_settings_menu_kb,
     settings_language_pick_kb,
 )
-from app.keyboards.callback_data import AdminSettingsCB
+from app.keyboards.callback_data import AdminReferralWithdrawCB, AdminSettingsCB
+from app.repositories.referral_repo import ReferralRepository
 from app.repositories.setting_repo import SettingRepository
 from app.states.admin_states import AdminInput
+from app.utils.formatting import fmt_price
+from app.utils.i18n import t
 
 router = Router(name="admin_settings")
 router.message.filter(IsAdmin())
@@ -24,6 +27,10 @@ TOGGLE_LABELS = {
     "manual_delivery_enabled": "Qo'lda yetkazish",
     "api_delivery_enabled": "API orqali yetkazish",
     "crypto_payment_enabled": "Kripto to'lov",
+    "referral_enabled": "Referral tizimi",
+    "referral_first_order_enabled": "1-buyurtma mukofoti",
+    "referral_recurring_enabled": "Doimiy mukofot",
+    "preorder_enabled": "Oldindan buyurtma",
 }
 
 
@@ -64,5 +71,49 @@ async def settings_toggle(callback: CallbackQuery, callback_data: AdminSettingsC
         # already succeeded above.
         if "message is not modified" not in str(exc):
             raise
+
+
+@router.callback_query(AdminReferralWithdrawCB.filter(F.action == "paid"))
+async def referral_withdraw_paid(
+    callback: CallbackQuery, callback_data: AdminReferralWithdrawCB, session: AsyncSession
+) -> None:
+    referrals = ReferralRepository(session)
+    withdrawal = await referrals.get_withdrawal(callback_data.withdrawal_id)
+    if withdrawal is None:
+        await callback.answer("So'rov topilmadi.", show_alert=True)
+        return
+    await referrals.mark_paid(withdrawal, callback.from_user.id)
+    await callback.message.edit_text(callback.message.text + "\n\n✅ TO'LANDI")
+    await callback.message.edit_reply_markup(reply_markup=None)
+    try:
+        await callback.bot.send_message(
+            withdrawal.user.telegram_id,
+            t(withdrawal.user.language, "msg_referral_withdraw_paid", amount=fmt_price(float(withdrawal.amount))),
+        )
+    except Exception:  # noqa: BLE001 - user may have blocked the bot
+        pass
+    await callback.answer("To'landi deb belgilandi ✅")
+
+
+@router.callback_query(AdminReferralWithdrawCB.filter(F.action == "reject"))
+async def referral_withdraw_reject(
+    callback: CallbackQuery, callback_data: AdminReferralWithdrawCB, session: AsyncSession
+) -> None:
+    referrals = ReferralRepository(session)
+    withdrawal = await referrals.get_withdrawal(callback_data.withdrawal_id)
+    if withdrawal is None:
+        await callback.answer("So'rov topilmadi.", show_alert=True)
+        return
+    await referrals.mark_rejected(withdrawal, callback.from_user.id)
+    await callback.message.edit_text(callback.message.text + "\n\n❌ RAD ETILDI")
+    await callback.message.edit_reply_markup(reply_markup=None)
+    try:
+        await callback.bot.send_message(
+            withdrawal.user.telegram_id,
+            t(withdrawal.user.language, "msg_referral_withdraw_rejected", amount=fmt_price(float(withdrawal.amount))),
+        )
+    except Exception:  # noqa: BLE001 - user may have blocked the bot
+        pass
+    await callback.answer("Rad etildi")
 
 

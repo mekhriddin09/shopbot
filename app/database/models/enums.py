@@ -29,3 +29,9 @@ class AdminRole(str, enum.Enum):
 class PaymentMethod(str, enum.Enum):
     CARD = "card"      # manual card/wallet transfer + screenshot proof
     CRYPTO = "crypto"  # CryptoBot / xRocket invoice, auto-confirmed
+
+
+class ReferralWithdrawalStatus(str, enum.Enum):
+    PENDING = "pending"
+    PAID = "paid"
+    REJECTED = "rejected"

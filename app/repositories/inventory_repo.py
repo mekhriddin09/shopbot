@@ -132,42 +132,69 @@ class InventoryRepository:
         await self.session.refresh(item)
         return item
 
-    async def release_reservation(self, order_id: int) -> bool:
-        """Release the code reserved for this order (if any) back to the
-        available pool — called when an order is rejected or cancelled
-        before delivery. No-op (returns False) if nothing was reserved."""
-        result = await self.session.execute(
-            select(InventoryCode).where(
-                InventoryCode.reserved_by_order_id == order_id,
-                InventoryCode.is_used.is_(False),
-            )
-        )
-        item = result.scalar_one_or_none()
-        if item is None:
-            return False
-        item.is_reserved = False
-        item.reserved_by_order_id = None
-        await self.session.commit()
-        return True
-
-    async def finalize_reservation(self, order_id: int) -> InventoryCode | None:
-        """Turn this order's existing reservation into an actually-used
-        (delivered) code — called on approval. Returns None if this order
-        never had a reservation (e.g. it was created before reservations
-        existed), so the caller can fall back to `claim_one_unused`."""
-        result = await self.session.execute(
-            select(InventoryCode).where(
-                InventoryCode.reserved_by_order_id == order_id,
-                InventoryCode.is_used.is_(False),
-            )
-        )
-        item = result.scalar_one_or_none()
-        if item is None:
+    async def reserve_many(self, product_id: int, order_id: int, count: int) -> list[InventoryCode] | None:
+        """Reserve `count` distinct codes for one order (multi-quantity
+        purchases). All-or-nothing: if fewer than `count` are available,
+        whatever was reserved during this call is released again and None
+        is returned, so a partially-fulfillable order never leaves a
+        partial reservation behind."""
+        reserved: list[InventoryCode] = []
+        for _ in range(max(count, 0)):
+            item = await self.reserve_one(product_id, order_id)
+            if item is None:
+                break
+            reserved.append(item)
+        if len(reserved) < count:
+            for item in reserved:
+                item.is_reserved = False
+                item.reserved_by_order_id = None
+            if reserved:
+                await self.session.commit()
             return None
-        item.is_used = True
-        item.is_reserved = False
-        item.used_by_order_id = order_id
-        item.used_at = datetime.now(timezone.utc)
+        return reserved
+
+    async def release_reservation(self, order_id: int) -> int:
+        """Release every code reserved for this order (there can be more
+        than one, for multi-quantity purchases) back to the available pool
+        — called when an order is rejected or cancelled before delivery.
+        Returns how many codes were released (0 if nothing was reserved)."""
+        result = await self.session.execute(
+            select(InventoryCode).where(
+                InventoryCode.reserved_by_order_id == order_id,
+                InventoryCode.is_used.is_(False),
+            )
+        )
+        items = list(result.scalars().all())
+        if not items:
+            return 0
+        for item in items:
+            item.is_reserved = False
+            item.reserved_by_order_id = None
         await self.session.commit()
-        await self.session.refresh(item)
-        return item
+        return len(items)
+
+    async def finalize_reservation(self, order_id: int) -> list[InventoryCode]:
+        """Turn every code reserved for this order into actually-used
+        (delivered) codes — called on approval. Returns an empty list if
+        this order never had a reservation (e.g. it was created before
+        reservations existed), so the caller can fall back to
+        `claim_one_unused`."""
+        result = await self.session.execute(
+            select(InventoryCode).where(
+                InventoryCode.reserved_by_order_id == order_id,
+                InventoryCode.is_used.is_(False),
+            )
+        )
+        items = list(result.scalars().all())
+        if not items:
+            return []
+        now = datetime.now(timezone.utc)
+        for item in items:
+            item.is_used = True
+            item.is_reserved = False
+            item.used_by_order_id = order_id
+            item.used_at = now
+        await self.session.commit()
+        for item in items:
+            await self.session.refresh(item)
+        return items

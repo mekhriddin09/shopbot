@@ -22,6 +22,7 @@ from app.services.delivery_service import DeliveryService
 from app.services.exceptions import DeliveryFailedError, InvalidOrderStateError
 from app.services.notify import notify_admins_text
 from app.services.order_service import OrderService
+from app.services.referral_service import ReferralService
 from app.utils.formatting import build_delivered_message
 from app.utils.i18n import t
 
@@ -105,6 +106,7 @@ async def _poll_once(bot: Bot) -> None:
                     order.user.telegram_id,
                     build_delivered_message(lang, order, result.payload),
                 )
+                await ReferralService(session).credit_for_delivered_order(order, bot)
             elif result.needs_manual_message:
                 # Crypto payment confirmed, but this product is delivered
                 # manually — give admins a one-tap way to write the message.

@@ -18,6 +18,11 @@
   "btn_pay": "💳 Оплатить",
   "btn_check_payment": "✅ Проверить",
   "btn_proof_channel": "📢 Канал с доказательствами",
+  "btn_referral": "🤝 Реферал",
+  "btn_referral_withdraw": "💰 Вывести деньги",
+  "btn_confirm": "✅ Подтвердить",
+  "btn_preorder": "📦 Предзаказ",
+  "btn_notify_stock": "🔔 Сообщить о поступлении",
 
   "msg_choose_language": "🌐 Выберите язык:",
   "msg_language_set": "✅ Язык изменён на русский.",
@@ -33,6 +38,7 @@
   "msg_crypto_price_label": "🪙 Цена в крипто: ${price}",
 
   "msg_payment_header": "💳 Информация об оплате:\n\n{instructions}\n\n🔹 Заказ: <code>{order_uuid}</code>\n🔹 Товар: {product_name}\n🔹 Цена: {price} {currency}",
+  "msg_preorder_payment_header": "⏳ <b>Предзаказ</b> (товара пока нет в наличии, будет отправлен после поступления)\n\n💳 Информация об оплате:\n\n{instructions}\n\n🔹 Заказ: <code>{order_uuid}</code>\n🔹 Товар: {product_name}\n🔹 Цена: {price} {currency}",
   "msg_send_screenshot": "🖼 Отправьте скриншот чека об оплате.",
   "msg_screenshot_required": "Пожалуйста, отправьте именно изображение (скриншот).",
   "msg_order_sent_to_admin": "✅ Ваш чек принят и проверяется администратором. Скоро вы получите ответ!",
@@ -86,6 +92,16 @@
 
   "msg_support_type_here": "✍️ Напишите свой вопрос здесь — администратор ответит. Чтобы выйти, выберите другой раздел в меню.",
   "msg_support_sent": "✅ Ваше сообщение отправлено. Администратор скоро ответит.",
+
+  "msg_stock_notify_subscribed": "🔔 Готово! Сообщим вам, когда товар появится в наличии.",
+  "msg_stock_back_in_stock": "🔔 Хорошие новости! \"{name}\" снова в наличии — можно оформить покупку!",
+  "msg_referral_disabled": "🤝 Реферальная программа пока не активна.",
+  "msg_referral_profile": "🤝 <b>Реферальная программа</b>\n\nВаша ссылка:\n{link}\n\n👥 Приглашено: {invited}\n🛍 Совершили покупку: {purchased}\n🎁 Наград за 1-й заказ: {first_rewards}\n\n💰 Баланс: {balance} {currency}",
+  "msg_referral_withdraw_not_enough": "⚠️ Недостаточно баланса для вывода, либо эта функция пока отключена.",
+  "msg_referral_withdraw_requested": "✅ Ваш запрос принят: {amount} {currency}.\n\nАдминистратор скоро свяжется с вами.",
+  "msg_referral_reward_received": "🎉 Получено реферальное вознаграждение: +{amount} {currency}!",
+  "msg_referral_withdraw_paid": "✅ Ваши реферальные средства ({amount}) выплачены. Спасибо!",
+  "msg_referral_withdraw_rejected": "❌ Ваш запрос на вывод ({amount}) отклонён. Свяжитесь с администратором для уточнения.",
 
   "msg_error_generic": "⚠️ Произошла ошибка. Попробуйте ещё раз чуть позже.",
   "msg_not_admin": "⛔ У вас нет доступа к этому разделу.",

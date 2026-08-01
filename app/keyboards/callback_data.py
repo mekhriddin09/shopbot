@@ -12,6 +12,8 @@ from aiogram.filters.callback_data import CallbackData
 class ShopCB(CallbackData, prefix="shop"):
     action: str  # open | buy | paid | back_to_list | back_to_product
     product_id: int = 0
+    qty: int = 1
+    preorder: bool = False
 
 
 class OrderCB(CallbackData, prefix="order"):
@@ -43,6 +45,8 @@ class CryptoCB(CallbackData, prefix="crypto"):
     product_id: int = 0
     order_id: int = 0
     provider: str | None = None
+    qty: int = 1
+    preorder: bool = False
 
 
 class AdminMenuCB(CallbackData, prefix="amenu"):
@@ -79,6 +83,33 @@ class AdminAdminsCB(CallbackData, prefix="aadm"):
 class AdminBroadcastCB(CallbackData, prefix="abcast"):
     action: str  # menu | all | bought | not_bought | by_product | product_pick | product_bought | product_not_bought | confirm | cancel
     product_id: int = 0
+
+
+class ReferralCB(CallbackData, prefix="ref"):
+    action: str  # withdraw
+
+
+class QtyCB(CallbackData, prefix="qty"):
+    action: str  # show | inc | dec | set | confirm
+    product_id: int
+    qty: int = 1
+    flow: str = "card"  # card | crypto
+    provider: str = ""
+
+
+class StockNotifyCB(CallbackData, prefix="stockw"):
+    action: str  # subscribe
+    product_id: int
+
+
+class AdminStockWaitersCB(CallbackData, prefix="astockw"):
+    action: str  # list | notify_all
+    product_id: int = 0
+
+
+class AdminReferralWithdrawCB(CallbackData, prefix="arefw"):
+    action: str  # paid | reject
+    withdrawal_id: int = 0
 
 
 class ConfirmCB(CallbackData, prefix="confirm"):

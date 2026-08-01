@@ -37,5 +37,6 @@ class UserContextMiddleware(BaseMiddleware):
             return  # silently ignore blocked users
 
         data["user"] = user
+        data["user_created"] = _created
         data["lang"] = user.language or settings.DEFAULT_LANGUAGE
         return await handler(event, data)

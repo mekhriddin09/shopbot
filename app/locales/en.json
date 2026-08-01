@@ -18,6 +18,11 @@
   "btn_pay": "💳 Pay",
   "btn_check_payment": "✅ Check",
   "btn_proof_channel": "📢 Proof channel",
+  "btn_referral": "🤝 Referral",
+  "btn_referral_withdraw": "💰 Withdraw",
+  "btn_confirm": "✅ Confirm",
+  "btn_preorder": "📦 Pre-order",
+  "btn_notify_stock": "🔔 Notify when in stock",
 
   "msg_choose_language": "🌐 Choose a language:",
   "msg_language_set": "✅ Language set to English.",
@@ -33,6 +38,7 @@
   "msg_crypto_price_label": "🪙 Crypto price: ${price}",
 
   "msg_payment_header": "💳 Payment details:\n\n{instructions}\n\n🔹 Order: <code>{order_uuid}</code>\n🔹 Product: {product_name}\n🔹 Price: {price} {currency}",
+  "msg_preorder_payment_header": "⏳ <b>Pre-order</b> (not in stock yet, will be sent once it arrives)\n\n💳 Payment details:\n\n{instructions}\n\n🔹 Order: <code>{order_uuid}</code>\n🔹 Product: {product_name}\n🔹 Price: {price} {currency}",
   "msg_send_screenshot": "🖼 Please upload a screenshot of your payment.",
   "msg_screenshot_required": "Please send an image (screenshot) only.",
   "msg_order_sent_to_admin": "✅ Your proof has been received and is being reviewed by the admin. You'll hear back soon!",
@@ -86,6 +92,16 @@
 
   "msg_support_type_here": "✍️ Type your question here — the admin will reply. To exit, choose another section from the menu.",
   "msg_support_sent": "✅ Your message has been sent. The admin will reply shortly.",
+
+  "msg_stock_notify_subscribed": "🔔 Done! We'll let you know when it's back in stock.",
+  "msg_stock_back_in_stock": "🔔 Good news! \"{name}\" is back in stock — you can purchase it now!",
+  "msg_referral_disabled": "🤝 The referral program isn't active yet.",
+  "msg_referral_profile": "🤝 <b>Referral program</b>\n\nYour link:\n{link}\n\n👥 Invited: {invited}\n🛍 Made a purchase: {purchased}\n🎁 First-order rewards: {first_rewards}\n\n💰 Balance: {balance} {currency}",
+  "msg_referral_withdraw_not_enough": "⚠️ Not enough balance to withdraw, or this feature is currently disabled.",
+  "msg_referral_withdraw_requested": "✅ Your request has been received: {amount} {currency}.\n\nThe admin will contact you shortly.",
+  "msg_referral_reward_received": "🎉 Referral reward received: +{amount} {currency}!",
+  "msg_referral_withdraw_paid": "✅ Your referral payout ({amount}) has been sent. Thank you!",
+  "msg_referral_withdraw_rejected": "❌ Your withdrawal request ({amount}) was rejected. Contact the admin for details.",
 
   "msg_error_generic": "⚠️ Something went wrong. Please try again shortly.",
   "msg_not_admin": "⛔ You don't have access to this section.",
