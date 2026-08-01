@@ -55,6 +55,8 @@ async def crypto_poller_loop(bot: Bot) -> None:
 async def _poll_once(bot: Bot) -> None:
     async with async_session_maker() as session:
         orders_repo = OrderRepository(session)
+        await _sweep_stale_stars_orders(bot, session, orders_repo)
+
         pending = await orders_repo.list_awaiting_crypto_payment()
         if not pending:
             return
@@ -111,6 +113,28 @@ async def _poll_once(bot: Bot) -> None:
                 # Crypto payment confirmed, but this product is delivered
                 # manually — give admins a one-tap way to write the message.
                 await _notify_admins_with_manual_button(bot, session, order.id, order.order_uuid, order.product.name)
+
+
+async def _sweep_stale_stars_orders(bot: Bot, session, orders_repo: OrderRepository) -> None:
+    """Telegram Stars payments are push-based — there's no "check invoice"
+    API call to poll like with crypto, Telegram just sends a
+    `successful_payment` update the moment the user pays. So the only job
+    here is the same abandoned-invoice timeout as crypto: release any
+    reserved stock for Stars invoices nobody ever paid."""
+    pending = await orders_repo.list_awaiting_stars_payment()
+    for order in pending:
+        if _age_minutes(order.created_at) < settings.CRYPTO_PAYMENT_TIMEOUT_MINUTES:
+            continue
+        cancelled = await OrderService(session).cancel_pending(order.id)
+        if cancelled:
+            order_logger.info("stars_payment_timeout order=%s", order.order_uuid)
+            try:
+                await bot.send_message(
+                    order.user.telegram_id,
+                    t(order.user.language, "msg_crypto_payment_timeout", order_uuid=order.order_uuid),
+                )
+            except Exception:  # noqa: BLE001 - user may have blocked the bot
+                logger.warning("Failed to notify user %s about stars timeout", order.user.telegram_id)
 
 
 async def _notify_admins_with_manual_button(

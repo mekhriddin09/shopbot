@@ -15,18 +15,22 @@ from app.keyboards.callback_data import (
     AdminMenuCB,
     AdminOrderListCB,
     AdminProductCB,
+    AdminReferralRedemptionCB,
+    AdminReferralRewardCB,
     AdminReferralWithdrawCB,
     AdminSettingsCB,
     AdminStockWaitersCB,
     ConfirmCB,
     OrderCB,
 )
+from app.utils.formatting import fmt_price
 
 ADMIN_BTN_PRODUCTS = "\U0001F6CD️ Mahsulotlar"
 ADMIN_BTN_ORDERS = "\U0001F4E5 Buyurtmalar"
 ADMIN_BTN_STATS = "\U0001F4CA Statistika"
 ADMIN_BTN_SETTINGS = "⚙️ Sozlamalar"
 ADMIN_BTN_BROADCAST = "\U0001F4E2 Xabar yuborish"
+ADMIN_BTN_REFERRAL_REWARDS = "\U0001F381 Referral do'koni"
 ADMIN_BTN_EXIT = "\U0001F6AA Admin paneldan chiqish"
 
 
@@ -35,7 +39,7 @@ def admin_main_menu_kb() -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text=ADMIN_BTN_PRODUCTS), KeyboardButton(text=ADMIN_BTN_ORDERS)],
             [KeyboardButton(text=ADMIN_BTN_STATS), KeyboardButton(text=ADMIN_BTN_SETTINGS)],
-            [KeyboardButton(text=ADMIN_BTN_BROADCAST)],
+            [KeyboardButton(text=ADMIN_BTN_BROADCAST), KeyboardButton(text=ADMIN_BTN_REFERRAL_REWARDS)],
             [KeyboardButton(text=ADMIN_BTN_EXIT)],
         ],
         resize_keyboard=True,
@@ -82,6 +86,7 @@ def admin_product_detail_kb(product: Product) -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text="\U0001FA99 Narx (USD/kripto)", callback_data=cb("edit_field", "price_usd")),
+            InlineKeyboardButton(text="⭐ Narx (Stars)", callback_data=cb("edit_field", "price_stars")),
         ],
         [
             InlineKeyboardButton(text="\U0001F5BC️ Rasm", callback_data=cb("edit_field", "image")),
@@ -291,6 +296,7 @@ def admin_settings_menu_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="\U0001F310 API orqali yetkazish", callback_data=AdminSettingsCB(action="toggle", key="api_delivery_enabled").pack())],
         [InlineKeyboardButton(text="📢 Isbotlar kanali havolasi", callback_data=AdminSettingsCB(action="edit", key="proof_channel_url").pack())],
         [InlineKeyboardButton(text="\U0001FA99 Kripto to'lov (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="crypto_payment_enabled").pack())],
+        [InlineKeyboardButton(text="⭐ Telegram Stars to'lov (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="stars_payment_enabled").pack())],
         [InlineKeyboardButton(text="\U0001F91D Referral (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="referral_enabled").pack())],
         [InlineKeyboardButton(text="\U0001F381 1-buyurtma mukofoti (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="referral_first_order_enabled").pack())],
         [InlineKeyboardButton(text="✏️ 1-buyurtma mukofoti miqdori", callback_data=AdminSettingsCB(action="edit", key="referral_first_order_value").pack())],
@@ -299,6 +305,7 @@ def admin_settings_menu_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="✏️ Referral valyutasi (UZS/USD/USDT/Ball)", callback_data=AdminSettingsCB(action="edit", key="referral_currency").pack())],
         [InlineKeyboardButton(text="✏️ Min. pul yechish miqdori", callback_data=AdminSettingsCB(action="edit", key="referral_withdraw_min").pack())],
         [InlineKeyboardButton(text="\U0001F4E6 Oldindan buyurtma (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="preorder_enabled").pack())],
+        [InlineKeyboardButton(text="\U0001F4DC Referral qoidalari (til bo'yicha)", callback_data=AdminSettingsCB(action="pick_lang", key="referral_rules").pack())],
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -314,6 +321,72 @@ def admin_referral_withdraw_kb(withdrawal_id: int) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="❌ Rad etish",
                     callback_data=AdminReferralWithdrawCB(action="reject", withdrawal_id=withdrawal_id).pack(),
+                ),
+            ]
+        ]
+    )
+
+
+def admin_referral_rewards_list_kb(rewards: list) -> InlineKeyboardMarkup:
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=f"{'🟢' if r.is_active else '⚪'} {r.name} — {fmt_price(float(r.cost))}",
+                callback_data=AdminReferralRewardCB(action="open", reward_id=r.id).pack(),
+            )
+        ]
+        for r in rewards
+    ]
+    rows.append(
+        [InlineKeyboardButton(text="➕ Yangi sovg'a", callback_data=AdminReferralRewardCB(action="add").pack())]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_referral_reward_detail_kb(reward) -> InlineKeyboardMarkup:
+    rid = reward.id
+    visibility_text = "\U0001F648 Yashirish" if reward.is_active else "\U0001F441 Ko'rsatish"
+
+    def cb(action: str, field: str = "") -> str:
+        return AdminReferralRewardCB(action=action, reward_id=rid, field=field).pack()
+
+    rows = [
+        [
+            InlineKeyboardButton(text="✏️ Nomi", callback_data=cb("edit_field", "name")),
+            InlineKeyboardButton(text="\U0001F4B0 Narxi (ball)", callback_data=cb("edit_field", "cost")),
+        ],
+        [InlineKeyboardButton(text="\U0001F4DD Izoh", callback_data=cb("edit_field", "description"))],
+        [
+            InlineKeyboardButton(text=visibility_text, callback_data=cb("toggle_active")),
+            InlineKeyboardButton(text="\U0001F5D1️ O'chirish", callback_data=cb("delete")),
+        ],
+        [InlineKeyboardButton(text="\U0001F519 Ro'yxatga qaytish", callback_data=AdminReferralRewardCB(action="list").pack())],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def confirm_delete_reward_kb(reward_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Ha, o'chirish", callback_data=AdminReferralRewardCB(action="confirm_delete", reward_id=reward_id).pack()),
+                InlineKeyboardButton(text="❌ Bekor qilish", callback_data=AdminReferralRewardCB(action="open", reward_id=reward_id).pack()),
+            ]
+        ]
+    )
+
+
+def admin_referral_redemption_kb(redemption_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Yetkazildi",
+                    callback_data=AdminReferralRedemptionCB(action="fulfilled", redemption_id=redemption_id).pack(),
+                ),
+                InlineKeyboardButton(
+                    text="❌ Rad etish",
+                    callback_data=AdminReferralRedemptionCB(action="reject", redemption_id=redemption_id).pack(),
                 ),
             ]
         ]

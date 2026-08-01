@@ -13,6 +13,7 @@ class DeliveryMode(str, enum.Enum):
 class OrderStatus(str, enum.Enum):
     AWAITING_PROOF = "awaiting_proof"        # user pressed "I paid", waiting for screenshot
     AWAITING_CRYPTO_PAYMENT = "awaiting_crypto_payment"  # crypto invoice created, waiting for on-chain confirmation
+    AWAITING_STARS_PAYMENT = "awaiting_stars_payment"    # Telegram Stars invoice sent, waiting for successful_payment
     PENDING_APPROVAL = "pending_approval"    # screenshot forwarded to admin
     APPROVED = "approved"
     REJECTED = "rejected"
@@ -29,9 +30,16 @@ class AdminRole(str, enum.Enum):
 class PaymentMethod(str, enum.Enum):
     CARD = "card"      # manual card/wallet transfer + screenshot proof
     CRYPTO = "crypto"  # CryptoBot / xRocket invoice, auto-confirmed
+    STARS = "stars"    # Telegram Stars (native Telegram payments), auto-confirmed
 
 
 class ReferralWithdrawalStatus(str, enum.Enum):
     PENDING = "pending"
     PAID = "paid"
+    REJECTED = "rejected"
+
+
+class ReferralRedemptionStatus(str, enum.Enum):
+    PENDING = "pending"
+    FULFILLED = "fulfilled"
     REJECTED = "rejected"

@@ -23,9 +23,11 @@ from app.keyboards.admin_kb import (
     admin_broadcast_confirm_kb,
     admin_product_detail_kb,
     admin_products_list_kb,
+    admin_referral_reward_detail_kb,
 )
 from app.repositories.inventory_repo import InventoryRepository
 from app.repositories.product_repo import ProductRepository
+from app.repositories.referral_repo import ReferralRepository
 from app.repositories.setting_repo import SettingRepository
 from app.services.delivery_service import DeliveryService
 from app.services.exceptions import DeliveryFailedError, InvalidOrderStateError
@@ -97,6 +99,18 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
                 except ValueError:
                     await message.answer("Narx noto'g'ri. Faqat raqam yuboring (masalan 4.00) yoki '-' yuboring.")
                     return
+        elif field == "price_stars":
+            if text == "-":
+                value = None
+            else:
+                try:
+                    value = int(text)
+                except ValueError:
+                    await message.answer("Narx noto'g'ri. Faqat butun son yuboring (masalan 100) yoki '-' yuboring.")
+                    return
+                if value < 1:
+                    await message.answer("1 dan kichik bo'lmasligi kerak.")
+                    return
         elif field in ("sort_order", "min_order_qty", "max_order_qty"):
             try:
                 value = int(text)
@@ -139,6 +153,63 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
         await state.clear()
         _, summary, kb = await _product_summary_and_kb(session, product.id)
         await message.answer(f"✅ Yangilandi!\n\n{summary}", reply_markup=kb)
+        return
+
+    if action == "new_reward_name":
+        await state.update_data(action="new_reward_cost", name=text)
+        await message.answer("Narxini (referral balansidan yechiladigan ball/summa) raqamda yozing (masalan: 20000):")
+        return
+
+    if action == "new_reward_cost":
+        try:
+            cost = float(text.replace(" ", "").replace(",", "."))
+        except ValueError:
+            await message.answer("Narx noto'g'ri. Faqat raqam yuboring, masalan: 20000")
+            return
+        name = data.get("name", "Yangi sovg'a")
+        reward = await ReferralRepository(session).create_reward(name=name, cost=cost)
+        admin_actions_logger.info("referral_reward_created id=%s name=%s admin=%s", reward.id, name, message.from_user.id)
+        await state.clear()
+        from app.handlers.admin.referral_rewards import _reward_summary  # local import avoids cycle
+
+        await message.answer(
+            f"✅ Sovg'a yaratildi!\n\n{_reward_summary(reward)}",
+            reply_markup=admin_referral_reward_detail_kb(reward),
+        )
+        return
+
+    if action == "edit_reward_field":
+        reward_id = data["reward_id"]
+        field = data["field"]
+        referrals = ReferralRepository(session)
+        reward = await referrals.get_reward(reward_id)
+        if reward is None:
+            await message.answer("Sovg'a topilmadi.")
+            await state.clear()
+            return
+
+        if field == "cost":
+            try:
+                value: object = float(text.replace(" ", "").replace(",", "."))
+            except ValueError:
+                await message.answer("Narx noto'g'ri. Faqat raqam yuboring.")
+                return
+        elif field == "description":
+            value = None if text == "-" else text
+        else:
+            value = text
+
+        await referrals.update_reward(reward, **{field: value})
+        admin_actions_logger.info(
+            "referral_reward_field_edited id=%s field=%s admin=%s", reward.id, field, message.from_user.id
+        )
+        await state.clear()
+        from app.handlers.admin.referral_rewards import _reward_summary  # local import avoids cycle
+
+        await message.answer(
+            f"✅ Yangilandi!\n\n{_reward_summary(reward)}",
+            reply_markup=admin_referral_reward_detail_kb(reward),
+        )
         return
 
     if action == "inventory_add_one":

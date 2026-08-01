@@ -50,6 +50,8 @@ _NEW_COLUMNS: list[tuple[str, str, str]] = [
     ("orders", "referral_is_first_reward", "BOOLEAN NOT NULL DEFAULT 0"),
     ("orders", "quantity", "INTEGER NOT NULL DEFAULT 1"),
     ("orders", "is_preorder", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("products", "price_stars", "INTEGER"),
+    ("orders", "stars_charge_id", "VARCHAR(128)"),
 ]
 
 DEFAULT_SETTINGS: dict[str, str] = {
@@ -123,9 +125,21 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # Minimum balance required before a "💰 Pulni yechish" (withdraw) request
     # can be made. 0 = withdrawal requests disabled entirely.
     "referral_withdraw_min": "0",
+    # Free-text referral program rules, admin-written per language. Shown
+    # via a "📜 Qoidalar" button on the referral profile screen — the button
+    # only appears once the admin has written something for that specific
+    # language (empty = hidden for that language, checked per-request).
+    "referral_rules_uz": "",
+    "referral_rules_ru": "",
+    "referral_rules_en": "",
 
     # Out-of-stock "notify me" + pre-order toggles.
     "preorder_enabled": "0",
+
+    # Telegram Stars (native in-app payments, currency XTR). Off by default
+    # until the admin sets a Stars price on at least one product and
+    # enables this.
+    "stars_payment_enabled": "0",
 }
 
 

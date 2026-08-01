@@ -14,3 +14,7 @@ class ReviewStates(StatesGroup):
 
 class SupportStates(StatesGroup):
     chatting = State()
+
+
+class ReferralRewardStates(StatesGroup):
+    waiting_note = State()

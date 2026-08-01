@@ -49,6 +49,14 @@ class CryptoCB(CallbackData, prefix="crypto"):
     preorder: bool = False
 
 
+class StarsCB(CallbackData, prefix="stars"):
+    action: str  # buy | cancel
+    product_id: int = 0
+    order_id: int = 0
+    qty: int = 1
+    preorder: bool = False
+
+
 class AdminMenuCB(CallbackData, prefix="amenu"):
     action: str  # products | inventory | orders | stats | settings | admins
 
@@ -86,14 +94,14 @@ class AdminBroadcastCB(CallbackData, prefix="abcast"):
 
 
 class ReferralCB(CallbackData, prefix="ref"):
-    action: str  # withdraw
+    action: str  # withdraw | rules | profile_back
 
 
 class QtyCB(CallbackData, prefix="qty"):
     action: str  # show | inc | dec | set | confirm
     product_id: int
     qty: int = 1
-    flow: str = "card"  # card | crypto
+    flow: str = "card"  # card | crypto | stars
     provider: str = ""
 
 
@@ -110,6 +118,22 @@ class AdminStockWaitersCB(CallbackData, prefix="astockw"):
 class AdminReferralWithdrawCB(CallbackData, prefix="arefw"):
     action: str  # paid | reject
     withdrawal_id: int = 0
+
+
+class ReferralRewardCB(CallbackData, prefix="refrw"):
+    action: str  # list | open | buy | skip_note | back
+    reward_id: int = 0
+
+
+class AdminReferralRewardCB(CallbackData, prefix="arefrw"):
+    action: str  # list | open | add | edit_field | toggle_active | delete | confirm_delete | back
+    reward_id: int = 0
+    field: str | None = None
+
+
+class AdminReferralRedemptionCB(CallbackData, prefix="arefrd"):
+    action: str  # fulfilled | reject
+    redemption_id: int = 0
 
 
 class ConfirmCB(CallbackData, prefix="confirm"):

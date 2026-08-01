@@ -15,9 +15,12 @@ from app.keyboards.callback_data import (
     MyOrdersPageCB,
     QtyCB,
     ReferralCB,
+    ReferralRewardCB,
     ShopCB,
+    StarsCB,
     StockNotifyCB,
 )
+from app.utils.formatting import fmt_price
 from app.utils.i18n import t
 
 
@@ -58,13 +61,14 @@ def product_detail_kb(
     in_stock: bool,
     show_crypto: bool = False,
     crypto_providers: list[tuple[str, str]] | None = None,
+    show_stars: bool = False,
     max_order_qty: int = 1,
     show_notify_button: bool = False,
     show_preorder_button: bool = False,
 ) -> InlineKeyboardMarkup:
     rows = []
     if in_stock:
-        buy_label = t(lang, "btn_pay_card") if show_crypto else t(lang, "btn_buy")
+        buy_label = t(lang, "btn_pay_card") if (show_crypto or show_stars) else t(lang, "btn_buy")
         if max_order_qty > 1:
             rows.append(
                 [
@@ -105,6 +109,27 @@ def product_detail_kb(
                             )
                         ]
                     )
+        if show_stars:
+            # Telegram's own native Stars payment — no external provider, so
+            # just one button (unlike crypto, which can have several).
+            if max_order_qty > 1:
+                rows.append(
+                    [
+                        InlineKeyboardButton(
+                            text=t(lang, "btn_buy_stars"),
+                            callback_data=QtyCB(action="show", product_id=product_id, flow="stars").pack(),
+                        )
+                    ]
+                )
+            else:
+                rows.append(
+                    [
+                        InlineKeyboardButton(
+                            text=t(lang, "btn_buy_stars"),
+                            callback_data=StarsCB(action="buy", product_id=product_id).pack(),
+                        )
+                    ]
+                )
     elif show_preorder_button:
         rows.append(
             [
@@ -126,6 +151,15 @@ def product_detail_kb(
                         )
                     ]
                 )
+        if show_stars:
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=t(lang, "btn_buy_stars"),
+                        callback_data=StarsCB(action="buy", product_id=product_id, preorder=True).pack(),
+                    )
+                ]
+            )
     elif show_notify_button:
         rows.append(
             [
@@ -186,6 +220,25 @@ def crypto_invoice_kb(lang: str, pay_url: str, order_id: int) -> InlineKeyboardM
     )
 
 
+def stars_invoice_kb(lang: str, order_id: int) -> InlineKeyboardMarkup:
+    """Telegram requires the very first button of an invoice message's first
+    row to have `pay=True` (no callback_data/url) for it to render as the
+    native "Pay" button. We add a Cancel row below it so the customer can
+    still back out and release any reserved stock — Stars payments are
+    push-based, so there's no separate "check payment" button like crypto."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=t(lang, "btn_pay_stars"), pay=True)],
+            [
+                InlineKeyboardButton(
+                    text=t(lang, "btn_cancel"),
+                    callback_data=StarsCB(action="cancel", order_id=order_id).pack(),
+                )
+            ],
+        ]
+    )
+
+
 def proof_channel_kb(lang: str, url: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text=t(lang, "btn_proof_channel"), url=url)]]
@@ -209,12 +262,64 @@ def my_orders_page_kb(current_page: int, total_pages: int) -> InlineKeyboardMark
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def referral_profile_kb(lang: str, can_withdraw: bool) -> InlineKeyboardMarkup | None:
-    if not can_withdraw:
+def referral_profile_kb(
+    lang: str, can_withdraw: bool, has_rewards: bool = False, has_rules: bool = False
+) -> InlineKeyboardMarkup | None:
+    rows = []
+    if has_rewards:
+        rows.append(
+            [InlineKeyboardButton(text=t(lang, "btn_referral_shop"), callback_data=ReferralRewardCB(action="list").pack())]
+        )
+    if can_withdraw:
+        rows.append(
+            [InlineKeyboardButton(text=t(lang, "btn_referral_withdraw"), callback_data=ReferralCB(action="withdraw").pack())]
+        )
+    if has_rules:
+        rows.append(
+            [InlineKeyboardButton(text=t(lang, "btn_referral_rules"), callback_data=ReferralCB(action="rules").pack())]
+        )
+    if not rows:
         return None
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def referral_reward_list_kb(lang: str, rewards: list) -> InlineKeyboardMarkup:
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=f"{r.name} — {fmt_price(float(r.cost))}",
+                callback_data=ReferralRewardCB(action="open", reward_id=r.id).pack(),
+            )
+        ]
+        for r in rewards
+    ]
+    rows.append(
+        [InlineKeyboardButton(text=t(lang, "btn_back"), callback_data=ReferralCB(action="profile_back").pack())]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def referral_reward_detail_kb(lang: str, reward_id: int, can_afford: bool) -> InlineKeyboardMarkup:
+    rows = []
+    if can_afford:
+        rows.append(
+            [InlineKeyboardButton(text=t(lang, "btn_referral_reward_buy"), callback_data=ReferralRewardCB(action="buy", reward_id=reward_id).pack())]
+        )
+    rows.append(
+        [InlineKeyboardButton(text=t(lang, "btn_back"), callback_data=ReferralRewardCB(action="list").pack())]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def referral_reward_skip_note_kb(lang: str, reward_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=t(lang, "btn_referral_withdraw"), callback_data=ReferralCB(action="withdraw").pack())]
+            [
+                InlineKeyboardButton(
+                    text=t(lang, "btn_skip"),
+                    callback_data=ReferralRewardCB(action="skip_note", reward_id=reward_id).pack(),
+                )
+            ]
         ]
     )
 

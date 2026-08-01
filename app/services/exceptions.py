@@ -46,3 +46,13 @@ class InvalidOrderStateError(DomainError):
 
 class DeliveryFailedError(DomainError):
     pass
+
+
+class RewardUnavailableError(DomainError):
+    """Raised when a referral-shop reward no longer exists or was hidden by
+    the admin between the customer opening the list and tapping "buy"."""
+
+
+class InsufficientBalanceError(DomainError):
+    """Raised when a customer's referral balance is too low to redeem the
+    reward they picked."""

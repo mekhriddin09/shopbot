@@ -65,7 +65,11 @@ class OrderService:
         )
         return order
 
-    _CANCELLABLE_STATUSES = (OrderStatus.AWAITING_PROOF, OrderStatus.AWAITING_CRYPTO_PAYMENT)
+    _CANCELLABLE_STATUSES = (
+        OrderStatus.AWAITING_PROOF,
+        OrderStatus.AWAITING_CRYPTO_PAYMENT,
+        OrderStatus.AWAITING_STARS_PAYMENT,
+    )
 
     async def start_preorder(self, user: User, product_id: int) -> Order:
         """Pay-now-deliver-later path for an out-of-stock product (must be

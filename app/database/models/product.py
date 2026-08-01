@@ -29,6 +29,9 @@ class Product(TimestampMixin, Base):
     price_usd: Mapped[float | None] = mapped_column(
         Numeric(12, 2), nullable=True, doc="Crypto (USD) price. Null = crypto payment not offered for this product."
     )
+    price_stars: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, doc="Telegram Stars price (whole number, XTR has no subunits). Null = Stars payment not offered for this product."
+    )
     image_file_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     delivery_mode: Mapped[DeliveryMode] = mapped_column(

@@ -119,6 +119,8 @@ async def open_product(callback: CallbackQuery, callback_data: ShopCB, session: 
     crypto_enabled = await settings_repo.get_bool("crypto_payment_enabled", False)
     crypto_providers = available_crypto_providers() if crypto_enabled and view.product.price_usd is not None else []
     show_crypto = bool(crypto_providers)
+    stars_enabled = await settings_repo.get_bool("stars_payment_enabled", False)
+    show_stars = stars_enabled and view.product.price_stars is not None
 
     preorder_enabled = not view.in_stock and await settings_repo.get_bool("preorder_enabled", False)
     show_notify = not view.in_stock and not preorder_enabled
@@ -126,12 +128,15 @@ async def open_product(callback: CallbackQuery, callback_data: ShopCB, session: 
     text = _product_card_text(lang, view.product, view.stock)
     if show_crypto:
         text += "\n" + t(lang, "msg_crypto_price_label", price=f"{float(view.product.price_usd):.2f}")
+    if show_stars:
+        text += "\n" + t(lang, "msg_stars_price_label", price=view.product.price_stars)
     kb = product_detail_kb(
         lang,
         view.product.id,
         view.in_stock,
         show_crypto=show_crypto,
         crypto_providers=crypto_providers,
+        show_stars=show_stars,
         max_order_qty=view.product.max_order_qty,
         show_notify_button=show_notify,
         show_preorder_button=preorder_enabled,
@@ -240,6 +245,10 @@ async def qty_confirm(
 
     if callback_data.flow == "crypto":
         await _start_crypto_purchase(callback, session, user, lang, product, callback_data.provider or "", qty)
+    elif callback_data.flow == "stars":
+        from app.handlers.user.stars import start_stars_purchase
+
+        await start_stars_purchase(callback, session, user, lang, product, qty)
     else:
         await _show_card_payment_instructions(callback, session, product, lang, qty)
 

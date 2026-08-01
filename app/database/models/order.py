@@ -41,6 +41,9 @@ class Order(TimestampMixin, Base):
     crypto_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
     crypto_invoice_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     crypto_pay_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    stars_charge_id: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, doc="telegram_payment_charge_id from successful_payment, needed for refundStarPayment"
+    )
 
     decided_by_admin_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

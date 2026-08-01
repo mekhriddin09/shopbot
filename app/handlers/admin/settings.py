@@ -27,6 +27,7 @@ TOGGLE_LABELS = {
     "manual_delivery_enabled": "Qo'lda yetkazish",
     "api_delivery_enabled": "API orqali yetkazish",
     "crypto_payment_enabled": "Kripto to'lov",
+    "stars_payment_enabled": "Telegram Stars to'lov",
     "referral_enabled": "Referral tizimi",
     "referral_first_order_enabled": "1-buyurtma mukofoti",
     "referral_recurring_enabled": "Doimiy mukofot",

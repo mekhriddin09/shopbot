@@ -55,6 +55,14 @@ class OrderRepository:
         )
         return list(result.scalars().all())
 
+    async def list_awaiting_stars_payment(self) -> list[Order]:
+        result = await self.session.execute(
+            select(Order)
+            .options(selectinload(Order.product), selectinload(Order.user))
+            .where(Order.status == OrderStatus.AWAITING_STARS_PAYMENT)
+        )
+        return list(result.scalars().all())
+
     async def get_by_id(self, order_id: int, *, for_update: bool = False) -> Order | None:
         stmt = (
             select(Order)

@@ -34,6 +34,7 @@ FIELD_PROMPTS = {
     "description": "Yangi tavsifni yozing (bu — hech qaysi tilga moslanmagan hollarda ko'rsatiladigan standart tavsif):",
     "price": "Yangi narxni raqamda yozing (masalan: 25000):",
     "price_usd": "Kripto (USD) narxini yozing (masalan: 4.00). Kripto to'lovni o'chirish uchun '-' yuboring:",
+    "price_stars": "Telegram Stars narxini butun sonda yozing (masalan: 100). Stars to'lovni o'chirish uchun '-' yuboring:",
     "emoji": "Yangi emoji yuboring:",
     "sort_order": "Tartib raqamini yozing (butun son, kichigi tepada turadi):",
     "payment_instructions": "Ushbu mahsulot uchun maxsus to'lov ma'lumotini yozing (bo'sh qoldirish uchun '-' yuboring):",
@@ -79,6 +80,11 @@ def _product_summary(product) -> str:
         if product.price_usd is not None
         else "\U0001FA99 Kripto narx: o'rnatilmagan\n"
     )
+    price_stars_line = (
+        f"⭐ Stars narx: {product.price_stars} ⭐\n"
+        if product.price_stars is not None
+        else "⭐ Stars narx: o'rnatilmagan\n"
+    )
     def _lang_coverage(field_base: str) -> str:
         set_langs = [code for code in _LANG_LABELS if getattr(product, f"{field_base}_{code}", None)]
         return ", ".join(set_langs) if set_langs else "faqat standart"
@@ -101,6 +107,7 @@ def _product_summary(product) -> str:
         f"\U0001F310 Tavsif tarjimalari: {_lang_coverage('description')}\n"
         f"\U0001F4B0 Narx: {fmt_price(float(product.price))} {product.currency}\n"
         f"{price_usd_line}"
+        f"{price_stars_line}"
         f"\U0001F4E6 Yetkazish rejimi: {mode_label}\n"
         f"\U0001F522 Tartib: {product.sort_order}\n"
         f"{qty_line}"
@@ -231,10 +238,29 @@ async def product_delete(callback: CallbackQuery, callback_data: AdminProductCB,
     if product is None:
         await callback.answer("Mahsulot topilmadi", show_alert=True)
         return
+    deleted = await products.delete(product)
+    if deleted:
+        admin_actions_logger.info(
+            "product_deleted id=%s name=%s admin=%s", product.id, product.name, callback.from_user.id
+        )
+        all_products = await products.list_all()
+        await callback.message.edit_text("✅ Mahsulot o'chirildi.", reply_markup=admin_products_list_kb(all_products))
+        await callback.answer()
+        return
+
+    # Database refused: this product has existing orders (RESTRICT FK) —
+    # deleting it outright would break those orders' history. Hide it
+    # instead, which is what the admin actually wants in practice (get it
+    # out of the shop) without losing past sales data.
+    await products.set_visibility(product, False)
     admin_actions_logger.info(
-        "product_deleted id=%s name=%s admin=%s", product.id, product.name, callback.from_user.id
+        "product_hidden_instead_of_deleted id=%s name=%s admin=%s", product.id, product.name, callback.from_user.id
     )
-    await products.delete(product)
-    all_products = await products.list_all()
-    await callback.message.edit_text("✅ Mahsulot o'chirildi.", reply_markup=admin_products_list_kb(all_products))
+    await callback.message.edit_text(
+        "⚠️ Bu mahsulot bo'yicha oldin buyurtmalar bo'lgani uchun butunlay o'chirib bo'lmadi "
+        "(buyurtmalar tarixi buzilmasligi uchun himoyalangan).\n\n"
+        "\U0001F648 Shuning uchun uni <b>yashirdik</b> — endi do'konda mijozlarga ko'rinmaydi, "
+        "lekin eski buyurtmalar va statistikada saqlanib qoladi.",
+        reply_markup=admin_products_list_kb(await products.list_all()),
+    )
     await callback.answer()

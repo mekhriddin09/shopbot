@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models import InventoryCode, Product
+from app.database.models import InventoryCode, Order, Product
 from app.database.models.enums import DeliveryMode
 
 
@@ -68,9 +68,27 @@ class ProductRepository:
         await self.session.refresh(product)
         return product
 
-    async def delete(self, product: Product) -> None:
+    async def has_orders(self, product_id: int) -> bool:
+        result = await self.session.execute(
+            select(func.count(Order.id)).where(Order.product_id == product_id)
+        )
+        return int(result.scalar_one()) > 0
+
+    async def delete(self, product: Product) -> bool:
+        """Returns True if the product was actually deleted. Returns False
+        (without touching the database) if this product has at least one
+        Order ever placed against it — `Order.product_id` is a RESTRICT
+        foreign key on purpose: deleting the product out from under
+        historical orders would either orphan them or silently erase order
+        history/stats. Checking first (rather than attempting the delete
+        and catching the resulting IntegrityError) avoids leaving the
+        session's transaction in a failed state. Callers should fall back
+        to hiding the product instead."""
+        if await self.has_orders(product.id):
+            return False
         await self.session.delete(product)
         await self.session.commit()
+        return True
 
     async def set_visibility(self, product: Product, visible: bool) -> None:
         product.is_visible = visible

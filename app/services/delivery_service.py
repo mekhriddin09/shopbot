@@ -84,6 +84,25 @@ class DeliveryService:
             )
             return await self._run_delivery(order)
 
+    async def auto_deliver_stars(self, order_id: int) -> ApprovalResult:
+        """Called from the `successful_payment` handler the instant Telegram
+        confirms a Stars payment — like crypto, Stars payments are
+        auto-verified by Telegram itself, so there's nothing for a human to
+        check; goes straight to delivery."""
+        async with lock_for(f"order:{order_id}"):
+            order = await self.orders.get_by_id(order_id)
+            if order is None:
+                raise InvalidOrderStateError("msg_order_not_found")
+            if order.status != OrderStatus.AWAITING_STARS_PAYMENT:
+                raise InvalidOrderStateError(
+                    "msg_not_awaiting_stars", status=order.status.value
+                )
+            await self.orders.set_status(order, OrderStatus.APPROVED, admin_id=None)
+            order_logger.info(
+                "order_auto_approved_stars id=%s product=%s", order.order_uuid, order.product_id
+            )
+            return await self._run_delivery(order)
+
     async def _run_delivery(self, order: Order) -> ApprovalResult:
         """Shared mode-dispatch logic for both manual admin approval and
         automatic crypto-confirmed delivery. Assumes the order is already

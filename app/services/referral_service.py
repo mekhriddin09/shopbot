@@ -18,9 +18,11 @@ import logging
 from aiogram import Bot
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import Order, User
+from app.database.models import Order, ReferralRedemption, User
 from app.repositories.order_repo import OrderRepository
+from app.repositories.referral_repo import ReferralRepository
 from app.repositories.setting_repo import SettingRepository
+from app.services.exceptions import InsufficientBalanceError, RewardUnavailableError
 from app.utils.formatting import fmt_price
 from app.utils.i18n import t
 
@@ -58,6 +60,7 @@ class ReferralService:
         self.session = session
         self.orders = OrderRepository(session)
         self.settings = SettingRepository(session)
+        self.referrals = ReferralRepository(session)
 
     async def set_referrer_if_new(self, user: User, referrer_user_id: int) -> None:
         """Only ever called right after a brand-new user's first /start
@@ -134,3 +137,29 @@ class ReferralService:
             )
         except Exception:  # noqa: BLE001 - referrer may have blocked the bot
             pass
+
+    async def redeem_reward(self, user: User, reward_id: int, note: str | None) -> ReferralRedemption:
+        """Spend the customer's referral balance on a catalog reward — the
+        "referral shop" checkout. Deducts the balance immediately (treated
+        as reserved the same way an inventory code is reserved at purchase
+        time) so a customer can't fire off several requests against the
+        same balance before an admin gets to the first one; a rejected
+        request refunds it back (see `ReferralRepository.mark_redemption_rejected`)."""
+        reward = await self.referrals.get_reward(reward_id)
+        if reward is None or not reward.is_active:
+            raise RewardUnavailableError("msg_referral_reward_unavailable")
+
+        balance = float(user.referral_balance)
+        cost = float(reward.cost)
+        if balance < cost:
+            raise InsufficientBalanceError("msg_referral_reward_insufficient_balance")
+
+        user.referral_balance = balance - cost
+        await self.session.commit()
+
+        redemption = await self.referrals.create_redemption(user.id, reward, note)
+        order_logger.info(
+            "referral_reward_redeemed user=%s reward=%s cost=%s redemption=%s",
+            user.telegram_id, reward.name, cost, redemption.id,
+        )
+        return redemption
