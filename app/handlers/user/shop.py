@@ -179,11 +179,9 @@ async def buy_product(callback: CallbackQuery, callback_data: ShopCB, session: A
     if product is None or not product.is_visible:
         await callback.answer(t(lang, "msg_product_not_found"), show_alert=True)
         return
-    if not callback_data.preorder and product.delivery_mode.value == "inventory":
-        stock = await products.available_stock(product.id)
-        if stock <= 0:
-            await callback.answer(t(lang, "msg_out_of_stock"), show_alert=True)
-            return
+    if not callback_data.preorder and await ProductService(session).stock_shortfall(product):
+        await callback.answer(t(lang, "msg_out_of_stock"), show_alert=True)
+        return
     await _show_card_payment_instructions(callback, session, product, lang, qty=1, preorder=callback_data.preorder)
 
 
@@ -237,11 +235,9 @@ async def qty_confirm(
         await callback.answer(t(lang, "msg_product_not_found"), show_alert=True)
         return
     qty = max(product.min_order_qty, min(product.max_order_qty, callback_data.qty))
-    if product.delivery_mode.value == "inventory":
-        stock = await products.available_stock(product.id)
-        if stock < qty:
-            await callback.answer(t(lang, "msg_out_of_stock"), show_alert=True)
-            return
+    if await ProductService(session).stock_shortfall(product, qty):
+        await callback.answer(t(lang, "msg_out_of_stock"), show_alert=True)
+        return
 
     if callback_data.flow == "crypto":
         await _start_crypto_purchase(callback, session, user, lang, product, callback_data.provider or "", qty)
@@ -392,11 +388,9 @@ async def crypto_buy(
     if product is None or not product.is_visible or product.price_usd is None:
         await callback.answer(t(lang, "msg_product_not_found"), show_alert=True)
         return
-    if not callback_data.preorder and product.delivery_mode.value == "inventory":
-        stock = await products.available_stock(product.id)
-        if stock <= 0:
-            await callback.answer(t(lang, "msg_out_of_stock"), show_alert=True)
-            return
+    if not callback_data.preorder and await ProductService(session).stock_shortfall(product):
+        await callback.answer(t(lang, "msg_out_of_stock"), show_alert=True)
+        return
     await _start_crypto_purchase(
         callback, session, user, lang, product, callback_data.provider or "", qty=1, preorder=callback_data.preorder
     )

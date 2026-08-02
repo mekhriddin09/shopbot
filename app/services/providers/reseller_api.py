@@ -6,9 +6,16 @@ Matches the "SHOP - RESELLER API" documentation the admin supplied:
 - Auth: header "Authorization: <api_key>" (raw key, no "Bearer " prefix)
 - GET  /v1/balance             -> {"status": "success", "balance": 150.0}
 - GET  /v1/products            -> {"status": "success", "products": [...]}
+                                   each product has an "id" (string, e.g.
+                                   "gemini") and a "stock_count" (live
+                                   remaining quantity — confirmed safe to
+                                   show directly to customers).
 - POST /v1/buy {"product_id", "quantity"}
         -> {"status": "success", "product_id", "quantity", "total_price",
             "new_balance", "links": ["https://..."]}
+        -> on out-of-stock: HTTP 409 with body
+           {"error": "Out of stock", "available": 0} (no "status" key on
+           this error shape — confirmed by the supplier).
 
 Each local Product using this provider needs `external_product_id` set to
 the matching `id` from the supplier's /v1/products list (e.g. "gemini") —
@@ -67,6 +74,30 @@ class ResellerApiProvider(BaseProvider):
             return False, None, data.get("message", "unknown_error")
         return True, data.get("balance"), None
 
+    async def get_stock_count(self, product_external_ref: str) -> int | None:
+        """Live remaining quantity for one product, read from the "id" /
+        "stock_count" fields of GET /v1/products. Returns None (treated by
+        callers as "unknown/unlimited") on any error, missing API key, or
+        if this specific product id isn't found in the supplier's list —
+        never raises."""
+        if not self.api_key or not product_external_ref:
+            return None
+        try:
+            resp = await self._get("/v1/products")
+            data = resp.json()
+        except Exception as exc:  # noqa: BLE001 - stock display must never break the shop
+            logger.warning("reseller_api get_stock_count error for %s: %s", product_external_ref, exc)
+            return None
+        if data.get("status") != "success":
+            return None
+        for item in data.get("products") or []:
+            if str(item.get("id")) == str(product_external_ref):
+                try:
+                    return int(item.get("stock_count"))
+                except (TypeError, ValueError):
+                    return None
+        return None
+
     async def fetch(self, *, product_external_ref: str | None, order_uuid: str) -> ProviderResult:
         if not self.api_key:
             return ProviderResult(success=False, error="RESELLER_API_KEY is not configured in .env")
@@ -81,12 +112,27 @@ class ResellerApiProvider(BaseProvider):
             resp = await self._post("/v1/buy", {"product_id": product_external_ref, "quantity": 1})
             data = resp.json()
         except httpx.HTTPStatusError as exc:
-            # Try to surface the supplier's own error message (e.g. "out of
-            # stock" / "insufficient balance") instead of just the status code.
+            # Try to surface the supplier's own error message instead of
+            # just the status code. Confirmed shapes: out-of-stock is a 409
+            # with {"error": "Out of stock", "available": N} (no "status"
+            # key on this one) — build a clean "Out of stock (available: N)"
+            # message when that shape is recognized, otherwise fall back to
+            # whatever "error"/"message" field is present, then the raw body.
             body_text = exc.response.text[:500] if exc.response is not None else ""
+            friendly_error = str(exc)
+            try:
+                body_json = exc.response.json() if exc.response is not None else {}
+            except Exception:  # noqa: BLE001 - body wasn't valid JSON
+                body_json = {}
+            if isinstance(body_json, dict) and body_json.get("error"):
+                friendly_error = str(body_json["error"])
+                if "available" in body_json:
+                    friendly_error += f" (available: {body_json['available']})"
+            elif isinstance(body_json, dict) and body_json.get("message"):
+                friendly_error = str(body_json["message"])
             logger.error("reseller_api HTTP error for order=%s: %s | body=%s", order_uuid, exc, body_text)
             return ProviderResult(
-                success=False, raw_request=request_payload, raw_response=body_text, error=str(exc)
+                success=False, raw_request=request_payload, raw_response=body_text, error=friendly_error
             )
         except httpx.HTTPError as exc:
             logger.error("reseller_api HTTP error for order=%s: %s", order_uuid, exc)

@@ -110,11 +110,11 @@ async def stars_buy(
     if product is None or not product.is_visible or product.price_stars is None:
         await callback.answer(t(lang, "msg_product_not_found"), show_alert=True)
         return
-    if not callback_data.preorder and product.delivery_mode.value == "inventory":
-        stock = await products.available_stock(product.id)
-        if stock <= 0:
-            await callback.answer(t(lang, "msg_out_of_stock"), show_alert=True)
-            return
+    from app.services.product_service import ProductService  # local import avoids a cycle
+
+    if not callback_data.preorder and await ProductService(session).stock_shortfall(product):
+        await callback.answer(t(lang, "msg_out_of_stock"), show_alert=True)
+        return
     await start_stars_purchase(
         callback, session, user, lang, product, qty=callback_data.qty or 1, preorder=callback_data.preorder
     )
