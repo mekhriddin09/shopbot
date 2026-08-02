@@ -56,6 +56,55 @@ async def settings_edit_start(callback: CallbackQuery, callback_data: AdminSetti
     await callback.answer()
 
 
+def _mask_secret(value: str) -> str:
+    if not value:
+        return "(o'rnatilmagan — .env dagi qiymat ishlatiladi)"
+    if len(value) <= 4:
+        return "*" * len(value)
+    return f"{'*' * (len(value) - 4)}{value[-4:]}"
+
+
+@router.callback_query(AdminSettingsCB.filter(F.action == "edit_masked"))
+async def settings_edit_masked_start(
+    callback: CallbackQuery, callback_data: AdminSettingsCB, session: AsyncSession, state: FSMContext
+) -> None:
+    """Same as `settings_edit_start`, but for secrets (API keys/tokens) —
+    shows only the last 4 characters instead of the full value, so it
+    doesn't sit fully exposed in the chat every time someone opens this
+    menu. Saving works exactly the same as a normal setting (dispatches to
+    the shared "settings_edit" action in generic_input.py)."""
+    current = await SettingRepository(session).get(callback_data.key)
+    await state.set_state(AdminInput.waiting_text)
+    await state.update_data(action="settings_edit", key=callback_data.key)
+    await callback.message.answer(
+        f"Joriy qiymat (oxirgi 4 belgi): {_mask_secret(current)}\n\n"
+        f"👇 Yangi qiymatni yozing (bekor qilish uchun '-' yuboring — o'zgarishsiz qoladi):"
+    )
+    await callback.answer()
+
+
+@router.callback_query(AdminSettingsCB.filter(F.action == "test_reseller"))
+async def settings_test_reseller(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Calls the reseller's own /v1/balance right now, with whatever
+    key/URL is currently active (DB override if set, else .env), and shows
+    the live result directly in the chat — the fastest way for the admin
+    to confirm a newly-pasted key actually works, no Railway/logs needed."""
+    from app.services.providers.reseller_api import ResellerApiProvider
+
+    await callback.answer("Tekshirilmoqda…")
+    provider = ResellerApiProvider()
+    ok, balance, error = await provider.get_balance()
+    if ok:
+        await callback.message.answer(
+            f"✅ Reseller API bilan ulanish muvaffaqiyatli!\n\n💰 Balans: {fmt_price(float(balance or 0))}"
+        )
+    else:
+        await callback.message.answer(
+            f"❌ Reseller API bilan ulanishda xatolik:\n\n<code>{error}</code>\n\n"
+            f"Kalitni va manzilni tekshirib qayta urinib ko'ring."
+        )
+
+
 @router.callback_query(AdminSettingsCB.filter(F.action == "toggle"))
 async def settings_toggle(callback: CallbackQuery, callback_data: AdminSettingsCB, session: AsyncSession) -> None:
     settings_repo = SettingRepository(session)

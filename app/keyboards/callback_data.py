@@ -79,7 +79,7 @@ class AdminOrderListCB(CallbackData, prefix="aordl"):
 
 
 class AdminSettingsCB(CallbackData, prefix="aset"):
-    action: str  # edit | toggle
+    action: str  # edit | edit_masked | toggle | pick_lang | test_reseller
     key: str | None = None
 
 

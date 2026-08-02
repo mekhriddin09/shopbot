@@ -40,24 +40,56 @@ class ResellerApiProvider(BaseProvider):
     key = "reseller_api"
 
     def __init__(self, base_url: str | None = None, api_key: str | None = None, timeout: float = 15.0) -> None:
+        # These are the .env-sourced *fallback* values only — see
+        # `_resolve_api_key`/`_resolve_base_url` below. The admin can
+        # override either one from inside the bot itself (Admin panel ->
+        # Sozlamalar -> Reseller API), stored as a DB Setting, which takes
+        # priority and takes effect on the very next call — no .env edit or
+        # redeploy needed. This single instance is created once at import
+        # time (see registry.py), so baking the key in here permanently
+        # would make bot-side key rotation impossible.
         self.base_url = (base_url or settings.RESELLER_API_BASE_URL).rstrip("/")
         self.api_key = api_key or settings.RESELLER_API_KEY
         self.timeout = timeout
 
-    def _headers(self) -> dict[str, str]:
-        return {"Authorization": self.api_key, "Content-Type": "application/json"}
+    async def _resolve_api_key(self) -> str:
+        try:
+            from app.database.engine import async_session_maker
+            from app.repositories.setting_repo import SettingRepository
+
+            async with async_session_maker() as session:
+                db_value = await SettingRepository(session).get("reseller_api_key", "")
+        except Exception:  # noqa: BLE001 - a DB hiccup must never break provider calls
+            db_value = ""
+        return db_value.strip() or self.api_key
+
+    async def _resolve_base_url(self) -> str:
+        try:
+            from app.database.engine import async_session_maker
+            from app.repositories.setting_repo import SettingRepository
+
+            async with async_session_maker() as session:
+                db_value = await SettingRepository(session).get("reseller_api_base_url", "")
+        except Exception:  # noqa: BLE001
+            db_value = ""
+        return (db_value.strip() or self.base_url).rstrip("/")
+
+    async def _headers(self) -> dict[str, str]:
+        return {"Authorization": await self._resolve_api_key(), "Content-Type": "application/json"}
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=0.5, min=0.5, max=4), reraise=True)
     async def _post(self, path: str, json_body: dict) -> httpx.Response:
+        base_url = await self._resolve_base_url()
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.post(f"{self.base_url}{path}", json=json_body, headers=self._headers())
+            resp = await client.post(f"{base_url}{path}", json=json_body, headers=await self._headers())
             resp.raise_for_status()
             return resp
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=0.5, min=0.5, max=4), reraise=True)
     async def _get(self, path: str) -> httpx.Response:
+        base_url = await self._resolve_base_url()
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.get(f"{self.base_url}{path}", headers=self._headers())
+            resp = await client.get(f"{base_url}{path}", headers=await self._headers())
             resp.raise_for_status()
             return resp
 
@@ -80,7 +112,7 @@ class ResellerApiProvider(BaseProvider):
         callers as "unknown/unlimited") on any error, missing API key, or
         if this specific product id isn't found in the supplier's list —
         never raises."""
-        if not self.api_key or not product_external_ref:
+        if not product_external_ref or not await self._resolve_api_key():
             return None
         try:
             resp = await self._get("/v1/products")
@@ -99,8 +131,11 @@ class ResellerApiProvider(BaseProvider):
         return None
 
     async def fetch(self, *, product_external_ref: str | None, order_uuid: str) -> ProviderResult:
-        if not self.api_key:
-            return ProviderResult(success=False, error="RESELLER_API_KEY is not configured in .env")
+        if not await self._resolve_api_key():
+            return ProviderResult(
+                success=False,
+                error="Reseller API key is not configured (Admin panel -> Sozlamalar -> Reseller API, or .env RESELLER_API_KEY).",
+            )
         if not product_external_ref:
             return ProviderResult(
                 success=False,
