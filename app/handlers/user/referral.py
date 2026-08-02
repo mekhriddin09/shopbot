@@ -70,9 +70,14 @@ async def referral_profile_back(callback: CallbackQuery, session: AsyncSession, 
 
 @router.callback_query(ReferralCB.filter(F.action == "rules"))
 async def referral_rules(callback: CallbackQuery, session: AsyncSession, lang: str) -> None:
+    # A regular chat message, not a callback alert — Telegram's alert popup
+    # is capped at 200 characters, far too short for real rules text (it
+    # was silently truncating admin's text and rendering in a cramped
+    # popup instead of a normal, fully readable message).
     rules_text = await SettingRepository(session).get(f"referral_rules_{lang}", "")
     text = (rules_text or "").strip() or t(lang, "msg_referral_rules_empty")
-    await callback.answer(text[:200], show_alert=True)
+    await callback.message.answer(t(lang, "msg_referral_rules_title") + "\n\n" + text)
+    await callback.answer()
 
 
 @router.callback_query(ReferralCB.filter(F.action == "withdraw"))
