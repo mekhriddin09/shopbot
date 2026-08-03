@@ -225,12 +225,6 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
 
     if action == "settings_edit":
         key = data["key"]
-        if text == "-":
-            # Convention for the masked-secret edit flow (API keys/tokens):
-            # "-" means "leave it as it is", never a literal value to save.
-            await state.clear()
-            await message.answer("↩️ Bekor qilindi, qiymat o'zgartirilmadi.")
-            return
         await SettingRepository(session).set(key, text)
         admin_actions_logger.info("setting_changed key=%s admin=%s", key, message.from_user.id)
         await state.clear()

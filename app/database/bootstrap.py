@@ -140,14 +140,6 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # until the admin sets a Stars price on at least one product and
     # enables this.
     "stars_payment_enabled": "0",
-
-    # Reseller API (external supplier, Mode 3 delivery). Empty = fall back
-    # to RESELLER_API_KEY / RESELLER_API_BASE_URL from .env. Setting these
-    # from the bot (Admin panel -> Sozlamalar -> Reseller API) overrides
-    # .env and takes effect immediately, no redeploy needed — lets the
-    # admin rotate a leaked/expired key without touching GitHub/Railway.
-    "reseller_api_key": "",
-    "reseller_api_base_url": "",
 }
 
 

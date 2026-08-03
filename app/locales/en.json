@@ -112,7 +112,6 @@
   "msg_referral_withdraw_paid": "✅ Your referral payout ({amount}) has been sent. Thank you!",
   "msg_referral_withdraw_rejected": "❌ Your withdrawal request ({amount}) was rejected. Contact the admin for details.",
   "msg_referral_rules_empty": "📜 The referral program rules haven't been set yet.",
-  "msg_referral_rules_title": "📜 <b>Referral program rules</b>",
   "msg_referral_shop_empty": "🎁 The referral shop doesn't have any rewards yet.",
   "msg_referral_shop_intro": "🎁 <b>Referral shop</b>\n\nYou can exchange your referral balance for the following rewards:",
   "msg_referral_reward_unavailable": "❌ This reward is no longer available.",

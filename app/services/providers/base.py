@@ -33,14 +33,3 @@ class BaseProvider(abc.ABC):
         exceptions into `ProviderResult(success=False, error=...)`.
         """
         raise NotImplementedError
-
-    async def get_stock_count(self, product_external_ref: str) -> int | None:
-        """Optional: live remaining-stock count from the supplier, used to
-        show real numbers on the product card and to block purchases the
-        supplier can't actually fulfil (mirrors the check already done for
-        INVENTORY-mode products). Default: unsupported — the caller treats
-        `None` the same as before this existed (shown as "unlimited",
-        no pre-purchase stock check). Override in providers whose API
-        actually exposes this (see `ResellerApiProvider`). Must never
-        raise — return `None` on any error."""
-        return None

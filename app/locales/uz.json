@@ -112,7 +112,6 @@
   "msg_referral_withdraw_paid": "✅ Referral pulingiz ({amount}) to'landi. Rahmat!",
   "msg_referral_withdraw_rejected": "❌ Referral pul yechish so'rovingiz ({amount}) rad etildi. Aniqlik uchun admin bilan bog'laning.",
   "msg_referral_rules_empty": "📜 Referral qoidalari hali kiritilmagan.",
-  "msg_referral_rules_title": "📜 <b>Referral qoidalari</b>",
   "msg_referral_shop_empty": "🎁 Hozircha referral do'konida sovg'alar yo'q.",
   "msg_referral_shop_intro": "🎁 <b>Referral do'koni</b>\n\nReferral balansingizni quyidagi sovg'alarga almashtirishingiz mumkin:",
   "msg_referral_reward_unavailable": "❌ Bu sovg'a endi mavjud emas.",
