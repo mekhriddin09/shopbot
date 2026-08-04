@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+from html import escape as html_escape
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +18,7 @@ from app.services.delivery_service import DeliveryService
 from app.services.exceptions import DeliveryFailedError, InvalidOrderStateError
 from app.services.referral_service import ReferralService
 from app.states.admin_states import AdminInput
-from app.utils.formatting import build_delivered_message, fmt_datetime, fmt_price
+from app.utils.formatting import build_delivered_message, fmt_datetime, fmt_price, fmt_time
 
 router = Router(name="admin_orders")
 router.message.filter(IsAdmin())
@@ -45,6 +47,47 @@ def _order_line(order) -> str:
         f"\U0001F4B0 {fmt_price(float(order.price_at_purchase))} {order.currency}\n"
         f"📅 {fmt_datetime(order.created_at)}"
     )
+
+
+def _delivered_confirmation_block(order) -> str:
+    """Appended to the original admin notification once an order is
+    actually delivered — shows exactly what was sent and when, right in
+    the same message thread, so the admin never has to dig through logs
+    to confirm "did this go out, and what did I send". `delivered_payload`
+    is HTML-escaped since it can be an arbitrary code/link/API result that
+    may contain `&`/`<`/`>` (e.g. a URL with query params) — unescaped,
+    that would break Telegram's HTML parser and silently fail the edit."""
+    payload = html_escape(order.delivered_payload) if order.delivered_payload else "-"
+    return (
+        f"\n\n✅ TASDIQLANDI VA YETKAZILDI\n"
+        f"🕐 Vaqt: {fmt_time(order.delivered_at)}\n"
+        f"📦 Yuborilgan:\n<code>{payload}</code>"
+    )
+
+
+async def _edit_order_message_with_confirmation(callback: CallbackQuery, block: str) -> None:
+    """Append `block` to whatever the original admin notification was —
+    almost always a photo (the payment screenshot) with a caption, but
+    sometimes a plain text message (e.g. the "needs manual delivery"
+    notice from the crypto auto-confirm path). `Message.text` is `None` on
+    photo messages (only `.caption` is populated), so blindly calling
+    `edit_text` there raises `TypeError` — which used to crash this handler
+    right after the product had already been delivered to the customer,
+    leaving the admin with no visible confirmation at all. Also guards
+    against Telegram's photo-caption length cap (1024 chars, vs 4096 for
+    plain text) — a large multi-code order could exceed it — falling back
+    to a fresh message instead of losing the confirmation entirely."""
+    try:
+        if callback.message.photo:
+            await callback.message.edit_caption(caption=(callback.message.caption or "") + block)
+        else:
+            await callback.message.edit_text((callback.message.text or "") + block)
+    except TelegramBadRequest:
+        await callback.message.answer("✅ TASDIQLANDI VA YETKAZILDI" + block)
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except TelegramBadRequest:
+        pass
 
 
 @router.callback_query(AdminOrderListCB.filter())
@@ -107,11 +150,22 @@ async def approve_order(callback: CallbackQuery, callback_data: OrderCB, session
             build_delivered_message(lang, order, result.payload),
         )
         await ReferralService(session).credit_for_delivered_order(order, callback.bot)
-        await callback.message.edit_text(callback.message.text + "\n\n✅ TASDIQLANDI VA YETKAZILDI")
-        await callback.message.edit_reply_markup(reply_markup=None)
+        await _edit_order_message_with_confirmation(callback, _delivered_confirmation_block(order))
     elif result.needs_manual_message:
         await state.set_state(AdminInput.waiting_text)
-        await state.update_data(action="manual_deliver", order_id=order.id)
+        await state.update_data(
+            action="manual_deliver",
+            order_id=order.id,
+            # Threaded through so generic_input.py's manual_deliver handler
+            # can edit *this* original notification (screenshot or text)
+            # once the admin actually types the delivery message, instead
+            # of leaving it as a stale, button-less card with no outcome
+            # ever shown on it.
+            admin_chat_id=callback.message.chat.id,
+            admin_message_id=callback.message.message_id,
+            admin_msg_is_photo=bool(callback.message.photo),
+            admin_original_body=callback.message.caption if callback.message.photo else callback.message.text,
+        )
         preorder_note = "\n⏳ Bu — oldindan buyurtma edi. Mahsulot stokga kelgach yuboring." if order.is_preorder else ""
         await callback.message.answer(
             f"✏️ Buyurtma <code>{order.order_uuid}</code> uchun mijozga yuboriladigan xabarni yozing:{preorder_note}"
@@ -136,7 +190,14 @@ async def write_manual_start(callback: CallbackQuery, callback_data: OrderCB, st
     manually-delivered product (see services/crypto_poller.py) — the order
     is already APPROVED, the admin just needs to type the message."""
     await state.set_state(AdminInput.waiting_text)
-    await state.update_data(action="manual_deliver", order_id=callback_data.order_id)
+    await state.update_data(
+        action="manual_deliver",
+        order_id=callback_data.order_id,
+        admin_chat_id=callback.message.chat.id,
+        admin_message_id=callback.message.message_id,
+        admin_msg_is_photo=bool(callback.message.photo),
+        admin_original_body=callback.message.caption if callback.message.photo else callback.message.text,
+    )
     await callback.message.answer("✍️ Mijozga yuboriladigan xabarni yozing:")
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.answer()

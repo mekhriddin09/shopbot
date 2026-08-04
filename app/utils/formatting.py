@@ -45,6 +45,12 @@ def fmt_datetime(value: datetime | None) -> str:
     return value.strftime("%Y-%m-%d %H:%M")
 
 
+def fmt_time(value: datetime | None) -> str:
+    if value is None:
+        return "-"
+    return value.strftime("%H:%M")
+
+
 def _localized_delivery_instructions(product, lang: str) -> str | None:
     return _localized_field(
         product, "delivery_instructions", lang, getattr(product, "delivery_instructions", None)

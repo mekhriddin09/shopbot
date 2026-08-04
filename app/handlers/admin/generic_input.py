@@ -298,6 +298,36 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
         from app.services.referral_service import ReferralService  # local import avoids a cycle
 
         await ReferralService(session).credit_for_delivered_order(order, message.bot)
+
+        # Edit the *original* admin notification (the screenshot/text that
+        # started this manual-delivery flow) to show the same "delivered at
+        # HH:MM, sent: <payload>" confirmation the auto-delivery path shows
+        # — otherwise that original card is left as a dead end with its
+        # buttons stripped and no visible outcome at all.
+        admin_chat_id = data.get("admin_chat_id")
+        admin_message_id = data.get("admin_message_id")
+        if admin_chat_id and admin_message_id:
+            from app.handlers.admin.orders import _delivered_confirmation_block  # local import avoids a cycle
+
+            new_body = (data.get("admin_original_body") or "") + _delivered_confirmation_block(order)
+            try:
+                if data.get("admin_msg_is_photo"):
+                    await message.bot.edit_message_caption(
+                        chat_id=admin_chat_id, message_id=admin_message_id, caption=new_body
+                    )
+                else:
+                    await message.bot.edit_message_text(
+                        chat_id=admin_chat_id, message_id=admin_message_id, text=new_body
+                    )
+            except TelegramAPIError:
+                pass  # message too old/deleted/caption-too-long — the confirmation below still reaches the admin
+            try:
+                await message.bot.edit_message_reply_markup(
+                    chat_id=admin_chat_id, message_id=admin_message_id, reply_markup=None
+                )
+            except TelegramAPIError:
+                pass
+
         await state.clear()
         await message.answer("✅ Xabar mijozga yuborildi va buyurtma yakunlandi.")
         return
