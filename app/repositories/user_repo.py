@@ -16,6 +16,27 @@ class UserRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_id(self, user_id: int) -> User | None:
+        return await self.session.get(User, user_id)
+
+    async def search_by_username(self, username_query: str, limit: int = 10) -> list[User]:
+        """Partial, case-insensitive username match — used by the admin
+        "look up a user" flow when the query isn't a plain Telegram ID."""
+        result = await self.session.execute(
+            select(User).where(User.username.ilike(f"%{username_query}%")).order_by(User.id.desc()).limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def adjust_referral_balance(self, user: User, delta: float) -> float:
+        """Manual admin balance correction (add/subtract). Clamped at 0 —
+        same floor used everywhere else the balance is touched (withdrawals,
+        redemption refunds) — so a subtraction can never push it negative.
+        Returns the new balance."""
+        user.referral_balance = max(0.0, float(user.referral_balance) + delta)
+        await self.session.commit()
+        await self.session.refresh(user)
+        return float(user.referral_balance)
+
     async def get_or_create(
         self, telegram_id: int, username: str | None, full_name: str | None, language: str
     ) -> tuple[User, bool]:

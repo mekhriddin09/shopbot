@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,16 +25,19 @@ from app.keyboards.admin_kb import (
     admin_product_detail_kb,
     admin_products_list_kb,
     admin_referral_reward_detail_kb,
+    admin_user_profile_kb,
+    admin_user_search_results_kb,
 )
 from app.repositories.inventory_repo import InventoryRepository
 from app.repositories.product_repo import ProductRepository
 from app.repositories.referral_repo import ReferralRepository
 from app.repositories.setting_repo import SettingRepository
+from app.repositories.user_repo import UserRepository
 from app.services.delivery_service import DeliveryService
 from app.services.exceptions import DeliveryFailedError, InvalidOrderStateError
 from app.services.stock_notify_service import notify_waiters_if_in_stock
 from app.states.admin_states import AdminInput
-from app.utils.formatting import build_delivered_message
+from app.utils.formatting import build_delivered_message, fmt_price
 from app.utils.i18n import t
 
 router = Router(name="admin_generic_input")
@@ -225,6 +229,12 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
 
     if action == "settings_edit":
         key = data["key"]
+        if text == "-":
+            # Convention for the masked-secret edit flow (API keys/tokens):
+            # "-" means "leave it as it is", never a literal value to save.
+            await state.clear()
+            await message.answer("↩️ Bekor qilindi, qiymat o'zgartirilmadi.")
+            return
         await SettingRepository(session).set(key, text)
         admin_actions_logger.info("setting_changed key=%s admin=%s", key, message.from_user.id)
         await state.clear()
@@ -290,6 +300,96 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
         await ReferralService(session).credit_for_delivered_order(order, message.bot)
         await state.clear()
         await message.answer("✅ Xabar mijozga yuborildi va buyurtma yakunlandi.")
+        return
+
+    if action == "user_search":
+        query = text.lstrip("@")
+        users_repo = UserRepository(session)
+        if query.isdigit():
+            found = await users_repo.get_by_telegram_id(int(query))
+            matches = [found] if found else []
+        else:
+            matches = await users_repo.search_by_username(query)
+        await state.clear()
+        if not matches:
+            await message.answer("❌ Foydalanuvchi topilmadi.")
+            return
+        if len(matches) == 1:
+            from app.handlers.admin.users import _send_user_profile  # local import avoids cycle
+
+            await _send_user_profile(message, session, matches[0])
+            return
+        await message.answer(
+            f"🔎 {len(matches)} ta mos foydalanuvchi topildi:",
+            reply_markup=admin_user_search_results_kb(matches),
+        )
+        return
+
+    if action == "user_balance_adjust":
+        user_id = data["user_id"]
+        sign = data["sign"]
+        try:
+            amount = float(text.replace(" ", "").replace(",", "."))
+        except ValueError:
+            await message.answer("Noto'g'ri raqam. Faqat son yuboring, masalan: 5000")
+            return
+        if amount <= 0:
+            await message.answer("0 dan katta son yuboring.")
+            return
+
+        target = await UserRepository(session).get_by_id(user_id)
+        if target is None:
+            await message.answer("Foydalanuvchi topilmadi.")
+            await state.clear()
+            return
+
+        delta = sign * amount
+        new_balance = await UserRepository(session).adjust_referral_balance(target, delta)
+        admin_actions_logger.info(
+            "user_balance_adjusted user=%s delta=%s new_balance=%s admin=%s",
+            target.id, delta, new_balance, message.from_user.id,
+        )
+        await state.clear()
+
+        currency = await SettingRepository(session).get("referral_currency", "UZS")
+        try:
+            await message.bot.send_message(
+                target.telegram_id,
+                t(
+                    target.language,
+                    "msg_balance_adjusted_by_admin",
+                    sign="+" if delta >= 0 else "-",
+                    amount=fmt_price(abs(delta)),
+                    balance=fmt_price(new_balance),
+                    currency=currency,
+                ),
+            )
+        except TelegramAPIError:
+            pass  # user may have blocked the bot — the admin-side confirmation below still shows the new balance
+
+        from app.handlers.admin.users import _build_user_profile_text  # local import avoids cycle
+
+        profile_text = await _build_user_profile_text(session, target)
+        await message.answer(f"✅ Balans yangilandi.\n\n{profile_text}", reply_markup=admin_user_profile_kb(target.id))
+        return
+
+    if action == "user_send_message":
+        user_id = data["user_id"]
+        target = await UserRepository(session).get_by_id(user_id)
+        if target is None:
+            await message.answer("Foydalanuvchi topilmadi.")
+            await state.clear()
+            return
+        await state.clear()
+        try:
+            await message.bot.send_message(
+                target.telegram_id,
+                t(target.language, "msg_admin_direct_message_prefix") + "\n\n" + text,
+            )
+            admin_actions_logger.info("user_direct_message_sent user=%s admin=%s", target.id, message.from_user.id)
+            await message.answer("✅ Xabar yuborildi.")
+        except TelegramAPIError:
+            await message.answer("⚠️ Yuborib bo'lmadi — foydalanuvchi botni bloklagan bo'lishi mumkin.")
         return
 
     await state.clear()

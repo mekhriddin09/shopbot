@@ -112,6 +112,7 @@
   "msg_referral_withdraw_paid": "✅ Ваши реферальные средства ({amount}) выплачены. Спасибо!",
   "msg_referral_withdraw_rejected": "❌ Ваш запрос на вывод ({amount}) отклонён. Свяжитесь с администратором для уточнения.",
   "msg_referral_rules_empty": "📜 Правила реферальной программы пока не заданы.",
+  "msg_referral_rules_title": "📜 <b>Правила реферальной программы</b>",
   "msg_referral_shop_empty": "🎁 В реферальном магазине пока нет наград.",
   "msg_referral_shop_intro": "🎁 <b>Реферальный магазин</b>\n\nВы можете обменять свой реферальный баланс на следующие награды:",
   "msg_referral_reward_unavailable": "❌ Эта награда больше недоступна.",
@@ -121,6 +122,9 @@
   "msg_referral_reward_requested": "✅ Ваш запрос принят: <b>{name}</b>.\n\nСумма списана с баланса, администратор скоро свяжется с вами.",
   "msg_referral_reward_fulfilled": "🎉 Ваша награда выдана: <b>{name}</b>. Спасибо!",
   "msg_referral_reward_rejected": "❌ Запрос на награду ({name}) отклонён. {amount} возвращено на ваш баланс. Свяжитесь с администратором для уточнения.",
+
+  "msg_balance_adjusted_by_admin": "💳 Ваш реферальный баланс изменён: {sign}{amount} {currency}.\n\nНовый баланс: {balance} {currency}.",
+  "msg_admin_direct_message_prefix": "📩 <b>Сообщение от администратора:</b>",
 
   "msg_error_generic": "⚠️ Произошла ошибка. Попробуйте ещё раз чуть позже.",
   "msg_not_admin": "⛔ У вас нет доступа к этому разделу.",

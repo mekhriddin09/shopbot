@@ -79,7 +79,7 @@ class AdminOrderListCB(CallbackData, prefix="aordl"):
 
 
 class AdminSettingsCB(CallbackData, prefix="aset"):
-    action: str  # edit | toggle
+    action: str  # edit | edit_masked | toggle | pick_lang | test_reseller
     key: str | None = None
 
 
@@ -102,7 +102,19 @@ class QtyCB(CallbackData, prefix="qty"):
     product_id: int
     qty: int = 1
     flow: str = "card"  # card | crypto | stars
-    provider: str = ""
+    # THE BUG: aiogram's CallbackData encodes an empty string field as an
+    # absent value, and unpacks that back to `None` — not back to `""`.
+    # This field used to be declared as plain `str = ""`, so any button
+    # packed with an empty provider (i.e. every "card" and "stars" flow
+    # button, since only "crypto" ever sets a real provider) produced a
+    # callback_data string that FAILED to unpack (pydantic rejected `None`
+    # for a `str` field). aiogram treats an unpack failure as "this filter
+    # doesn't match" rather than raising, so those buttons silently matched
+    # no handler at all — the client shows an endless "loading" spinner on
+    # tap instead of any error. `str | None` fixes the round-trip; every
+    # call site already does `callback_data.provider or ""` so `None` flows
+    # through safely.
+    provider: str | None = None
 
 
 class StockNotifyCB(CallbackData, prefix="stockw"):
@@ -134,6 +146,11 @@ class AdminReferralRewardCB(CallbackData, prefix="arefrw"):
 class AdminReferralRedemptionCB(CallbackData, prefix="arefrd"):
     action: str  # fulfilled | reject
     redemption_id: int = 0
+
+
+class AdminUserCB(CallbackData, prefix="auser"):
+    action: str  # search_prompt | export_sales | profile | balance_add | balance_sub | message | orders
+    user_id: int = 0
 
 
 class ConfirmCB(CallbackData, prefix="confirm"):

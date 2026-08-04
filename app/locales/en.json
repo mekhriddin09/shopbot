@@ -112,6 +112,7 @@
   "msg_referral_withdraw_paid": "✅ Your referral payout ({amount}) has been sent. Thank you!",
   "msg_referral_withdraw_rejected": "❌ Your withdrawal request ({amount}) was rejected. Contact the admin for details.",
   "msg_referral_rules_empty": "📜 The referral program rules haven't been set yet.",
+  "msg_referral_rules_title": "📜 <b>Referral program rules</b>",
   "msg_referral_shop_empty": "🎁 The referral shop doesn't have any rewards yet.",
   "msg_referral_shop_intro": "🎁 <b>Referral shop</b>\n\nYou can exchange your referral balance for the following rewards:",
   "msg_referral_reward_unavailable": "❌ This reward is no longer available.",
@@ -121,6 +122,9 @@
   "msg_referral_reward_requested": "✅ Your request has been received: <b>{name}</b>.\n\nThe amount was deducted from your balance, the admin will contact you shortly.",
   "msg_referral_reward_fulfilled": "🎉 Your reward has been delivered: <b>{name}</b>. Thank you!",
   "msg_referral_reward_rejected": "❌ Your reward request ({name}) was rejected. {amount} has been refunded to your balance. Contact the admin for details.",
+
+  "msg_balance_adjusted_by_admin": "💳 Your referral balance has been adjusted: {sign}{amount} {currency}.\n\nNew balance: {balance} {currency}.",
+  "msg_admin_direct_message_prefix": "📩 <b>Message from the admin:</b>",
 
   "msg_error_generic": "⚠️ Something went wrong. Please try again shortly.",
   "msg_not_admin": "⛔ You don't have access to this section.",

@@ -112,6 +112,7 @@
   "msg_referral_withdraw_paid": "✅ Referral pulingiz ({amount}) to'landi. Rahmat!",
   "msg_referral_withdraw_rejected": "❌ Referral pul yechish so'rovingiz ({amount}) rad etildi. Aniqlik uchun admin bilan bog'laning.",
   "msg_referral_rules_empty": "📜 Referral qoidalari hali kiritilmagan.",
+  "msg_referral_rules_title": "📜 <b>Referral qoidalari</b>",
   "msg_referral_shop_empty": "🎁 Hozircha referral do'konida sovg'alar yo'q.",
   "msg_referral_shop_intro": "🎁 <b>Referral do'koni</b>\n\nReferral balansingizni quyidagi sovg'alarga almashtirishingiz mumkin:",
   "msg_referral_reward_unavailable": "❌ Bu sovg'a endi mavjud emas.",
@@ -121,6 +122,9 @@
   "msg_referral_reward_requested": "✅ So'rovingiz qabul qilindi: <b>{name}</b>.\n\nBalansingizdan yechildi, admin tez orada siz bilan bog'lanadi.",
   "msg_referral_reward_fulfilled": "🎉 Sovg'angiz yetkazildi: <b>{name}</b>. Rahmat!",
   "msg_referral_reward_rejected": "❌ Sovg'a so'rovingiz ({name}) rad etildi. Balansingizga {amount} qaytarildi. Aniqlik uchun admin bilan bog'laning.",
+
+  "msg_balance_adjusted_by_admin": "💳 Referral balansingiz o'zgartirildi: {sign}{amount} {currency}.\n\nYangi balans: {balance} {currency}.",
+  "msg_admin_direct_message_prefix": "📩 <b>Administratordan xabar:</b>",
 
   "msg_error_generic": "⚠️ Xatolik yuz berdi. Iltimos, birozdan so'ng qayta urinib ko'ring.",
   "msg_not_admin": "⛔ Sizda ushbu bo'limga kirish huquqi yo'q.",

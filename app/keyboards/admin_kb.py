@@ -20,6 +20,7 @@ from app.keyboards.callback_data import (
     AdminReferralWithdrawCB,
     AdminSettingsCB,
     AdminStockWaitersCB,
+    AdminUserCB,
     ConfirmCB,
     OrderCB,
 )
@@ -31,6 +32,7 @@ ADMIN_BTN_STATS = "\U0001F4CA Statistika"
 ADMIN_BTN_SETTINGS = "⚙️ Sozlamalar"
 ADMIN_BTN_BROADCAST = "\U0001F4E2 Xabar yuborish"
 ADMIN_BTN_REFERRAL_REWARDS = "\U0001F381 Referral do'koni"
+ADMIN_BTN_USERS = "\U0001F464 Foydalanuvchilar"
 ADMIN_BTN_EXIT = "\U0001F6AA Admin paneldan chiqish"
 
 
@@ -40,6 +42,7 @@ def admin_main_menu_kb() -> ReplyKeyboardMarkup:
             [KeyboardButton(text=ADMIN_BTN_PRODUCTS), KeyboardButton(text=ADMIN_BTN_ORDERS)],
             [KeyboardButton(text=ADMIN_BTN_STATS), KeyboardButton(text=ADMIN_BTN_SETTINGS)],
             [KeyboardButton(text=ADMIN_BTN_BROADCAST), KeyboardButton(text=ADMIN_BTN_REFERRAL_REWARDS)],
+            [KeyboardButton(text=ADMIN_BTN_USERS)],
             [KeyboardButton(text=ADMIN_BTN_EXIT)],
         ],
         resize_keyboard=True,
@@ -297,6 +300,9 @@ def admin_settings_menu_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="📢 Isbotlar kanali havolasi", callback_data=AdminSettingsCB(action="edit", key="proof_channel_url").pack())],
         [InlineKeyboardButton(text="\U0001FA99 Kripto to'lov (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="crypto_payment_enabled").pack())],
         [InlineKeyboardButton(text="⭐ Telegram Stars to'lov (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="stars_payment_enabled").pack())],
+        [InlineKeyboardButton(text="\U0001F511 Reseller API kaliti", callback_data=AdminSettingsCB(action="edit_masked", key="reseller_api_key").pack())],
+        [InlineKeyboardButton(text="\U0001F310 Reseller API manzili (URL)", callback_data=AdminSettingsCB(action="edit", key="reseller_api_base_url").pack())],
+        [InlineKeyboardButton(text="\U0001F50C Reseller: ulanishni tekshirish", callback_data=AdminSettingsCB(action="test_reseller").pack())],
         [InlineKeyboardButton(text="\U0001F91D Referral (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="referral_enabled").pack())],
         [InlineKeyboardButton(text="\U0001F381 1-buyurtma mukofoti (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="referral_first_order_enabled").pack())],
         [InlineKeyboardButton(text="✏️ 1-buyurtma mukofoti miqdori", callback_data=AdminSettingsCB(action="edit", key="referral_first_order_value").pack())],
@@ -389,6 +395,45 @@ def admin_referral_redemption_kb(redemption_id: int) -> InlineKeyboardMarkup:
                     callback_data=AdminReferralRedemptionCB(action="reject", redemption_id=redemption_id).pack(),
                 ),
             ]
+        ]
+    )
+
+
+def admin_users_menu_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="\U0001F50E Foydalanuvchini qidirish (ID yoki username)", callback_data=AdminUserCB(action="search_prompt").pack())],
+            [InlineKeyboardButton(text="\U0001F4E4 To'liq sotuv hisobotini yuklab olish (CSV)", callback_data=AdminUserCB(action="export_sales").pack())],
+        ]
+    )
+
+
+def admin_user_search_results_kb(users: list) -> InlineKeyboardMarkup:
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=f"{u.full_name or '-'} (@{u.username or '-'}) [{u.telegram_id}]",
+                callback_data=AdminUserCB(action="profile", user_id=u.id).pack(),
+            )
+        ]
+        for u in users
+    ]
+    rows.append(
+        [InlineKeyboardButton(text="\U0001F519 Qayta qidirish", callback_data=AdminUserCB(action="search_prompt").pack())]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_user_profile_kb(user_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="➕ Balans qo'shish", callback_data=AdminUserCB(action="balance_add", user_id=user_id).pack()),
+                InlineKeyboardButton(text="➖ Balans ayirish", callback_data=AdminUserCB(action="balance_sub", user_id=user_id).pack()),
+            ],
+            [InlineKeyboardButton(text="✉️ Xabar yuborish", callback_data=AdminUserCB(action="message", user_id=user_id).pack())],
+            [InlineKeyboardButton(text="\U0001F4E6 Buyurtmalari", callback_data=AdminUserCB(action="orders", user_id=user_id).pack())],
+            [InlineKeyboardButton(text="\U0001F519 Qidiruvga qaytish", callback_data=AdminUserCB(action="search_prompt").pack())],
         ]
     )
 

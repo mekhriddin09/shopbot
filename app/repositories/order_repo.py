@@ -180,6 +180,37 @@ class OrderRepository:
         )
         return int(result.scalar_one())
 
+    async def count_by_user(self, user_id: int) -> int:
+        """All orders regardless of status — used by the admin user-profile
+        card (`count_delivered_by_user` above only counts completed ones)."""
+        result = await self.session.execute(
+            select(func.count(Order.id)).where(Order.user_id == user_id)
+        )
+        return int(result.scalar_one())
+
+    async def total_spent_by_user(self, user_id: int) -> float:
+        """Sum of `price_at_purchase` (already qty-inclusive, same convention
+        as the global `total_sales()` above) across this user's DELIVERED
+        orders."""
+        result = await self.session.execute(
+            select(func.coalesce(func.sum(Order.price_at_purchase), 0)).where(
+                Order.user_id == user_id, Order.status == OrderStatus.DELIVERED
+            )
+        )
+        return float(result.scalar_one())
+
+    async def list_all(self, limit: int = 5000) -> list[Order]:
+        """Every order, newest first — the source data for the admin's full
+        sales-data CSV export. Capped generously high (not the usual 50)
+        since this is a deliberate bulk-export action, not a chat listing."""
+        result = await self.session.execute(
+            select(Order)
+            .options(selectinload(Order.product), selectinload(Order.user))
+            .order_by(Order.id.desc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
     async def list_buyer_user_ids(self, product_id: int | None = None) -> set[int]:
         """Distinct `user_id`s that have at least one successfully DELIVERED
         order — the definition of "a customer" used by the broadcast
