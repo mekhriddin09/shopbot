@@ -53,7 +53,8 @@ async def settings_edit_start(callback: CallbackQuery, callback_data: AdminSetti
     await state.set_state(AdminInput.waiting_text)
     await state.update_data(action="settings_edit", key=callback_data.key)
     await callback.message.answer(
-        f"Joriy qiymat:\n\n{current}\n\n👇 Yangi matnni yozing:"
+        f"Joriy qiymat:\n\n{current}\n\n"
+        f"👇 Yangi matnni yozing, YOKI matn juda uzun bo'lsa, .txt fayl qilib yuboring:"
     )
     await callback.answer()
 

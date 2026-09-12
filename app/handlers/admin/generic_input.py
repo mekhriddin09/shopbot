@@ -443,6 +443,42 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
     await state.clear()
 
 
+@router.message(AdminInput.waiting_text, F.document)
+async def handle_document_as_text_value(message: Message, session: AsyncSession, state: FSMContext) -> None:
+    """Lets the admin upload a `.txt` file instead of typing/pasting —
+    mainly for `settings_edit` (e.g. a long oferta/terms document that
+    exceeds Telegram's ~4096-character single-message limit). Every other
+    `waiting_text` action still expects a typed message, so this only acts
+    when the current action is one that makes sense as a file upload;
+    otherwise it's silently ignored (state stays open, admin can still type)."""
+    data = await state.get_data()
+    action = data.get("action")
+    if action not in ("settings_edit",):
+        return
+
+    document = message.document
+    filename = (document.file_name or "").lower()
+    if not (filename.endswith(".txt") or filename.endswith(".md")):
+        await message.answer("Iltimos, .txt (yoki .md) formatidagi fayl yuboring, yoki matnni to'g'ridan-to'g'ri yozing.")
+        return
+    if document.file_size and document.file_size > 2_000_000:
+        await message.answer("Fayl juda katta (2MB dan oshmasligi kerak).")
+        return
+
+    file = await message.bot.get_file(document.file_id)
+    buffer = await message.bot.download_file(file.file_path)
+    text = buffer.read().decode("utf-8", errors="ignore").strip()
+    if not text:
+        await message.answer("Fayl bo'sh ko'rinadi. Boshqa fayl yuboring.")
+        return
+
+    key = data["key"]
+    await SettingRepository(session).set(key, text)
+    admin_actions_logger.info("setting_changed_via_file key=%s chars=%s admin=%s", key, len(text), message.from_user.id)
+    await state.clear()
+    await message.answer(f"✅ Sozlama fayldan yangilandi ({len(text)} belgi).")
+
+
 @router.message(AdminInput.waiting_image, F.photo)
 async def handle_image_input(message: Message, session: AsyncSession, state: FSMContext) -> None:
     data = await state.get_data()
