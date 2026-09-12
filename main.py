@@ -16,6 +16,7 @@ from app.handlers.admin import admin_router
 from app.handlers.user import user_router
 from app.middlewares.db_session import DbSessionMiddleware
 from app.middlewares.error_handling import ErrorHandlingMiddleware
+from app.middlewares.onboarding_gate import OnboardingGateMiddleware
 from app.middlewares.throttling import ThrottlingMiddleware
 from app.middlewares.user_context import UserContextMiddleware
 from app.services.crypto_poller import crypto_poller_loop
@@ -44,6 +45,7 @@ async def main() -> None:
     dp.update.outer_middleware(ThrottlingMiddleware())
     dp.update.outer_middleware(DbSessionMiddleware())
     dp.update.outer_middleware(UserContextMiddleware())
+    dp.update.outer_middleware(OnboardingGateMiddleware())
 
     dp.include_router(admin_router)
     dp.include_router(user_router)
