@@ -14,6 +14,7 @@ from app.keyboards.callback_data import (
     AdminInventoryCB,
     AdminMenuCB,
     AdminOrderListCB,
+    AdminPhoneCB,
     AdminProductCB,
     AdminReferralRedemptionCB,
     AdminReferralRewardCB,
@@ -312,7 +313,28 @@ def admin_settings_menu_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="✏️ Min. pul yechish miqdori", callback_data=AdminSettingsCB(action="edit", key="referral_withdraw_min").pack())],
         [InlineKeyboardButton(text="\U0001F4E6 Oldindan buyurtma (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="preorder_enabled").pack())],
         [InlineKeyboardButton(text="\U0001F4DC Referral qoidalari (til bo'yicha)", callback_data=AdminSettingsCB(action="pick_lang", key="referral_rules").pack())],
+        [InlineKeyboardButton(text="\U0001F6AA Majburiy oferta+kanal (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="onboarding_gate_enabled").pack())],
+        [InlineKeyboardButton(text="\U0001F4C4 Oferta matni (til bo'yicha)", callback_data=AdminSettingsCB(action="pick_lang", key="oferta_text").pack())],
+        [InlineKeyboardButton(text="\U0001F4E2 Majburiy kanal (@username yoki ID)", callback_data=AdminSettingsCB(action="edit", key="required_channel").pack())],
+        [InlineKeyboardButton(text="\U0001F517 Kanal havolasi (join link)", callback_data=AdminSettingsCB(action="edit", key="required_channel_url").pack())],
+        [InlineKeyboardButton(text="\U0001F4DE Referral tasdiqlash: telefon+captcha (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="referral_verification_enabled").pack())],
+        [InlineKeyboardButton(text="☎️ Ruxsat etilgan chet el raqamlari", callback_data=AdminPhoneCB(action="list").pack())],
     ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_phone_whitelist_kb(entries: list) -> InlineKeyboardMarkup:
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=f"\U0001F5D1️ +{e.phone_number}" + (f" ({e.note})" if e.note else ""),
+                callback_data=AdminPhoneCB(action="remove", phone_id=e.id).pack(),
+            )
+        ]
+        for e in entries
+    ]
+    rows.append([InlineKeyboardButton(text="➕ Raqam qo'shish", callback_data=AdminPhoneCB(action="add").pack())])
+    rows.append([InlineKeyboardButton(text="\U0001F519 Sozlamalarga qaytish", callback_data=AdminMenuCB(action="settings").pack())])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

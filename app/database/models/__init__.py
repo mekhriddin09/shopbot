@@ -2,6 +2,7 @@
 create_all, and so relationship() string references resolve correctly."""
 from app.database.models.admin import AdminUser
 from app.database.models.admin_log import AdminActionLog
+from app.database.models.allowed_phone import AllowedPhoneNumber
 from app.database.models.enums import (
     AdminRole,
     DeliveryMode,
@@ -25,6 +26,7 @@ from app.database.models.user import User
 __all__ = [
     "AdminUser",
     "AdminActionLog",
+    "AllowedPhoneNumber",
     "AdminRole",
     "DeliveryMode",
     "OrderStatus",

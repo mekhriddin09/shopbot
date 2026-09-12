@@ -52,6 +52,9 @@ _NEW_COLUMNS: list[tuple[str, str, str]] = [
     ("orders", "is_preorder", "BOOLEAN NOT NULL DEFAULT 0"),
     ("products", "price_stars", "INTEGER"),
     ("orders", "stars_charge_id", "VARCHAR(128)"),
+    ("users", "oferta_accepted", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("users", "phone_number", "VARCHAR(32)"),
+    ("users", "referral_confirmed", "BOOLEAN NOT NULL DEFAULT 0"),
 ]
 
 DEFAULT_SETTINGS: dict[str, str] = {
@@ -148,6 +151,30 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # admin rotate a leaked/expired key without touching GitHub/Railway.
     "reseller_api_key": "",
     "reseller_api_base_url": "",
+
+    # Onboarding gate: mandatory oferta (terms) acceptance + mandatory
+    # channel subscription, checked before *any* other handler runs (see
+    # OnboardingGateMiddleware). Off by default — an upgrade must never
+    # silently lock out existing users; the admin turns this on only after
+    # writing the oferta text and setting the channel below.
+    "onboarding_gate_enabled": "0",
+    # Either "@channel_username" or a numeric chat id (e.g. "-1001234567890")
+    # — passed straight to bot.get_chat_member(). Empty = channel check
+    # skipped even if the gate above is on (oferta-only gate).
+    "required_channel": "",
+    # Public join link shown on the "🔗 Kanalga o'tish" button — needed
+    # separately because private channels/numeric ids aren't valid t.me URLs.
+    "required_channel_url": "",
+    "oferta_text_uz": "",
+    "oferta_text_ru": "",
+    "oferta_text_en": "",
+
+    # Referral-confirmation anti-fraud gate (phone number + math captcha).
+    # Only ever applies to users who arrived via a referral link — never
+    # blocks organic/direct users, and never blocks the shop itself, only
+    # that specific referred user's contribution to their referrer's
+    # invited-count/stats/rewards. On by default per admin request.
+    "referral_verification_enabled": "1",
 }
 
 

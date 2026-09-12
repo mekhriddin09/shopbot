@@ -15,13 +15,30 @@ class ReferralRepository:
         self.session = session
 
     async def get_stats(self, referrer_id: int) -> dict[str, int]:
+        # When the referral-confirmation anti-fraud gate is on (default),
+        # both counts are scoped to `referral_confirmed=True` — a referred
+        # user who hasn't passed the phone+captcha check yet (see
+        # app/services/onboarding_service.py) doesn't count toward their
+        # referrer's stats, so fake/bot-farmed accounts can't inflate them
+        # just by clicking the link. If the admin turns that feature off,
+        # fall back to counting every linked user like before (so numbers
+        # don't mysteriously drop to zero when they disable it).
+        from app.repositories.setting_repo import SettingRepository  # local import avoids a cycle
+
+        verification_enabled = await SettingRepository(self.session).get_bool("referral_verification_enabled", True)
+        confirmed_clause = [User.referral_confirmed.is_(True)] if verification_enabled else []
+
         invited = await self.session.execute(
-            select(func.count(User.id)).where(User.referred_by_id == referrer_id)
+            select(func.count(User.id)).where(User.referred_by_id == referrer_id, *confirmed_clause)
         )
         purchased = await self.session.execute(
             select(func.count(func.distinct(Order.user_id)))
             .join(User, User.id == Order.user_id)
-            .where(User.referred_by_id == referrer_id, Order.status == OrderStatus.DELIVERED)
+            .where(
+                User.referred_by_id == referrer_id,
+                Order.status == OrderStatus.DELIVERED,
+                *confirmed_clause,
+            )
         )
         first_rewards = await self.session.execute(
             select(func.count(Order.id))

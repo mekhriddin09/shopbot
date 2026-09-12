@@ -9,10 +9,12 @@ from aiogram.types import (
 
 from app.database.models import Product
 from app.keyboards.callback_data import (
+    CaptchaCB,
     CryptoCB,
     LangCB,
     MyOrderCB,
     MyOrdersPageCB,
+    OnboardingCB,
     QtyCB,
     ReferralCB,
     ReferralRewardCB,
@@ -27,17 +29,56 @@ from app.utils.i18n import t
 ADMIN_PANEL_BTN = "\U0001F6E0️ Admin panel"
 
 
-def main_menu_kb(lang: str, is_admin: bool = False) -> ReplyKeyboardMarkup:
+def main_menu_kb(lang: str, is_admin: bool = False, needs_referral_confirmation: bool = False) -> ReplyKeyboardMarkup:
     rows = [
         [KeyboardButton(text=t(lang, "btn_shop")), KeyboardButton(text=t(lang, "btn_my_orders"))],
         [KeyboardButton(text=t(lang, "btn_reviews")), KeyboardButton(text=t(lang, "btn_support"))],
         [KeyboardButton(text=t(lang, "btn_referral")), KeyboardButton(text=t(lang, "btn_language"))],
     ]
+    if needs_referral_confirmation:
+        # Only shown to users who arrived via a referral link and haven't
+        # passed the phone+captcha anti-fraud check yet — disappears for
+        # good once confirmed (see app/handlers/user/onboarding.py).
+        rows.append([KeyboardButton(text=t(lang, "btn_referral_confirm"))])
     if is_admin:
         # Only ever shown to telegram IDs that pass IsAdmin — regular users
         # never see this row, so there is nothing to hide-by-obscurity here.
         rows.append([KeyboardButton(text=ADMIN_PANEL_BTN)])
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
+
+
+def oferta_accept_kb(lang: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=t(lang, "btn_offer_accept"), callback_data=OnboardingCB(action="accept_offer").pack())]
+        ]
+    )
+
+
+def channel_check_kb(lang: str, channel_url: str) -> InlineKeyboardMarkup:
+    rows = []
+    if channel_url:
+        rows.append([InlineKeyboardButton(text=t(lang, "btn_channel_open"), url=channel_url)])
+    rows.append(
+        [InlineKeyboardButton(text=t(lang, "btn_channel_check"), callback_data=OnboardingCB(action="check_channel").pack())]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def request_contact_kb(lang: str) -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=t(lang, "btn_share_contact"), request_contact=True)]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+
+
+def captcha_kb(options: list[int], correct: int) -> InlineKeyboardMarkup:
+    buttons = [
+        InlineKeyboardButton(text=str(value), callback_data=CaptchaCB(action="answer", correct=(value == correct)).pack())
+        for value in options
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=[buttons[:2], buttons[2:]])
 
 
 def shop_list_kb(products: list[Product], lang: str) -> InlineKeyboardMarkup:

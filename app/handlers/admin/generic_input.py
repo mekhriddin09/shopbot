@@ -403,6 +403,24 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
         await message.answer(f"✅ Balans yangilandi.\n\n{profile_text}", reply_markup=admin_user_profile_kb(target.id))
         return
 
+    if action == "add_allowed_phone":
+        from app.repositories.allowed_phone_repo import AllowedPhoneRepository
+        from app.services.onboarding_service import normalize_phone
+
+        normalized = normalize_phone(text)
+        if not normalized:
+            await message.answer("Noto'g'ri raqam. Qaytadan yozing (masalan: +7 999 123 45 67).")
+            return
+        await AllowedPhoneRepository(session).add(normalized)
+        admin_actions_logger.info("allowed_phone_added phone=%s admin=%s", normalized, message.from_user.id)
+        await state.clear()
+
+        from app.keyboards.admin_kb import admin_phone_whitelist_kb
+
+        entries = await AllowedPhoneRepository(session).list_all()
+        await message.answer(f"✅ +{normalized} ro'yxatga qo'shildi.", reply_markup=admin_phone_whitelist_kb(entries))
+        return
+
     if action == "user_send_message":
         user_id = data["user_id"]
         target = await UserRepository(session).get_by_id(user_id)

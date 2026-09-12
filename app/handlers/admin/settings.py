@@ -32,6 +32,8 @@ TOGGLE_LABELS = {
     "referral_first_order_enabled": "1-buyurtma mukofoti",
     "referral_recurring_enabled": "Doimiy mukofot",
     "preorder_enabled": "Oldindan buyurtma",
+    "onboarding_gate_enabled": "Majburiy oferta+kanal",
+    "referral_verification_enabled": "Referral tasdiqlash (telefon+captcha)",
 }
 
 

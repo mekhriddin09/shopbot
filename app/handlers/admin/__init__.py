@@ -6,6 +6,7 @@ from app.handlers.admin import (
     inventory,
     menu,
     orders,
+    phone_whitelist,
     products,
     referral_rewards,
     settings as admin_settings,
@@ -24,6 +25,7 @@ admin_router.include_router(broadcast.router)
 admin_router.include_router(stats.router)
 admin_router.include_router(referral_rewards.router)
 admin_router.include_router(admin_users.router)
+admin_router.include_router(phone_whitelist.router)
 admin_router.include_router(generic_input.router)
 # Registered last: broadly matches any admin "reply" — more specific,
 # state-bound handlers above must get first refusal.

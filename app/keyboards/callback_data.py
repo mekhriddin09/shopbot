@@ -153,6 +153,24 @@ class AdminUserCB(CallbackData, prefix="auser"):
     user_id: int = 0
 
 
+class OnboardingCB(CallbackData, prefix="ogate"):
+    action: str  # accept_offer | check_channel
+
+
+class CaptchaCB(CallbackData, prefix="capt"):
+    action: str  # answer
+    # Each option button carries whether *it* is the correct one — this is
+    # a low-stakes human-friction check, not a security boundary, so there's
+    # no need for server-side FSM state just to remember the right answer
+    # between showing the question and checking the tap.
+    correct: bool = False
+
+
+class AdminPhoneCB(CallbackData, prefix="aphone"):
+    action: str  # list | add | remove
+    phone_id: int = 0
+
+
 class ConfirmCB(CallbackData, prefix="confirm"):
     action: str  # yes | no
     context: str | None = None

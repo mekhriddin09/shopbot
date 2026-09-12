@@ -27,6 +27,18 @@ class UserRepository:
         )
         return list(result.scalars().all())
 
+    async def mark_oferta_accepted(self, user: User) -> None:
+        user.oferta_accepted = True
+        await self.session.commit()
+
+    async def set_phone_number(self, user: User, phone_number: str) -> None:
+        user.phone_number = phone_number
+        await self.session.commit()
+
+    async def mark_referral_confirmed(self, user: User) -> None:
+        user.referral_confirmed = True
+        await self.session.commit()
+
     async def adjust_referral_balance(self, user: User, delta: float) -> float:
         """Manual admin balance correction (add/subtract). Clamped at 0 —
         same floor used everywhere else the balance is touched (withdrawals,

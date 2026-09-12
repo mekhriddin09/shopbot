@@ -92,6 +92,18 @@ class ReferralService:
         if buyer is None or buyer.referred_by_id is None:
             return
 
+        # Anti-fraud gate: a referred user who hasn't confirmed via
+        # phone+captcha yet (see app/services/onboarding_service.py) never
+        # triggers a reward for their referrer — otherwise a script could
+        # farm fake accounts through the referral link and cash in the
+        # moment any one of them makes a purchase. Deliberately NOT marking
+        # `order.referral_rewarded = True` here: if this same buyer confirms
+        # later, a *subsequent* delivered order can still reward the
+        # referrer normally (this specific unconfirmed order just never
+        # counts — no retroactive credit for it once confirmed).
+        if not buyer.referral_confirmed and await self.settings.get_bool("referral_verification_enabled", True):
+            return
+
         referrer = await self.session.get(User, buyer.referred_by_id)
         if referrer is None:
             return
