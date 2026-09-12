@@ -42,8 +42,8 @@
 
   "msg_payment_header": "💳 To'lov ma'lumotlari:\n\n{instructions}\n\n🔹 Buyurtma: <code>{order_uuid}</code>\n🔹 Mahsulot: {product_name}\n🔹 Narxi: {price} {currency}",
   "msg_preorder_payment_header": "⏳ <b>Oldindan buyurtma</b> (mahsulot hozircha stokda yo'q, kelgach yuboriladi)\n\n💳 To'lov ma'lumotlari:\n\n{instructions}\n\n🔹 Buyurtma: <code>{order_uuid}</code>\n🔹 Mahsulot: {product_name}\n🔹 Narxi: {price} {currency}",
-  "msg_send_screenshot": "🖼 To'lov chekini (screenshot) rasm sifatida yuboring.",
-  "msg_screenshot_required": "Iltimos, faqat rasm (screenshot) yuboring.",
+  "msg_send_screenshot": "🖼 To'lov chekini yuboring — skrinshot (rasm) yoki fayl (PDF, DOCX va h.k.) ko'rinishida bo'lishi mumkin.",
+  "msg_screenshot_required": "Iltimos, chekni rasm yoki fayl (masalan PDF, DOCX) sifatida yuboring.",
   "msg_order_sent_to_admin": "✅ Chekingiz qabul qilindi va admin tomonidan tekshirilmoqda. Tez orada javob olasiz!",
   "msg_order_already_processed": "⚠️ Bu buyurtma allaqachon ko'rib chiqilgan.",
 

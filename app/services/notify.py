@@ -32,8 +32,16 @@ async def notify_admins_new_order(
     bot: Bot,
     session: AsyncSession,
     order: Order,
-    screenshot_file_id: str,
+    proof_file_id: str,
+    *,
+    is_document: bool = False,
 ) -> None:
+    """`is_document=True` when the customer's payment proof was uploaded as
+    a file (png-as-document, pdf, docx, ...) rather than a native Telegram
+    photo — see `app/handlers/user/shop.py:receive_screenshot`, which now
+    accepts either. Sent via `send_document` in that case so it reaches the
+    admin as the original file (a `send_photo` call would silently fail or
+    mangle non-image documents)."""
     preorder_line = "\n⏳ <b>OLDINDAN BUYURTMA</b> (mahsulot hozircha stokda yo'q)" if order.is_preorder else ""
     qty_line = f"\n\U0001F522 Miqdor: {order.quantity} dona" if order.quantity and order.quantity > 1 else ""
     caption = (
@@ -47,12 +55,20 @@ async def notify_admins_new_order(
     )
     for admin_id in await _all_admin_ids(session):
         try:
-            await bot.send_photo(
-                admin_id,
-                photo=screenshot_file_id,
-                caption=caption,
-                reply_markup=admin_order_action_kb(order.id),
-            )
+            if is_document:
+                await bot.send_document(
+                    admin_id,
+                    document=proof_file_id,
+                    caption=caption,
+                    reply_markup=admin_order_action_kb(order.id),
+                )
+            else:
+                await bot.send_photo(
+                    admin_id,
+                    photo=proof_file_id,
+                    caption=caption,
+                    reply_markup=admin_order_action_kb(order.id),
+                )
         except TelegramAPIError:
             logger.warning("Failed to notify admin %s about order %s", admin_id, order.order_uuid)
 

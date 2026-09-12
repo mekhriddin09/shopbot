@@ -46,6 +46,34 @@ router.message.filter(IsAdmin())
 admin_actions_logger = logging.getLogger("admin_actions")
 
 
+async def _reflect_delivery_on_admin_card(bot, data: dict, order) -> None:
+    """Edit the *original* admin notification (the payment proof photo/
+    document/text that started this manual-delivery flow) to show the same
+    "delivered at HH:MM, sent: <payload>" confirmation the auto-delivery
+    path shows — otherwise that original card is left as a dead end with
+    its buttons stripped and no visible outcome at all. Shared by both the
+    typed-text and uploaded-file manual-delivery paths below."""
+    admin_chat_id = data.get("admin_chat_id")
+    admin_message_id = data.get("admin_message_id")
+    if not (admin_chat_id and admin_message_id):
+        return
+
+    from app.handlers.admin.orders import _delivered_confirmation_block  # local import avoids a cycle
+
+    new_body = (data.get("admin_original_body") or "") + _delivered_confirmation_block(order)
+    try:
+        if data.get("admin_msg_is_photo"):
+            await bot.edit_message_caption(chat_id=admin_chat_id, message_id=admin_message_id, caption=new_body)
+        else:
+            await bot.edit_message_text(chat_id=admin_chat_id, message_id=admin_message_id, text=new_body)
+    except TelegramAPIError:
+        pass  # message too old/deleted/caption-too-long — the confirmation below still reaches the admin
+    try:
+        await bot.edit_message_reply_markup(chat_id=admin_chat_id, message_id=admin_message_id, reply_markup=None)
+    except TelegramAPIError:
+        pass
+
+
 async def _product_summary_and_kb(session: AsyncSession, product_id: int):
     from app.handlers.admin.products import _product_summary  # local import avoids cycle
 
@@ -298,35 +326,7 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
         from app.services.referral_service import ReferralService  # local import avoids a cycle
 
         await ReferralService(session).credit_for_delivered_order(order, message.bot)
-
-        # Edit the *original* admin notification (the screenshot/text that
-        # started this manual-delivery flow) to show the same "delivered at
-        # HH:MM, sent: <payload>" confirmation the auto-delivery path shows
-        # — otherwise that original card is left as a dead end with its
-        # buttons stripped and no visible outcome at all.
-        admin_chat_id = data.get("admin_chat_id")
-        admin_message_id = data.get("admin_message_id")
-        if admin_chat_id and admin_message_id:
-            from app.handlers.admin.orders import _delivered_confirmation_block  # local import avoids a cycle
-
-            new_body = (data.get("admin_original_body") or "") + _delivered_confirmation_block(order)
-            try:
-                if data.get("admin_msg_is_photo"):
-                    await message.bot.edit_message_caption(
-                        chat_id=admin_chat_id, message_id=admin_message_id, caption=new_body
-                    )
-                else:
-                    await message.bot.edit_message_text(
-                        chat_id=admin_chat_id, message_id=admin_message_id, text=new_body
-                    )
-            except TelegramAPIError:
-                pass  # message too old/deleted/caption-too-long — the confirmation below still reaches the admin
-            try:
-                await message.bot.edit_message_reply_markup(
-                    chat_id=admin_chat_id, message_id=admin_message_id, reply_markup=None
-                )
-            except TelegramAPIError:
-                pass
+        await _reflect_delivery_on_admin_card(message.bot, data, order)
 
         await state.clear()
         await message.answer("✅ Xabar mijozga yuborildi va buyurtma yakunlandi.")
@@ -445,18 +445,67 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
 
 @router.message(AdminInput.waiting_text, F.document)
 async def handle_document_as_text_value(message: Message, session: AsyncSession, state: FSMContext) -> None:
-    """Lets the admin upload a `.txt` file instead of typing/pasting —
-    mainly for `settings_edit` (e.g. a long oferta/terms document that
-    exceeds Telegram's ~4096-character single-message limit). Every other
-    `waiting_text` action still expects a typed message, so this only acts
-    when the current action is one that makes sense as a file upload;
-    otherwise it's silently ignored (state stays open, admin can still type)."""
+    """Two unrelated file-upload conveniences share this one handler slot
+    (both fire while `AdminInput.waiting_text` is active, distinguished by
+    `action`):
+
+    - `settings_edit`: upload a `.txt`/`.md` file instead of typing/pasting
+      — mainly for a long oferta/terms document that exceeds Telegram's
+      ~4096-character single-message limit. The file is *decoded* into text
+      and stored as the setting's value.
+    - `manual_deliver`: send the customer an actual file (PDF/DOCX/ZIP/
+      whatever) as the product itself, instead of typing a text/code
+      message — the file is simply *forwarded* (by file_id), never
+      downloaded or decoded.
+
+    Every other `waiting_text` action still expects a typed message, so
+    this silently no-ops for those (state stays open, admin can still type)."""
     data = await state.get_data()
     action = data.get("action")
-    if action not in ("settings_edit",):
+    document = message.document
+
+    if action == "manual_deliver":
+        order_id = data["order_id"]
+        file_name = document.file_name or "fayl"
+        descriptive = f"[Fayl] {file_name}"
+        delivery = DeliveryService(session)
+        try:
+            order = await delivery.deliver_manual_message(order_id, message.from_user.id, descriptive)
+        except InvalidOrderStateError as exc:
+            await message.answer(str(exc))
+            await state.clear()
+            return
+
+        lang = order.user.language
+        caption = build_delivered_message(lang, order, descriptive)
+        try:
+            if len(caption) <= 1024:
+                await message.bot.send_document(order.user.telegram_id, document.file_id, caption=caption)
+            else:
+                # Telegram caption cap (1024 chars) — send the file plain,
+                # then the (longer) confirmation/instructions as a follow-up.
+                await message.bot.send_document(order.user.telegram_id, document.file_id)
+                await message.bot.send_message(order.user.telegram_id, caption)
+        except TelegramAPIError:
+            await message.answer("⚠️ Fayl mijozga yuborib bo'lmadi — foydalanuvchi botni bloklagan bo'lishi mumkin.")
+            await state.clear()
+            return
+
+        admin_actions_logger.info(
+            "order_manual_delivered_file order=%s file=%s admin=%s", order_id, file_name, message.from_user.id
+        )
+        from app.services.referral_service import ReferralService  # local import avoids a cycle
+
+        await ReferralService(session).credit_for_delivered_order(order, message.bot)
+        await _reflect_delivery_on_admin_card(message.bot, data, order)
+
+        await state.clear()
+        await message.answer("✅ Fayl mijozga yuborildi va buyurtma yakunlandi.")
         return
 
-    document = message.document
+    if action != "settings_edit":
+        return
+
     filename = (document.file_name or "").lower()
     if not (filename.endswith(".txt") or filename.endswith(".md")):
         await message.answer("Iltimos, .txt (yoki .md) formatidagi fayl yuboring, yoki matnni to'g'ridan-to'g'ri yozing.")

@@ -42,8 +42,8 @@
 
   "msg_payment_header": "💳 Информация об оплате:\n\n{instructions}\n\n🔹 Заказ: <code>{order_uuid}</code>\n🔹 Товар: {product_name}\n🔹 Цена: {price} {currency}",
   "msg_preorder_payment_header": "⏳ <b>Предзаказ</b> (товара пока нет в наличии, будет отправлен после поступления)\n\n💳 Информация об оплате:\n\n{instructions}\n\n🔹 Заказ: <code>{order_uuid}</code>\n🔹 Товар: {product_name}\n🔹 Цена: {price} {currency}",
-  "msg_send_screenshot": "🖼 Отправьте скриншот чека об оплате.",
-  "msg_screenshot_required": "Пожалуйста, отправьте именно изображение (скриншот).",
+  "msg_send_screenshot": "🖼 Отправьте чек об оплате — скриншот (изображение) или файл (PDF, DOCX и т.д.).",
+  "msg_screenshot_required": "Пожалуйста, отправьте чек в виде изображения или файла (например PDF, DOCX).",
   "msg_order_sent_to_admin": "✅ Ваш чек принят и проверяется администратором. Скоро вы получите ответ!",
   "msg_order_already_processed": "⚠️ Этот заказ уже был обработан.",
 

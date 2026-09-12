@@ -275,7 +275,7 @@ async def mark_paid(
     await callback.answer()
 
 
-@router.message(PurchaseStates.waiting_screenshot, F.photo)
+@router.message(PurchaseStates.waiting_screenshot, F.photo | F.document)
 async def receive_screenshot(message: Message, session: AsyncSession, lang: str, state: FSMContext) -> None:
     data = await state.get_data()
     order_id = data.get("order_id")
@@ -283,7 +283,15 @@ async def receive_screenshot(message: Message, session: AsyncSession, lang: str,
         await state.clear()
         return
 
-    file_id = message.photo[-1].file_id
+    # Accept a native Telegram photo OR any uploaded file (png/jpg sent as
+    # a "file" instead of compressed photo, pdf, docx, ...) — some bank
+    # apps export receipts as PDF/DOCX rather than a screenshot, and some
+    # users deliberately send images as files to avoid Telegram's photo
+    # compression. Whichever it is, the exact same file_id gets stored and
+    # forwarded on to the admin (see notify_admins_new_order's is_document).
+    is_document = message.document is not None
+    file_id = message.document.file_id if is_document else message.photo[-1].file_id
+
     order_service = OrderService(session)
     try:
         order = await order_service.submit_payment_proof(order_id, file_id, instructions_snapshot=None)
@@ -294,7 +302,7 @@ async def receive_screenshot(message: Message, session: AsyncSession, lang: str,
 
     # re-fetch with relations for the admin notification
     full_order = await OrderRepository(session).get_by_id(order.id)
-    await notify_admins_new_order(message.bot, session, full_order, file_id)
+    await notify_admins_new_order(message.bot, session, full_order, file_id, is_document=is_document)
 
     needs_confirm = await user_needs_referral_confirmation(session, full_order.user)
     await message.answer(

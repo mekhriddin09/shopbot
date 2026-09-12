@@ -42,8 +42,8 @@
 
   "msg_payment_header": "💳 Payment details:\n\n{instructions}\n\n🔹 Order: <code>{order_uuid}</code>\n🔹 Product: {product_name}\n🔹 Price: {price} {currency}",
   "msg_preorder_payment_header": "⏳ <b>Pre-order</b> (not in stock yet, will be sent once it arrives)\n\n💳 Payment details:\n\n{instructions}\n\n🔹 Order: <code>{order_uuid}</code>\n🔹 Product: {product_name}\n🔹 Price: {price} {currency}",
-  "msg_send_screenshot": "🖼 Please upload a screenshot of your payment.",
-  "msg_screenshot_required": "Please send an image (screenshot) only.",
+  "msg_send_screenshot": "🖼 Please send your payment proof — a screenshot (image) or a file (PDF, DOCX, etc.).",
+  "msg_screenshot_required": "Please send the proof as an image or a file (e.g. PDF, DOCX).",
   "msg_order_sent_to_admin": "✅ Your proof has been received and is being reviewed by the admin. You'll hear back soon!",
   "msg_order_already_processed": "⚠️ This order has already been processed.",
 

@@ -67,21 +67,24 @@ def _delivered_confirmation_block(order) -> str:
 
 async def _edit_order_message_with_confirmation(callback: CallbackQuery, block: str) -> None:
     """Append `block` to whatever the original admin notification was —
-    almost always a photo (the payment screenshot) with a caption, but
+    almost always a photo OR a document (the payment proof — now accepted
+    as either, see shop.py's receive_screenshot) with a caption, but
     sometimes a plain text message (e.g. the "needs manual delivery"
     notice from the crypto auto-confirm path). `Message.text` is `None` on
-    photo messages (only `.caption` is populated), so blindly calling
-    `edit_text` there raises `TypeError` — which used to crash this handler
-    right after the product had already been delivered to the customer,
-    leaving the admin with no visible confirmation at all. Also guards
-    against Telegram's photo-caption length cap (1024 chars, vs 4096 for
-    plain text) — a large multi-code order could exceed it — falling back
-    to a fresh message instead of losing the confirmation entirely."""
+    any media message — photo *or* document — (only `.caption` is
+    populated there), so blindly calling `edit_text` on one raises
+    `TypeError` — which used to crash this handler right after the product
+    had already been delivered to the customer, leaving the admin with no
+    visible confirmation at all. Checking `.text is None` (rather than
+    `.photo` specifically) covers every media type uniformly. Also guards
+    against Telegram's caption length cap (1024 chars, vs 4096 for plain
+    text) — a large multi-code order could exceed it — falling back to a
+    fresh message instead of losing the confirmation entirely."""
     try:
-        if callback.message.photo:
+        if callback.message.text is None:
             await callback.message.edit_caption(caption=(callback.message.caption or "") + block)
         else:
-            await callback.message.edit_text((callback.message.text or "") + block)
+            await callback.message.edit_text(callback.message.text + block)
     except TelegramBadRequest:
         await callback.message.answer("✅ TASDIQLANDI VA YETKAZILDI" + block)
     try:
@@ -163,8 +166,10 @@ async def approve_order(callback: CallbackQuery, callback_data: OrderCB, session
             # ever shown on it.
             admin_chat_id=callback.message.chat.id,
             admin_message_id=callback.message.message_id,
-            admin_msg_is_photo=bool(callback.message.photo),
-            admin_original_body=callback.message.caption if callback.message.photo else callback.message.text,
+            # True for any media message (photo OR document) — both use
+            # `.caption` instead of `.text`, see _edit_order_message_with_confirmation.
+            admin_msg_is_photo=callback.message.text is None,
+            admin_original_body=callback.message.caption if callback.message.text is None else callback.message.text,
         )
         preorder_note = "\n⏳ Bu — oldindan buyurtma edi. Mahsulot stokga kelgach yuboring." if order.is_preorder else ""
         await callback.message.answer(
@@ -195,8 +200,8 @@ async def write_manual_start(callback: CallbackQuery, callback_data: OrderCB, st
         order_id=callback_data.order_id,
         admin_chat_id=callback.message.chat.id,
         admin_message_id=callback.message.message_id,
-        admin_msg_is_photo=bool(callback.message.photo),
-        admin_original_body=callback.message.caption if callback.message.photo else callback.message.text,
+        admin_msg_is_photo=callback.message.text is None,
+        admin_original_body=callback.message.caption if callback.message.text is None else callback.message.text,
     )
     await callback.message.answer("✍️ Mijozga yuboriladigan xabarni yozing:")
     await callback.message.edit_reply_markup(reply_markup=None)
