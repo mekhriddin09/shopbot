@@ -10,7 +10,6 @@ from app.database.models import User
 from app.filters.is_admin import is_admin_telegram_id
 from app.keyboards.user_kb import main_menu_kb
 from app.repositories.setting_repo import SettingRepository
-from app.services.onboarding_service import user_needs_referral_confirmation
 from app.services.referral_service import ReferralService, parse_start_referral_payload
 
 router = Router(name="user_start")
@@ -49,7 +48,4 @@ async def cmd_start(
         "welcome_message_en"
     )
     is_admin = await is_admin_telegram_id(user.telegram_id, session)
-    needs_confirm = await user_needs_referral_confirmation(session, user)
-    await message.answer(
-        welcome, reply_markup=main_menu_kb(lang, is_admin=is_admin, needs_referral_confirmation=needs_confirm)
-    )
+    await message.answer(welcome, reply_markup=main_menu_kb(lang, is_admin=is_admin))

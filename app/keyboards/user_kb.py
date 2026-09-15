@@ -29,17 +29,19 @@ from app.utils.i18n import t
 ADMIN_PANEL_BTN = "\U0001F6E0️ Admin panel"
 
 
-def main_menu_kb(lang: str, is_admin: bool = False, needs_referral_confirmation: bool = False) -> ReplyKeyboardMarkup:
+def main_menu_kb(lang: str, is_admin: bool = False) -> ReplyKeyboardMarkup:
+    # NOTE: there is deliberately no "confirm your referral" button here.
+    # Referral confirmation (phone + captcha) is enforced up-front by
+    # OnboardingGateMiddleware for the users it applies to, so by the time
+    # anyone sees this menu they've already passed it. An optional menu
+    # button was the original design and it didn't work: users simply
+    # ignored it (the shop kept working without it), so almost nobody ever
+    # confirmed and referrer stats stayed empty.
     rows = [
         [KeyboardButton(text=t(lang, "btn_shop")), KeyboardButton(text=t(lang, "btn_my_orders"))],
         [KeyboardButton(text=t(lang, "btn_reviews")), KeyboardButton(text=t(lang, "btn_support"))],
         [KeyboardButton(text=t(lang, "btn_referral")), KeyboardButton(text=t(lang, "btn_language"))],
     ]
-    if needs_referral_confirmation:
-        # Only shown to users who arrived via a referral link and haven't
-        # passed the phone+captcha anti-fraud check yet — disappears for
-        # good once confirmed (see app/handlers/user/onboarding.py).
-        rows.append([KeyboardButton(text=t(lang, "btn_referral_confirm"))])
     if is_admin:
         # Only ever shown to telegram IDs that pass IsAdmin — regular users
         # never see this row, so there is nothing to hide-by-obscurity here.

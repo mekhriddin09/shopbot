@@ -1,11 +1,11 @@
-"""User side of the onboarding gate's own buttons (oferta accept / channel
-re-check — the mandatory, applies-to-everyone half, actually intercepted
-and shown by OnboardingGateMiddleware; these handlers are what run once the
-admin's "ogate:" buttons are tapped) plus the separate, referral-only
-confirmation flow (phone number + math captcha) that protects a referrer's
-stats/rewards from fake-account farming. See app/services/onboarding_service.py
-for the phone/captcha logic and app/middlewares/onboarding_gate.py for the
-mandatory gate itself."""
+"""User side of the onboarding gate: the oferta-accept / channel-recheck
+buttons, and the referral-confirmation step (phone number + math captcha)
+that protects a referrer's stats/rewards from fake-account farming.
+
+The gate itself (which steps apply to whom, and blocking everything else
+until they're done) lives in `app/middlewares/onboarding_gate.py`; these
+handlers just process the taps/uploads that flow *out* of it. Phone/captcha
+logic is in `app/services/onboarding_service.py`."""
 from __future__ import annotations
 
 from aiogram import F, Router
@@ -40,47 +40,70 @@ async def _show_main_menu(target, session: AsyncSession, user: User, lang: str) 
     settings_repo = SettingRepository(session)
     welcome = await settings_repo.get(f"welcome_message_{lang}") or await settings_repo.get("welcome_message_en")
     is_admin = await is_admin_telegram_id(user.telegram_id, session)
-    needs_confirm = await user_needs_referral_confirmation(session, user)
-    await target.answer(welcome, reply_markup=main_menu_kb(lang, is_admin=is_admin, needs_referral_confirmation=needs_confirm))
+    await target.answer(welcome, reply_markup=main_menu_kb(lang, is_admin=is_admin))
+
+
+async def _advance_after_gate_step(target, session: AsyncSession, user: User, lang: str) -> None:
+    """Called after a gate step is satisfied: move the user to whichever
+    step is still outstanding, or show the main menu if the gate is fully
+    cleared. Keeps the whole thing a single continuous flow instead of
+    dumping the user back to a menu they'd have to poke at again."""
+    settings_repo = SettingRepository(session)
+
+    if await settings_repo.get_bool("onboarding_gate_enabled", False):
+        required_channel = await settings_repo.get("required_channel", "")
+        if required_channel and not await _is_subscribed(target.bot, required_channel, user.telegram_id):
+            channel_url = await settings_repo.get("required_channel_url", "")
+            await target.answer(
+                t(lang, "msg_channel_subscribe_required"), reply_markup=channel_check_kb(lang, channel_url)
+            )
+            return
+
+    if await user_needs_referral_confirmation(session, user):
+        if not user.phone_number:
+            await target.answer(t(lang, "msg_referral_confirm_intro"), reply_markup=request_contact_kb(lang))
+        else:
+            question, correct, options = generate_captcha()
+            await target.answer(
+                t(lang, "msg_captcha_prompt", question=question), reply_markup=captcha_kb(options, correct)
+            )
+        return
+
+    await _show_main_menu(target, session, user, lang)
+
+
+async def _is_subscribed(bot, channel: str, telegram_id: int) -> bool:
+    """Fails open on any error, exactly like the middleware's own check —
+    see app/middlewares/onboarding_gate.py."""
+    try:
+        member = await bot.get_chat_member(channel, telegram_id)
+        return member.status in _ACTIVE_CHANNEL_STATUSES
+    except Exception:  # noqa: BLE001
+        return True
 
 
 @router.callback_query(OnboardingCB.filter(F.action == "accept_offer"))
 async def accept_offer(callback: CallbackQuery, session: AsyncSession, user: User, lang: str) -> None:
     await UserRepository(session).mark_oferta_accepted(user)
-    settings_repo = SettingRepository(session)
-    required_channel = await settings_repo.get("required_channel", "")
     try:
         await callback.message.edit_reply_markup(reply_markup=None)
     except Exception:  # noqa: BLE001 - best effort
         pass
-    if required_channel:
-        channel_url = await settings_repo.get("required_channel_url", "")
-        await callback.message.answer(t(lang, "msg_channel_subscribe_required"), reply_markup=channel_check_kb(lang, channel_url))
-        await callback.answer()
-        return
-    await _show_main_menu(callback.message, session, user, lang)
+    await _advance_after_gate_step(callback.message, session, user, lang)
     await callback.answer()
 
 
 @router.callback_query(OnboardingCB.filter(F.action == "check_channel"))
 async def check_channel(callback: CallbackQuery, session: AsyncSession, user: User, lang: str) -> None:
-    settings_repo = SettingRepository(session)
-    required_channel = await settings_repo.get("required_channel", "")
-    subscribed = True
-    if required_channel:
-        try:
-            member = await callback.bot.get_chat_member(required_channel, user.telegram_id)
-            subscribed = member.status in _ACTIVE_CHANNEL_STATUSES
-        except Exception:  # noqa: BLE001 - fail open, same reasoning as the middleware
-            subscribed = True
-    if not subscribed:
+    required_channel = await SettingRepository(session).get("required_channel", "")
+    if required_channel and not await _is_subscribed(callback.bot, required_channel, user.telegram_id):
         await callback.answer(t(lang, "msg_channel_still_not_subscribed"), show_alert=True)
         return
     try:
         await callback.message.edit_reply_markup(reply_markup=None)
     except Exception:  # noqa: BLE001 - best effort
         pass
-    await _show_main_menu(callback.message, session, user, lang)
+    await _advance_after_gate_step(callback.message, session, user, lang)
     await callback.answer()
 
 
@@ -88,11 +111,6 @@ async def check_channel(callback: CallbackQuery, session: AsyncSession, user: Us
 # Referral confirmation: phone + captcha — only for users who came via a
 # referral link, to protect the referrer's stats/rewards from fake accounts.
 # ------------------------------------------------------------------
-
-
-@router.message(F.text.in_({t(l, "btn_referral_confirm") for l in ("uz", "ru", "en")}))
-async def referral_confirm_start(message: Message, lang: str) -> None:
-    await message.answer(t(lang, "msg_referral_confirm_intro"), reply_markup=request_contact_kb(lang))
 
 
 async def _awaiting_referral_confirmation(message: Message, user: User) -> bool:
@@ -111,7 +129,7 @@ async def contact_received(message: Message, session: AsyncSession, user: User, 
     if contact.user_id and contact.user_id != message.from_user.id:
         # Someone shared a saved contact card that isn't their own number —
         # exactly the kind of spoofing this gate exists to prevent.
-        await message.answer(t(lang, "msg_phone_must_be_own"))
+        await message.answer(t(lang, "msg_phone_must_be_own"), reply_markup=request_contact_kb(lang))
         return
 
     if not await is_phone_allowed(session, contact.phone_number):
@@ -138,7 +156,9 @@ async def captcha_answer(
     if not callback_data.correct:
         question, correct, options = generate_captcha()
         try:
-            await callback.message.edit_text(t(lang, "msg_captcha_wrong") + "\n\n" + t(lang, "msg_captcha_prompt", question=question))
+            await callback.message.edit_text(
+                t(lang, "msg_captcha_wrong") + "\n\n" + t(lang, "msg_captcha_prompt", question=question)
+            )
             await callback.message.edit_reply_markup(reply_markup=captcha_kb(options, correct))
         except Exception:  # noqa: BLE001 - best effort re-render
             pass
@@ -151,11 +171,7 @@ async def captcha_answer(
         await callback.message.edit_reply_markup(reply_markup=None)
     except Exception:  # noqa: BLE001 - best effort
         pass
-    is_admin = await is_admin_telegram_id(user.telegram_id, session)
-    await callback.message.answer(
-        t(lang, "main_menu_hint"),
-        reply_markup=main_menu_kb(lang, is_admin=is_admin, needs_referral_confirmation=False),
-    )
+    await _show_main_menu(callback.message, session, user, lang)
     await callback.answer()
 
 

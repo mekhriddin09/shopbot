@@ -30,7 +30,6 @@ from app.services.exceptions import (
     ProductUnavailableError,
 )
 from app.services.notify import notify_admins_new_order
-from app.services.onboarding_service import user_needs_referral_confirmation
 from app.services.order_service import OrderService
 from app.services.product_service import ProductService
 from app.states.user_states import PurchaseStates
@@ -304,11 +303,7 @@ async def receive_screenshot(message: Message, session: AsyncSession, lang: str,
     full_order = await OrderRepository(session).get_by_id(order.id)
     await notify_admins_new_order(message.bot, session, full_order, file_id, is_document=is_document)
 
-    needs_confirm = await user_needs_referral_confirmation(session, full_order.user)
-    await message.answer(
-        t(lang, "msg_order_sent_to_admin"),
-        reply_markup=main_menu_kb(lang, needs_referral_confirmation=needs_confirm),
-    )
+    await message.answer(t(lang, "msg_order_sent_to_admin"), reply_markup=main_menu_kb(lang))
     await state.clear()
 
 

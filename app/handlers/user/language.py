@@ -9,7 +9,6 @@ from app.filters.is_admin import is_admin_telegram_id
 from app.keyboards.callback_data import LangCB
 from app.keyboards.user_kb import language_kb, main_menu_kb
 from app.repositories.user_repo import UserRepository
-from app.services.onboarding_service import user_needs_referral_confirmation
 from app.utils.i18n import available_languages, t
 
 router = Router(name="user_language")
@@ -31,10 +30,6 @@ async def set_language(
     users = UserRepository(session)
     await users.set_language(user, code)
     is_admin = await is_admin_telegram_id(user.telegram_id, session)
-    needs_confirm = await user_needs_referral_confirmation(session, user)
     await callback.message.edit_text(t(code, "msg_language_set"))
-    await callback.message.answer(
-        t(code, "main_menu_hint"),
-        reply_markup=main_menu_kb(code, is_admin=is_admin, needs_referral_confirmation=needs_confirm),
-    )
+    await callback.message.answer(t(code, "main_menu_hint"), reply_markup=main_menu_kb(code, is_admin=is_admin))
     await callback.answer()
