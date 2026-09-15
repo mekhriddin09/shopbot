@@ -311,6 +311,9 @@ def admin_settings_menu_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="✏️ Doimiy mukofot miqdori", callback_data=AdminSettingsCB(action="edit", key="referral_recurring_value").pack())],
         [InlineKeyboardButton(text="✏️ Referral valyutasi (UZS/USD/USDT/Ball)", callback_data=AdminSettingsCB(action="edit", key="referral_currency").pack())],
         [InlineKeyboardButton(text="✏️ Min. pul yechish miqdori", callback_data=AdminSettingsCB(action="edit", key="referral_withdraw_min").pack())],
+        [InlineKeyboardButton(text="\U0001F3AF Ball nomi (taklif valyutasi)", callback_data=AdminSettingsCB(action="edit", key="referral_points_name").pack())],
+        [InlineKeyboardButton(text="\U0001F3AF Taklif mukofoti (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="referral_confirm_reward_enabled").pack())],
+        [InlineKeyboardButton(text="✏️ Taklif mukofoti miqdori (ball)", callback_data=AdminSettingsCB(action="edit", key="referral_confirm_reward_value").pack())],
         [InlineKeyboardButton(text="\U0001F4E6 Oldindan buyurtma (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="preorder_enabled").pack())],
         [InlineKeyboardButton(text="\U0001F4DC Referral qoidalari (til bo'yicha)", callback_data=AdminSettingsCB(action="pick_lang", key="referral_rules").pack())],
         [InlineKeyboardButton(text="\U0001F6AA Majburiy oferta+kanal (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="onboarding_gate_enabled").pack())],
@@ -378,11 +381,20 @@ def admin_referral_reward_detail_kb(reward) -> InlineKeyboardMarkup:
     def cb(action: str, field: str = "") -> str:
         return AdminReferralRewardCB(action=action, reward_id=rid, field=field).pack()
 
+    from app.database.models.enums import ReferralCurrency  # local import avoids a cycle
+
+    currency_text = (
+        "\U0001F4B1 Valyuta: \U0001F3AF Ball"
+        if reward.currency_type == ReferralCurrency.POINTS
+        else "\U0001F4B1 Valyuta: \U0001F4B5 Sotuv valyutasi"
+    )
+
     rows = [
         [
             InlineKeyboardButton(text="✏️ Nomi", callback_data=cb("edit_field", "name")),
-            InlineKeyboardButton(text="\U0001F4B0 Narxi (ball)", callback_data=cb("edit_field", "cost")),
+            InlineKeyboardButton(text="\U0001F4B0 Narxi", callback_data=cb("edit_field", "cost")),
         ],
+        [InlineKeyboardButton(text=currency_text, callback_data=cb("toggle_currency"))],
         [InlineKeyboardButton(text="\U0001F4DD Izoh", callback_data=cb("edit_field", "description"))],
         [
             InlineKeyboardButton(text=visibility_text, callback_data=cb("toggle_active")),
@@ -450,8 +462,12 @@ def admin_user_profile_kb(user_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="➕ Balans qo'shish", callback_data=AdminUserCB(action="balance_add", user_id=user_id).pack()),
-                InlineKeyboardButton(text="➖ Balans ayirish", callback_data=AdminUserCB(action="balance_sub", user_id=user_id).pack()),
+                InlineKeyboardButton(text="➕ 💵 Sotuv balansi", callback_data=AdminUserCB(action="balance_add", user_id=user_id).pack()),
+                InlineKeyboardButton(text="➖ 💵 Sotuv balansi", callback_data=AdminUserCB(action="balance_sub", user_id=user_id).pack()),
+            ],
+            [
+                InlineKeyboardButton(text="➕ 🎯 Ball", callback_data=AdminUserCB(action="points_add", user_id=user_id).pack()),
+                InlineKeyboardButton(text="➖ 🎯 Ball", callback_data=AdminUserCB(action="points_sub", user_id=user_id).pack()),
             ],
             [InlineKeyboardButton(text="✉️ Xabar yuborish", callback_data=AdminUserCB(action="message", user_id=user_id).pack())],
             [InlineKeyboardButton(text="\U0001F4E6 Buyurtmalari", callback_data=AdminUserCB(action="orders", user_id=user_id).pack())],

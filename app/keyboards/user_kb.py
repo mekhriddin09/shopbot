@@ -306,9 +306,21 @@ def my_orders_page_kb(current_page: int, total_pages: int) -> InlineKeyboardMark
 
 
 def referral_profile_kb(
-    lang: str, can_withdraw: bool, has_rewards: bool = False, has_rules: bool = False
+    lang: str,
+    can_withdraw: bool,
+    has_rewards: bool = False,
+    has_rules: bool = False,
+    needs_confirmation: bool = False,
 ) -> InlineKeyboardMarkup | None:
     rows = []
+    if needs_confirmation:
+        # Shown to a referred-but-unconfirmed user so they can complete (or
+        # retry) the phone+captcha check whenever they want — e.g. they
+        # declined the one-time prompt at entry, or their first attempt was
+        # rejected because they only had a foreign number at the time.
+        rows.append(
+            [InlineKeyboardButton(text=t(lang, "btn_referral_confirm"), callback_data=ReferralCB(action="confirm").pack())]
+        )
     if has_rewards:
         rows.append(
             [InlineKeyboardButton(text=t(lang, "btn_referral_shop"), callback_data=ReferralRewardCB(action="list").pack())]
@@ -326,16 +338,23 @@ def referral_profile_kb(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def referral_reward_list_kb(lang: str, rewards: list) -> InlineKeyboardMarkup:
-    rows = [
-        [
-            InlineKeyboardButton(
-                text=f"{r.name} — {fmt_price(float(r.cost))}",
-                callback_data=ReferralRewardCB(action="open", reward_id=r.id).pack(),
-            )
-        ]
-        for r in rewards
-    ]
+def referral_reward_list_kb(
+    lang: str, rewards: list, currency_name: str = "", points_name: str = ""
+) -> InlineKeyboardMarkup:
+    """Each button spells out which of the two currencies the item costs,
+    so the customer can tell at a glance what they can actually afford
+    without opening every single one."""
+    from app.database.models.enums import ReferralCurrency  # local import avoids a cycle
+
+    rows = []
+    for r in rewards:
+        unit = points_name if r.currency_type == ReferralCurrency.POINTS else currency_name
+        label = f"{r.name} — {fmt_price(float(r.cost))}"
+        if unit:
+            label += f" {unit}"
+        rows.append(
+            [InlineKeyboardButton(text=label, callback_data=ReferralRewardCB(action="open", reward_id=r.id).pack())]
+        )
     rows.append(
         [InlineKeyboardButton(text=t(lang, "btn_back"), callback_data=ReferralCB(action="profile_back").pack())]
     )

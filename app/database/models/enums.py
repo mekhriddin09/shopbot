@@ -43,3 +43,23 @@ class ReferralRedemptionStatus(str, enum.Enum):
     PENDING = "pending"
     FULFILLED = "fulfilled"
     REJECTED = "rejected"
+
+
+class ReferralCurrency(str, enum.Enum):
+    """The two independent referral currencies a user can accumulate.
+
+    BALANCE — earned from *sales*: a referred user's first and recurring
+    purchases (see ReferralService.credit_for_delivered_order). Real
+    money-like value, so it's the only one that can be cashed out via a
+    `ReferralWithdrawal`. Its display name is admin-configurable via the
+    "referral_currency" setting (UZS / USD / Stars / whatever).
+
+    POINTS — earned from *invites*: each referred user who passes the
+    phone+captcha confirmation (see ReferralService.credit_for_confirmation).
+    Deliberately NOT withdrawable — it can only be spent in the referral
+    shop, so farming invites with throwaway accounts can never turn into
+    a cash-out. Display name configurable via "referral_points_name".
+    """
+
+    BALANCE = "balance"
+    POINTS = "points"

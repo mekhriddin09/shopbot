@@ -34,6 +34,7 @@ TOGGLE_LABELS = {
     "preorder_enabled": "Oldindan buyurtma",
     "onboarding_gate_enabled": "Majburiy oferta+kanal",
     "referral_verification_enabled": "Referral tasdiqlash (telefon+captcha)",
+    "referral_confirm_reward_enabled": "Taklif mukofoti (ball)",
 }
 
 

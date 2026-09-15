@@ -62,7 +62,9 @@ async def _build_user_profile_text(session: AsyncSession, user: User) -> str:
     delivered_count = await orders_repo.count_delivered_by_user(user.id)
     total_spent = await orders_repo.total_spent_by_user(user.id)
     ref_stats = await ReferralRepository(session).get_stats(user.id)
-    currency = await SettingRepository(session).get("referral_currency", "UZS")
+    settings_repo = SettingRepository(session)
+    currency = await settings_repo.get("referral_currency", "UZS")
+    points_name = await settings_repo.get("referral_points_name", "Ball")
 
     lines = [
         f"👤 <b>{user.full_name or '-'}</b> (@{user.username or '-'})",
@@ -76,10 +78,13 @@ async def _build_user_profile_text(session: AsyncSession, user: User) -> str:
         f"Jami xarid summasi: {fmt_price(total_spent)}",
         "",
         "🤝 <b>Referal faoliyati</b>",
-        f"Taklif qilgan: {ref_stats['invited']} kishi",
+        f"Taklif qilgan (tasdiqlangan): {ref_stats['invited']} kishi",
         f"Ulardan xarid qilgan: {ref_stats['purchased']} kishi",
         f"1-buyurtma mukofotlari: {ref_stats['first_rewards']} ta",
-        f"Referral balansi: {fmt_price(float(user.referral_balance))} {currency}",
+        f"💵 Sotuv balansi: {fmt_price(float(user.referral_balance))} {currency}",
+        f"🎯 Taklif balansi: {fmt_price(float(user.referral_points))} {points_name}",
+        f"📞 O'zi tasdiqlanganmi: {'ha' if user.referral_confirmed else ('yo‘q' if user.referred_by_id else '— (referalsiz)')}",
+        f"☎️ Raqami: {('+' + user.phone_number) if user.phone_number else '-'}",
     ]
 
     if user.referred_by_id:
@@ -142,17 +147,27 @@ async def show_user_orders(callback: CallbackQuery, callback_data: AdminUserCB, 
     await callback.answer()
 
 
-@router.callback_query(AdminUserCB.filter(F.action.in_({"balance_add", "balance_sub"})))
+@router.callback_query(AdminUserCB.filter(F.action.in_({"balance_add", "balance_sub", "points_add", "points_sub"})))
 async def balance_adjust_start(callback: CallbackQuery, callback_data: AdminUserCB, state: FSMContext, session: AsyncSession) -> None:
     user = await UserRepository(session).get_by_id(callback_data.user_id)
     if user is None:
         await callback.answer("Foydalanuvchi topilmadi.", show_alert=True)
         return
-    sign = 1 if callback_data.action == "balance_add" else -1
+    action = callback_data.action
+    sign = 1 if action.endswith("_add") else -1
+    use_points = action.startswith("points")
+
+    settings_repo = SettingRepository(session)
+    unit = (
+        await settings_repo.get("referral_points_name", "Ball")
+        if use_points
+        else await settings_repo.get("referral_currency", "UZS")
+    )
+
     await state.set_state(AdminInput.waiting_text)
-    await state.update_data(action="user_balance_adjust", user_id=user.id, sign=sign)
+    await state.update_data(action="user_balance_adjust", user_id=user.id, sign=sign, use_points=use_points)
     verb = "qo'shmoqchi" if sign > 0 else "ayirmoqchi"
-    await callback.message.answer(f"✏️ Necha birlik {verb}bo'lsangiz, raqamda yozing:")
+    await callback.message.answer(f"✏️ Necha <b>{unit}</b> {verb}bo'lsangiz, raqamda yozing:")
     await callback.answer()
 
 

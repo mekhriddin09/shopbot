@@ -6,7 +6,11 @@ from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Integer, Numeric,
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base, TimestampMixin
-from app.database.models.enums import ReferralRedemptionStatus, ReferralWithdrawalStatus
+from app.database.models.enums import (
+    ReferralCurrency,
+    ReferralRedemptionStatus,
+    ReferralWithdrawalStatus,
+)
 
 
 class ReferralWithdrawal(TimestampMixin, Base):
@@ -43,6 +47,14 @@ class ReferralReward(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     cost: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    # Which of the user's two referral balances this reward is priced in.
+    # Defaults to BALANCE so every reward that existed before this column
+    # was introduced keeps behaving exactly as it did.
+    currency_type: Mapped[ReferralCurrency] = mapped_column(
+        Enum(ReferralCurrency, native_enum=False),
+        default=ReferralCurrency.BALANCE,
+        server_default="BALANCE",
+    )
     is_active: Mapped[bool] = mapped_column(default=True, server_default="1")
     sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
@@ -65,6 +77,14 @@ class ReferralRedemption(TimestampMixin, Base):
     )
     reward_name_snapshot: Mapped[str] = mapped_column(String(128), nullable=False)
     cost_snapshot: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    # Snapshotted alongside name/cost: a rejection must refund to the SAME
+    # balance the cost was taken from, even if the admin has since changed
+    # the catalog item's currency (or deleted it entirely).
+    currency_type: Mapped[ReferralCurrency] = mapped_column(
+        Enum(ReferralCurrency, native_enum=False),
+        default=ReferralCurrency.BALANCE,
+        server_default="BALANCE",
+    )
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[ReferralRedemptionStatus] = mapped_column(
         Enum(ReferralRedemptionStatus, native_enum=False), default=ReferralRedemptionStatus.PENDING

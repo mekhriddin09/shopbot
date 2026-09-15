@@ -39,6 +39,10 @@ class UserRepository:
         user.referral_confirmed = True
         await self.session.commit()
 
+    async def mark_referral_prompt_shown(self, user: User) -> None:
+        user.referral_prompt_shown = True
+        await self.session.commit()
+
     async def adjust_referral_balance(self, user: User, delta: float) -> float:
         """Manual admin balance correction (add/subtract). Clamped at 0 —
         same floor used everywhere else the balance is touched (withdrawals,
@@ -48,6 +52,14 @@ class UserRepository:
         await self.session.commit()
         await self.session.refresh(user)
         return float(user.referral_balance)
+
+    async def adjust_referral_points(self, user: User, delta: float) -> float:
+        """Same as `adjust_referral_balance`, for the second (invite-based,
+        shop-only) currency — see ReferralCurrency in models/enums.py."""
+        user.referral_points = max(0.0, float(user.referral_points) + delta)
+        await self.session.commit()
+        await self.session.refresh(user)
+        return float(user.referral_points)
 
     async def get_or_create(
         self, telegram_id: int, username: str | None, full_name: str | None, language: str

@@ -43,6 +43,21 @@ async def _show_main_menu(target, session: AsyncSession, user: User, lang: str) 
     await target.answer(welcome, reply_markup=main_menu_kb(lang, is_admin=is_admin))
 
 
+async def prompt_referral_confirmation(target, session: AsyncSession, user: User, lang: str) -> None:
+    """Show whichever confirmation step is still outstanding: ask for the
+    phone number, or (if we already have it) put up a fresh captcha.
+    Shared by the one-time entry prompt (OnboardingGateMiddleware), the
+    retry button on the referral profile, and the post-oferta chaining
+    below — so all three always show the user the same correct next step."""
+    if not user.phone_number:
+        await target.answer(t(lang, "msg_referral_confirm_intro"), reply_markup=request_contact_kb(lang))
+        return
+    question, correct, options = generate_captcha()
+    await target.answer(
+        t(lang, "msg_captcha_prompt", question=question), reply_markup=captcha_kb(options, correct)
+    )
+
+
 async def _advance_after_gate_step(target, session: AsyncSession, user: User, lang: str) -> None:
     """Called after a gate step is satisfied: move the user to whichever
     step is still outstanding, or show the main menu if the gate is fully
@@ -59,17 +74,13 @@ async def _advance_after_gate_step(target, session: AsyncSession, user: User, la
             )
             return
 
-    if await user_needs_referral_confirmation(session, user):
-        if not user.phone_number:
-            await target.answer(t(lang, "msg_referral_confirm_intro"), reply_markup=request_contact_kb(lang))
-        else:
-            question, correct, options = generate_captcha()
-            await target.answer(
-                t(lang, "msg_captcha_prompt", question=question), reply_markup=captcha_kb(options, correct)
-            )
-        return
-
+    # Confirmation is non-blocking, so show the welcome/menu FIRST (the bot
+    # is usable right now regardless), then offer the confirmation once.
     await _show_main_menu(target, session, user, lang)
+
+    if not user.referral_prompt_shown and await user_needs_referral_confirmation(session, user):
+        await UserRepository(session).mark_referral_prompt_shown(user)
+        await prompt_referral_confirmation(target, session, user, lang)
 
 
 async def _is_subscribed(bot, channel: str, telegram_id: int) -> bool:
@@ -166,6 +177,13 @@ async def captcha_answer(
         return
 
     await UserRepository(session).mark_referral_confirmed(user)
+
+    # Pay the referrer their invite points ("Ball") — this is the whole
+    # point of the confirmation step existing.
+    from app.services.referral_service import ReferralService  # local import avoids a cycle
+
+    await ReferralService(session).credit_for_confirmation(user, callback.bot)
+
     try:
         await callback.message.edit_text(t(lang, "msg_referral_confirmed"))
         await callback.message.edit_reply_markup(reply_markup=None)

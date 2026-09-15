@@ -7,7 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database.models import Order, ReferralRedemption, ReferralReward, ReferralWithdrawal, User
-from app.database.models.enums import OrderStatus, ReferralRedemptionStatus, ReferralWithdrawalStatus
+from app.database.models.enums import (
+    OrderStatus,
+    ReferralCurrency,
+    ReferralRedemptionStatus,
+    ReferralWithdrawalStatus,
+)
 
 
 class ReferralRepository:
@@ -144,6 +149,7 @@ class ReferralRepository:
             reward_id=reward.id,
             reward_name_snapshot=reward.name,
             cost_snapshot=reward.cost,
+            currency_type=reward.currency_type,
             note=note,
             status=ReferralRedemptionStatus.PENDING,
         )
@@ -167,12 +173,19 @@ class ReferralRepository:
         await self.session.commit()
 
     async def mark_redemption_rejected(self, redemption: ReferralRedemption, admin_id: int) -> None:
-        """Refund the reserved balance back to the user — the request never
-        went through, so the spend shouldn't stick."""
+        """Refund the reserved amount back to the user — the request never
+        went through, so the spend shouldn't stick. Refunds to whichever
+        currency it was paid from, using the redemption's own snapshot
+        rather than the catalog item's current setting (the admin may have
+        changed or deleted that item in the meantime)."""
         redemption.status = ReferralRedemptionStatus.REJECTED
         redemption.decided_by_admin_id = admin_id
         redemption.decided_at = datetime.now(timezone.utc)
         user = await self.session.get(User, redemption.user_id)
         if user is not None:
-            user.referral_balance = float(user.referral_balance) + float(redemption.cost_snapshot)
+            amount = float(redemption.cost_snapshot)
+            if redemption.currency_type == ReferralCurrency.POINTS:
+                user.referral_points = float(user.referral_points) + amount
+            else:
+                user.referral_balance = float(user.referral_balance) + amount
         await self.session.commit()

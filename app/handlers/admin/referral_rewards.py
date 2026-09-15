@@ -18,6 +18,7 @@ from app.keyboards.admin_kb import (
     admin_referral_rewards_list_kb,
     confirm_delete_reward_kb,
 )
+from app.database.models.enums import ReferralCurrency
 from app.keyboards.callback_data import AdminReferralRedemptionCB, AdminReferralRewardCB
 from app.repositories.referral_repo import ReferralRepository
 from app.states.admin_states import AdminInput
@@ -40,9 +41,15 @@ FIELD_PROMPTS = {
 def _reward_summary(reward) -> str:
     visibility = "\U0001F7E2 Ko'rinadi" if reward.is_active else "⚪ Yashirilgan"
     description_line = f"\n{reward.description}" if reward.description else ""
+    currency_label = (
+        "\U0001F3AF Ball (taklif uchun)"
+        if reward.currency_type == ReferralCurrency.POINTS
+        else "\U0001F4B5 Valyuta (sotuvdan)"
+    )
     return (
         f"\U0001F381 <b>{reward.name}</b>{description_line}\n\n"
         f"\U0001F4B0 Narxi: {fmt_price(float(reward.cost))}\n"
+        f"{currency_label}\n"
         f"{visibility}"
     )
 
@@ -102,6 +109,32 @@ async def referral_reward_toggle_active(callback: CallbackQuery, callback_data: 
         await callback.answer("Sovg'a topilmadi", show_alert=True)
         return
     await referrals.update_reward(reward, is_active=not reward.is_active)
+    await callback.message.edit_text(_reward_summary(reward), reply_markup=admin_referral_reward_detail_kb(reward))
+    await callback.answer()
+
+
+@router.callback_query(AdminReferralRewardCB.filter(F.action == "toggle_currency"))
+async def referral_reward_toggle_currency(
+    callback: CallbackQuery, callback_data: AdminReferralRewardCB, session: AsyncSession
+) -> None:
+    """Flip a catalog item between the two referral currencies. Only
+    affects future redemptions — past ones keep their own snapshotted
+    currency (see ReferralRedemption.currency_type), so a reward that's
+    already been redeemed and later switched still refunds correctly if
+    that old request is rejected."""
+    referrals = ReferralRepository(session)
+    reward = await referrals.get_reward(callback_data.reward_id)
+    if reward is None:
+        await callback.answer("Sovg'a topilmadi", show_alert=True)
+        return
+    new_currency = (
+        ReferralCurrency.BALANCE if reward.currency_type == ReferralCurrency.POINTS else ReferralCurrency.POINTS
+    )
+    await referrals.update_reward(reward, currency_type=new_currency)
+    admin_actions_logger.info(
+        "referral_reward_currency_changed id=%s currency=%s admin=%s",
+        reward.id, new_currency.value, callback.from_user.id,
+    )
     await callback.message.edit_text(_reward_summary(reward), reply_markup=admin_referral_reward_detail_kb(reward))
     await callback.answer()
 

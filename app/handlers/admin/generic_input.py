@@ -374,14 +374,20 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
             return
 
         delta = sign * amount
-        new_balance = await UserRepository(session).adjust_referral_balance(target, delta)
+        use_points = bool(data.get("use_points"))
+        users_repo = UserRepository(session)
+        settings_repo = SettingRepository(session)
+        if use_points:
+            new_balance = await users_repo.adjust_referral_points(target, delta)
+            currency = await settings_repo.get("referral_points_name", "Ball")
+        else:
+            new_balance = await users_repo.adjust_referral_balance(target, delta)
+            currency = await settings_repo.get("referral_currency", "UZS")
         admin_actions_logger.info(
-            "user_balance_adjusted user=%s delta=%s new_balance=%s admin=%s",
-            target.id, delta, new_balance, message.from_user.id,
+            "user_balance_adjusted user=%s currency=%s delta=%s new_balance=%s admin=%s",
+            target.id, "points" if use_points else "balance", delta, new_balance, message.from_user.id,
         )
         await state.clear()
-
-        currency = await SettingRepository(session).get("referral_currency", "UZS")
         try:
             await message.bot.send_message(
                 target.telegram_id,

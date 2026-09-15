@@ -7,14 +7,9 @@ from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, Update
 
 from app.filters.is_admin import is_admin_telegram_id
-from app.keyboards.user_kb import (
-    captcha_kb,
-    channel_check_kb,
-    oferta_accept_kb,
-    request_contact_kb,
-)
+from app.keyboards.user_kb import channel_check_kb, oferta_accept_kb
 from app.repositories.setting_repo import SettingRepository
-from app.services.onboarding_service import generate_captcha, user_needs_referral_confirmation
+from app.services.onboarding_service import user_needs_referral_confirmation
 from app.utils.i18n import t
 
 logger = logging.getLogger(__name__)
@@ -29,24 +24,27 @@ _GATE_CALLBACK_PREFIXES = ("ogate:", "capt:")
 
 
 class OnboardingGateMiddleware(BaseMiddleware):
-    """Blocks every update from a non-admin user until they've completed the
-    onboarding steps that apply *to them*, in order:
+    """Runs the onboarding steps that apply to each non-admin user, in order.
 
-      1. Accept the oferta (everyone, if the gate is on)
-      2. Subscribe to the mandatory channel (everyone, if one is configured)
-      3. Share a phone number + pass a math captcha (ONLY users who arrived
-         via someone's referral link and haven't confirmed yet)
+    BLOCKING steps (update never reaches its handler until satisfied), and
+    only while `onboarding_gate_enabled` is on:
+      1. Accept the oferta
+      2. Subscribe to the mandatory channel (if one is configured)
 
-    Step 3 is deliberately scoped to referred users: an organic visitor has
-    no referrer, so there is no referral fraud to prevent by making them
-    hand over a phone number — it would only cost conversions. Meanwhile,
-    forcing it at the door (rather than offering an ignorable menu button)
-    is what actually makes it effective, since a fake account can't simply
-    skip it and still count toward its referrer.
+    NON-BLOCKING step, on its own `referral_verification_enabled` toggle:
+      3. Offer phone + captcha confirmation, once, to users who arrived via
+         someone's referral link. The update proceeds to its handler either
+         way — declining or failing this only means the user doesn't count
+         toward their referrer's invite stats/Ball reward. The bot stays
+         fully usable and they can still refer others themselves.
 
-    Same short-circuit-with-bare-`return` pattern already used by
-    `UserContextMiddleware` for banned users. Registered last in main.py's
-    stack — it needs `session`/`user`/`lang` already present in `data`.
+    Step 3 is scoped to referred users because an organic visitor has no
+    referrer, so demanding their phone number prevents no fraud and only
+    costs conversions.
+
+    Blocking uses the same short-circuit-with-bare-`return` pattern already
+    used by `UserContextMiddleware` for banned users. Registered last in
+    main.py's stack — needs `session`/`user`/`lang` already in `data`.
     """
 
     async def __call__(
@@ -108,21 +106,29 @@ class OnboardingGateMiddleware(BaseMiddleware):
                     await cq.answer()
                 return None
 
-        # Step 3 — referral confirmation. Checked independently of
-        # `onboarding_gate_enabled` (it has its own
-        # `referral_verification_enabled` toggle) so the admin can run the
-        # anti-fraud check with or without the oferta/channel wall.
-        if await user_needs_referral_confirmation(session, user):
-            if not user.phone_number:
-                await target.answer(t(lang, "msg_referral_confirm_intro"), reply_markup=request_contact_kb(lang))
-            else:
-                question, correct, options = generate_captcha()
-                await target.answer(
-                    t(lang, "msg_captcha_prompt", question=question), reply_markup=captcha_kb(options, correct)
-                )
-            if cq:
-                await cq.answer()
-            return None
+        # Step 3 — referral confirmation. Deliberately NOT a block: it's
+        # offered once, up front, and then the update continues to its
+        # normal handler either way. Failing or ignoring it only costs the
+        # user their "counts as a referral" status — the bot itself stays
+        # fully usable, they can still buy, and they can still invite
+        # others with their own link. (An earlier version did block here,
+        # which meant e.g. anyone with a foreign phone number was locked
+        # out of the shop entirely — losing a paying customer to protect a
+        # referral statistic, exactly the wrong trade.) They can come back
+        # to it any time from the 🤝 Referral section.
+        if not user.referral_prompt_shown and await user_needs_referral_confirmation(session, user):
+            # Local imports avoid an import cycle (handlers import keyboards
+            # which import... — the middleware is loaded before routers).
+            from app.handlers.user.onboarding import prompt_referral_confirmation
+            from app.repositories.user_repo import UserRepository
+
+            await UserRepository(session).mark_referral_prompt_shown(user)
+            result = await handler(event, data)
+            # Prompt *after* the normal handler so the user sees their
+            # /start welcome + menu first, then the optional ask — rather
+            # than the ask appearing to be a wall in front of the bot.
+            await prompt_referral_confirmation(target, session, user, lang)
+            return result
 
         return await handler(event, data)
 

@@ -19,6 +19,7 @@ from aiogram import Bot
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Order, ReferralRedemption, User
+from app.database.models.enums import ReferralCurrency
 from app.repositories.order_repo import OrderRepository
 from app.repositories.referral_repo import ReferralRepository
 from app.repositories.setting_repo import SettingRepository
@@ -150,28 +151,89 @@ class ReferralService:
         except Exception:  # noqa: BLE001 - referrer may have blocked the bot
             pass
 
+    async def credit_for_confirmation(self, user: User, bot: Bot) -> None:
+        """Credit the *referrer* with invite points ("Ball") the moment one
+        of their referred users passes the phone+captcha confirmation. This
+        is the second, independent referral currency — see ReferralCurrency
+        in models/enums.py for why it's kept apart from the sales-based
+        balance (short version: points come from invites, are shop-only,
+        and can never be cashed out, so invite-farming has no cash exit).
+
+        Safe to call unconditionally — a fast no-op unless the reward is
+        enabled, the user was actually referred, and they haven't already
+        been paid for."""
+        if user.referral_confirm_rewarded or user.referred_by_id is None:
+            return
+        if not await self.settings.get_bool("referral_enabled", False):
+            return
+        if not await self.settings.get_bool("referral_confirm_reward_enabled", False):
+            return
+
+        referrer = await self.session.get(User, user.referred_by_id)
+        if referrer is None:
+            return
+
+        # Points are a flat per-invite amount — a percentage would be
+        # meaningless here since no purchase is involved.
+        _, value = parse_reward_value(await self.settings.get("referral_confirm_reward_value", "0"))
+        reward = round(value, 2)
+
+        user.referral_confirm_rewarded = True
+        if reward <= 0:
+            await self.session.commit()
+            return
+
+        referrer.referral_points = float(referrer.referral_points) + reward
+        await self.session.commit()
+
+        order_logger.info(
+            "referral_points_credited referrer=%s invited=%s amount=%s",
+            referrer.telegram_id, user.telegram_id, reward,
+        )
+
+        points_name = await self.settings.get("referral_points_name", "Ball")
+        try:
+            await bot.send_message(
+                referrer.telegram_id,
+                t(
+                    referrer.language,
+                    "msg_referral_points_received",
+                    amount=fmt_price(reward),
+                    currency=points_name,
+                ),
+            )
+        except Exception:  # noqa: BLE001 - referrer may have blocked the bot
+            pass
+
     async def redeem_reward(self, user: User, reward_id: int, note: str | None) -> ReferralRedemption:
         """Spend the customer's referral balance on a catalog reward — the
-        "referral shop" checkout. Deducts the balance immediately (treated
-        as reserved the same way an inventory code is reserved at purchase
-        time) so a customer can't fire off several requests against the
-        same balance before an admin gets to the first one; a rejected
-        request refunds it back (see `ReferralRepository.mark_redemption_rejected`)."""
+        "referral shop" checkout. Each reward is priced in exactly one of
+        the two currencies (`reward.currency_type`), and is paid for from
+        that matching balance only. The amount is deducted immediately
+        (treated as reserved the same way an inventory code is reserved at
+        purchase time) so a customer can't fire off several requests
+        against the same balance before an admin gets to the first one; a
+        rejected request refunds it to the same currency it came from (see
+        `ReferralRepository.mark_redemption_rejected`)."""
         reward = await self.referrals.get_reward(reward_id)
         if reward is None or not reward.is_active:
             raise RewardUnavailableError("msg_referral_reward_unavailable")
 
-        balance = float(user.referral_balance)
+        uses_points = reward.currency_type == ReferralCurrency.POINTS
+        balance = float(user.referral_points if uses_points else user.referral_balance)
         cost = float(reward.cost)
         if balance < cost:
             raise InsufficientBalanceError("msg_referral_reward_insufficient_balance")
 
-        user.referral_balance = balance - cost
+        if uses_points:
+            user.referral_points = balance - cost
+        else:
+            user.referral_balance = balance - cost
         await self.session.commit()
 
         redemption = await self.referrals.create_redemption(user.id, reward, note)
         order_logger.info(
-            "referral_reward_redeemed user=%s reward=%s cost=%s redemption=%s",
-            user.telegram_id, reward.name, cost, redemption.id,
+            "referral_reward_redeemed user=%s reward=%s cost=%s currency=%s redemption=%s",
+            user.telegram_id, reward.name, cost, reward.currency_type.value, redemption.id,
         )
         return redemption

@@ -102,13 +102,22 @@ async def notify_admins_referral_withdrawal(
 async def notify_admins_referral_redemption(
     bot: Bot, session: AsyncSession, redemption: ReferralRedemption, user: User
 ) -> None:
+    from app.database.models.enums import ReferralCurrency  # local import avoids a cycle
+    from app.repositories.setting_repo import SettingRepository
+
+    settings_repo = SettingRepository(session)
+    if redemption.currency_type == ReferralCurrency.POINTS:
+        unit = await settings_repo.get("referral_points_name", "Ball")
+    else:
+        unit = await settings_repo.get("referral_currency", "UZS")
+
     note_line = f"\n\U0001F4DD Izoh: {redemption.note}" if redemption.note else ""
     text = (
         f"\U0001F381 <b>Referral do'koni — yangi so'rov</b>\n\n"
         f"\U0001F464 {user.full_name or '-'} (@{user.username or '-'})\n"
         f"\U0001F194 Telegram ID: <code>{user.telegram_id}</code>\n"
         f"\U0001F3F7️ Sovg'a: {redemption.reward_name_snapshot}\n"
-        f"\U0001F4B0 Narxi: {fmt_price(float(redemption.cost_snapshot))}\n"
+        f"\U0001F4B0 Narxi: {fmt_price(float(redemption.cost_snapshot))} {unit}\n"
         f"\U0001F196 So'rov: <code>{redemption.id}</code>"
         f"{note_line}"
     )

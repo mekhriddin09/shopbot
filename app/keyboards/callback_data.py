@@ -94,7 +94,7 @@ class AdminBroadcastCB(CallbackData, prefix="abcast"):
 
 
 class ReferralCB(CallbackData, prefix="ref"):
-    action: str  # withdraw | rules | profile_back
+    action: str  # withdraw | rules | profile_back | confirm
 
 
 class QtyCB(CallbackData, prefix="qty"):
@@ -138,7 +138,7 @@ class ReferralRewardCB(CallbackData, prefix="refrw"):
 
 
 class AdminReferralRewardCB(CallbackData, prefix="arefrw"):
-    action: str  # list | open | add | edit_field | toggle_active | delete | confirm_delete | back
+    action: str  # list | open | add | edit_field | toggle_active | toggle_currency | delete | confirm_delete | back
     reward_id: int = 0
     field: str | None = None
 
@@ -149,7 +149,8 @@ class AdminReferralRedemptionCB(CallbackData, prefix="arefrd"):
 
 
 class AdminUserCB(CallbackData, prefix="auser"):
-    action: str  # search_prompt | export_sales | profile | balance_add | balance_sub | message | orders
+    action: str  # search_prompt | export_sales | profile | balance_add | balance_sub |
+    #              points_add | points_sub | message | orders
     user_id: int = 0
 
 

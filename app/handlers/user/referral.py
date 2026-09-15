@@ -6,6 +6,7 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
+from app.database.models.enums import ReferralCurrency
 from app.keyboards.callback_data import ReferralCB, ReferralRewardCB
 from app.keyboards.user_kb import (
     referral_profile_kb,
@@ -17,6 +18,7 @@ from app.repositories.referral_repo import ReferralRepository
 from app.repositories.setting_repo import SettingRepository
 from app.services.exceptions import InsufficientBalanceError, RewardUnavailableError
 from app.services.notify import notify_admins_referral_redemption
+from app.services.onboarding_service import user_needs_referral_confirmation
 from app.services.referral_service import ReferralService
 from app.states.user_states import ReferralRewardStates
 from app.utils.formatting import fmt_price
@@ -31,12 +33,15 @@ async def _build_referral_profile(session: AsyncSession, user: User, lang: str, 
     me = await bot.get_me()
     link = f"https://t.me/{me.username}?start=ref{user.id}"
     currency = await settings_repo.get("referral_currency", "UZS")
+    points_name = await settings_repo.get("referral_points_name", "Ball")
     withdraw_min = float(await settings_repo.get("referral_withdraw_min", "0") or 0)
     balance = float(user.referral_balance)
+    points = float(user.referral_points)
     can_withdraw = withdraw_min > 0 and balance >= withdraw_min
     has_rewards = bool(await ReferralRepository(session).list_active_rewards())
     rules_text = await settings_repo.get(f"referral_rules_{lang}", "")
     has_rules = bool((rules_text or "").strip())
+    needs_confirmation = await user_needs_referral_confirmation(session, user)
 
     text = t(
         lang,
@@ -47,8 +52,21 @@ async def _build_referral_profile(session: AsyncSession, user: User, lang: str, 
         first_rewards=stats["first_rewards"],
         balance=fmt_price(balance),
         currency=currency,
+        points=fmt_price(points),
+        points_name=points_name,
     )
-    kb = referral_profile_kb(lang, can_withdraw, has_rewards=has_rewards, has_rules=has_rules)
+    if needs_confirmation:
+        # Tell them plainly that they themselves aren't counted yet — this
+        # is the one place the confirmation state is visible/actionable
+        # after the one-time prompt at entry.
+        text += "\n\n" + t(lang, "msg_referral_not_confirmed_notice")
+    kb = referral_profile_kb(
+        lang,
+        can_withdraw,
+        has_rewards=has_rewards,
+        has_rules=has_rules,
+        needs_confirmation=needs_confirmation,
+    )
     return text, kb
 
 
@@ -80,6 +98,23 @@ async def referral_rules(callback: CallbackQuery, session: AsyncSession, lang: s
     await callback.answer()
 
 
+@router.callback_query(ReferralCB.filter(F.action == "confirm"))
+async def referral_confirm_from_profile(
+    callback: CallbackQuery, session: AsyncSession, user: User, lang: str
+) -> None:
+    """Retry/complete the phone+captcha confirmation on demand. Entry point
+    for the button on the referral profile — the one-time prompt at entry
+    is skippable and non-blocking, so this is how a user who declined it
+    (or whose number was rejected at the time) comes back to it."""
+    if not await user_needs_referral_confirmation(session, user):
+        await callback.answer()
+        return
+    from app.handlers.user.onboarding import prompt_referral_confirmation  # local import avoids a cycle
+
+    await prompt_referral_confirmation(callback.message, session, user, lang)
+    await callback.answer()
+
+
 @router.callback_query(ReferralCB.filter(F.action == "withdraw"))
 async def referral_withdraw(callback: CallbackQuery, session: AsyncSession, user: User, lang: str) -> None:
     settings_repo = SettingRepository(session)
@@ -105,14 +140,27 @@ async def referral_withdraw(callback: CallbackQuery, session: AsyncSession, user
 # ------------------------------------------------------------------
 
 
+async def _reward_currency(session: AsyncSession, reward, user: User) -> tuple[str, float]:
+    """(display name, the user's balance) for whichever of the two
+    currencies this particular reward is priced in."""
+    settings_repo = SettingRepository(session)
+    if reward.currency_type == ReferralCurrency.POINTS:
+        return await settings_repo.get("referral_points_name", "Ball"), float(user.referral_points)
+    return await settings_repo.get("referral_currency", "UZS"), float(user.referral_balance)
+
+
 @router.callback_query(ReferralRewardCB.filter(F.action == "list"))
 async def referral_reward_list(callback: CallbackQuery, session: AsyncSession, lang: str) -> None:
     rewards = await ReferralRepository(session).list_active_rewards()
     if not rewards:
         await callback.answer(t(lang, "msg_referral_shop_empty"), show_alert=True)
         return
+    settings_repo = SettingRepository(session)
+    currency = await settings_repo.get("referral_currency", "UZS")
+    points_name = await settings_repo.get("referral_points_name", "Ball")
     await callback.message.edit_text(
-        t(lang, "msg_referral_shop_intro"), reply_markup=referral_reward_list_kb(lang, rewards)
+        t(lang, "msg_referral_shop_intro"),
+        reply_markup=referral_reward_list_kb(lang, rewards, currency_name=currency, points_name=points_name),
     )
     await callback.answer()
 
@@ -125,8 +173,8 @@ async def referral_reward_open(
     if reward is None or not reward.is_active:
         await callback.answer(t(lang, "msg_referral_reward_unavailable"), show_alert=True)
         return
-    currency = await SettingRepository(session).get("referral_currency", "UZS")
-    can_afford = float(user.referral_balance) >= float(reward.cost)
+    currency, balance = await _reward_currency(session, reward, user)
+    can_afford = balance >= float(reward.cost)
     description_block = f"\n{reward.description}" if reward.description else ""
     text = t(
         lang,
@@ -134,7 +182,7 @@ async def referral_reward_open(
         name=reward.name,
         description_block=description_block,
         cost=fmt_price(float(reward.cost)),
-        balance=fmt_price(float(user.referral_balance)),
+        balance=fmt_price(balance),
         currency=currency,
     )
     await callback.message.edit_text(
@@ -156,7 +204,8 @@ async def referral_reward_buy(
     if reward is None or not reward.is_active:
         await callback.answer(t(lang, "msg_referral_reward_unavailable"), show_alert=True)
         return
-    if float(user.referral_balance) < float(reward.cost):
+    _, balance = await _reward_currency(session, reward, user)
+    if balance < float(reward.cost):
         await callback.answer(t(lang, "msg_referral_reward_insufficient_balance"), show_alert=True)
         return
 

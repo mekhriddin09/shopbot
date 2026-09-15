@@ -25,6 +25,13 @@ class User(TimestampMixin, Base):
     )
     referral_balance: Mapped[float] = mapped_column(Numeric(12, 2), default=0, server_default="0")
 
+    # Second, independent referral currency ("Ball" by default, renameable
+    # via the "referral_points_name" setting): earned by inviting users who
+    # pass the phone+captcha confirmation, spendable ONLY in the referral
+    # shop — never withdrawable as cash. See ReferralCurrency in enums.py
+    # for why the two are kept separate.
+    referral_points: Mapped[float] = mapped_column(Numeric(12, 2), default=0, server_default="0")
+
     # Onboarding gate: mandatory oferta (terms) acceptance + mandatory
     # channel subscription, both admin-configurable/toggle-able (see
     # Setting "onboarding_gate_enabled"), checked by OnboardingGateMiddleware
@@ -38,6 +45,14 @@ class User(TimestampMixin, Base):
     # ReferralRepository.get_stats and ReferralService.credit_for_delivered_order.
     phone_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
     referral_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # Confirmation is offered once, unprompted, on entry — then never
+    # auto-shown again (the user can always come back to it from the
+    # Referral section). Without this flag the prompt would reappear on
+    # every single message for anyone who declined or failed it.
+    referral_prompt_shown: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # Guards the invite reward against ever being paid twice for the same
+    # referred user (e.g. if confirmation were somehow re-run).
+    referral_confirm_rewarded: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     orders: Mapped[list["Order"]] = relationship(back_populates="user")
     reviews: Mapped[list["Review"]] = relationship(back_populates="user")

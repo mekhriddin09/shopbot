@@ -8,6 +8,7 @@ from app.database.models.enums import (
     DeliveryMode,
     OrderStatus,
     PaymentMethod,
+    ReferralCurrency,
     ReferralRedemptionStatus,
     ReferralWithdrawalStatus,
 )
@@ -31,6 +32,7 @@ __all__ = [
     "DeliveryMode",
     "OrderStatus",
     "PaymentMethod",
+    "ReferralCurrency",
     "ReferralRedemptionStatus",
     "ReferralWithdrawalStatus",
     "InventoryCode",

@@ -55,6 +55,11 @@ _NEW_COLUMNS: list[tuple[str, str, str]] = [
     ("users", "oferta_accepted", "BOOLEAN NOT NULL DEFAULT 0"),
     ("users", "phone_number", "VARCHAR(32)"),
     ("users", "referral_confirmed", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("users", "referral_points", "NUMERIC(12, 2) NOT NULL DEFAULT 0"),
+    ("users", "referral_prompt_shown", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("users", "referral_confirm_rewarded", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("referral_rewards", "currency_type", "VARCHAR(32) NOT NULL DEFAULT 'BALANCE'"),
+    ("referral_redemptions", "currency_type", "VARCHAR(32) NOT NULL DEFAULT 'BALANCE'"),
 ]
 
 DEFAULT_SETTINGS: dict[str, str] = {
@@ -168,6 +173,15 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "oferta_text_uz": "",
     "oferta_text_ru": "",
     "oferta_text_en": "",
+
+    # Second referral currency ("Ball"): earned per referred user who
+    # passes the phone+captcha confirmation, spendable only in the referral
+    # shop (never withdrawable — see ReferralCurrency in models/enums.py).
+    # The sales-based currency keeps its own separate name in
+    # "referral_currency" above.
+    "referral_points_name": "Ball",
+    "referral_confirm_reward_enabled": "0",
+    "referral_confirm_reward_value": "0",
 
     # Referral-confirmation anti-fraud gate (phone number + math captcha).
     # Only ever applies to users who arrived via a referral link — never
