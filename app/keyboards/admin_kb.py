@@ -12,7 +12,6 @@ from app.database.models.enums import DeliveryMode
 from app.keyboards.callback_data import (
     AdminBroadcastCB,
     AdminInventoryCB,
-    AdminMenuCB,
     AdminOrderListCB,
     AdminPhoneCB,
     AdminProductCB,
@@ -289,40 +288,185 @@ def admin_write_manual_kb(order_id: int) -> InlineKeyboardMarkup:
     )
 
 
-def admin_settings_menu_kb() -> InlineKeyboardMarkup:
-    rows = [
-        [InlineKeyboardButton(text="\U0001F44B Xush kelibsiz xabari", callback_data=AdminSettingsCB(action="pick_lang", key="welcome_message").pack())],
-        [InlineKeyboardButton(text="\U0001F4AC Yordam xabari", callback_data=AdminSettingsCB(action="pick_lang", key="support_message").pack())],
-        [InlineKeyboardButton(text="\U0001F4B3 Umumiy to'lov ma'lumoti", callback_data=AdminSettingsCB(action="pick_lang", key="payment_instructions").pack())],
-        [InlineKeyboardButton(text="⭐ Sharhlar matni", callback_data=AdminSettingsCB(action="pick_lang", key="reviews_text").pack())],
-        [InlineKeyboardButton(text="\U0001F504 Avto-yetkazish (inventar)", callback_data=AdminSettingsCB(action="toggle", key="automatic_delivery_enabled").pack())],
-        [InlineKeyboardButton(text="✍️ Qo'lda yetkazish", callback_data=AdminSettingsCB(action="toggle", key="manual_delivery_enabled").pack())],
-        [InlineKeyboardButton(text="\U0001F310 API orqali yetkazish", callback_data=AdminSettingsCB(action="toggle", key="api_delivery_enabled").pack())],
-        [InlineKeyboardButton(text="📢 Isbotlar kanali havolasi", callback_data=AdminSettingsCB(action="edit", key="proof_channel_url").pack())],
-        [InlineKeyboardButton(text="\U0001FA99 Kripto to'lov (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="crypto_payment_enabled").pack())],
-        [InlineKeyboardButton(text="⭐ Telegram Stars to'lov (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="stars_payment_enabled").pack())],
-        [InlineKeyboardButton(text="\U0001F511 Reseller API kaliti", callback_data=AdminSettingsCB(action="edit_masked", key="reseller_api_key").pack())],
-        [InlineKeyboardButton(text="\U0001F310 Reseller API manzili (URL)", callback_data=AdminSettingsCB(action="edit", key="reseller_api_base_url").pack())],
-        [InlineKeyboardButton(text="\U0001F50C Reseller: ulanishni tekshirish", callback_data=AdminSettingsCB(action="test_reseller").pack())],
-        [InlineKeyboardButton(text="\U0001F91D Referral (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="referral_enabled").pack())],
-        [InlineKeyboardButton(text="\U0001F381 1-buyurtma mukofoti (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="referral_first_order_enabled").pack())],
-        [InlineKeyboardButton(text="✏️ 1-buyurtma mukofoti miqdori", callback_data=AdminSettingsCB(action="edit", key="referral_first_order_value").pack())],
-        [InlineKeyboardButton(text="\U0001F501 Doimiy mukofot (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="referral_recurring_enabled").pack())],
-        [InlineKeyboardButton(text="✏️ Doimiy mukofot miqdori", callback_data=AdminSettingsCB(action="edit", key="referral_recurring_value").pack())],
-        [InlineKeyboardButton(text="✏️ Referral valyutasi (UZS/USD/USDT/Ball)", callback_data=AdminSettingsCB(action="edit", key="referral_currency").pack())],
-        [InlineKeyboardButton(text="✏️ Min. pul yechish miqdori", callback_data=AdminSettingsCB(action="edit", key="referral_withdraw_min").pack())],
-        [InlineKeyboardButton(text="\U0001F3AF Ball nomi (taklif valyutasi)", callback_data=AdminSettingsCB(action="edit", key="referral_points_name").pack())],
-        [InlineKeyboardButton(text="\U0001F3AF Taklif mukofoti (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="referral_confirm_reward_enabled").pack())],
-        [InlineKeyboardButton(text="✏️ Taklif mukofoti miqdori (ball)", callback_data=AdminSettingsCB(action="edit", key="referral_confirm_reward_value").pack())],
-        [InlineKeyboardButton(text="\U0001F4E6 Oldindan buyurtma (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="preorder_enabled").pack())],
-        [InlineKeyboardButton(text="\U0001F4DC Referral qoidalari (til bo'yicha)", callback_data=AdminSettingsCB(action="pick_lang", key="referral_rules").pack())],
-        [InlineKeyboardButton(text="\U0001F6AA Majburiy oferta+kanal (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="onboarding_gate_enabled").pack())],
-        [InlineKeyboardButton(text="\U0001F4C4 Oferta matni (til bo'yicha)", callback_data=AdminSettingsCB(action="pick_lang", key="oferta_text").pack())],
-        [InlineKeyboardButton(text="\U0001F4E2 Majburiy kanal (@username yoki ID)", callback_data=AdminSettingsCB(action="edit", key="required_channel").pack())],
-        [InlineKeyboardButton(text="\U0001F517 Kanal havolasi (join link)", callback_data=AdminSettingsCB(action="edit", key="required_channel_url").pack())],
-        [InlineKeyboardButton(text="\U0001F4DE Referral tasdiqlash: telefon+captcha (yoq/o'chir)", callback_data=AdminSettingsCB(action="toggle", key="referral_verification_enabled").pack())],
-        [InlineKeyboardButton(text="☎️ Ruxsat etilgan chet el raqamlari", callback_data=AdminPhoneCB(action="list").pack())],
-    ]
+# ----------------------------------------------------------------------
+# Settings menu — one grouped, navigable tree instead of the ~30-button
+# flat wall it used to be.
+#
+# SETTINGS_GROUPS is the single source of truth: both the keyboard builder
+# (`admin_settings_menu_kb`) and the "here are your current values" summary
+# renderer (`app/handlers/admin/settings.py:render_settings_group`) read
+# from it, so a setting can never appear in one and be missing from the
+# other. Adding a new setting = adding one line here.
+#
+# Item kinds:
+#   ("toggle", key, label)  -> on/off switch
+#   ("edit",   key, label)  -> free-text value
+#   ("masked", key, label)  -> secret, only last 4 chars ever displayed
+#   ("lang",   base, label) -> per-language text (base_uz/_ru/_en)
+#   ("group",  name, label) -> opens another group below
+#   ("phones", None, label) -> the allowed-foreign-numbers list screen
+#   ("test_reseller", None, label) -> live connection check, not a value
+# ----------------------------------------------------------------------
+
+SETTINGS_GROUPS: dict[str, dict] = {
+    "root": {
+        "title": "⚙️ <b>Sozlamalar</b>",
+        "intro": "Kerakli bo'limni tanlang:",
+        "items": [
+            ("group", "texts", "\U0001F4DD Matnlar va xabarlar"),
+            ("group", "delivery", "\U0001F4E6 Yetkazib berish"),
+            ("group", "payments", "\U0001F4B3 To'lov usullari"),
+            ("group", "referral", "\U0001F91D Referal dasturi"),
+            ("group", "access", "\U0001F512 Kirish nazorati"),
+            ("group", "reseller", "\U0001F310 Reseller API"),
+        ],
+    },
+    "texts": {
+        "title": "\U0001F4DD <b>Matnlar va xabarlar</b>",
+        "intro": "Har biri UZ/RU/EN uchun alohida yoziladi. Matn uzun bo'lsa .txt fayl yuborsangiz ham bo'ladi.",
+        "parent": "root",
+        "items": [
+            ("lang", "welcome_message", "\U0001F44B Xush kelibsiz xabari"),
+            ("lang", "support_message", "\U0001F4AC Yordam xabari"),
+            ("lang", "payment_instructions", "\U0001F4B3 Umumiy to'lov ma'lumoti"),
+            ("lang", "reviews_text", "⭐ Sharhlar matni"),
+            ("edit", "proof_channel_url", "📢 Isbotlar kanali havolasi"),
+        ],
+    },
+    "delivery": {
+        "title": "\U0001F4E6 <b>Yetkazib berish</b>",
+        "intro": "Qaysi yetkazish usullari ishlashi va oldindan buyurtma qabul qilinishi.",
+        "parent": "root",
+        "items": [
+            ("toggle", "automatic_delivery_enabled", "\U0001F504 Avto-yetkazish (inventar)"),
+            ("toggle", "manual_delivery_enabled", "✍️ Qo'lda yetkazish"),
+            ("toggle", "api_delivery_enabled", "\U0001F310 API orqali yetkazish"),
+            ("toggle", "preorder_enabled", "\U0001F4E6 Oldindan buyurtma"),
+        ],
+    },
+    "payments": {
+        "title": "\U0001F4B3 <b>To'lov usullari</b>",
+        "intro": (
+            "Karta orqali to'lov doim ishlaydi (chek/skrinshot bilan).\n"
+            "Kripto to'lov uchun mahsulotga USD narx, Stars uchun Stars narxi kiritilgan bo'lishi kerak."
+        ),
+        "parent": "root",
+        "items": [
+            ("toggle", "crypto_payment_enabled", "\U0001FA99 Kripto to'lov"),
+            ("toggle", "stars_payment_enabled", "⭐ Telegram Stars to'lov"),
+        ],
+    },
+    "referral": {
+        "title": "\U0001F91D <b>Referal dasturi</b>",
+        "intro": (
+            "Ikkita mustaqil mukofot turi bor — pastdagi ikki bo'limda alohida sozlanadi:\n\n"
+            "\U0001F4B5 <b>Sotuv mukofoti</b> — taklif qilingan odam <b>xarid qilganda</b> beriladi. "
+            "Pul sifatida yechib olish mumkin.\n"
+            "\U0001F3AF <b>Ball</b> — taklif qilingan odam <b>tasdiqdan o'tganda</b> beriladi. "
+            "Faqat referal do'konida sarflanadi, pul sifatida yechilmaydi."
+        ),
+        "parent": "root",
+        "items": [
+            ("toggle", "referral_enabled", "\U0001F91D Referal tizimi (umumiy)"),
+            ("group", "referral_sales", "\U0001F4B5 Sotuv mukofoti (xarid uchun)"),
+            ("group", "referral_points", "\U0001F3AF Ball (taklif uchun)"),
+            ("lang", "referral_rules", "\U0001F4DC Referal qoidalari matni"),
+        ],
+    },
+    "referral_sales": {
+        "title": "\U0001F4B5 <b>Sotuv mukofoti</b>",
+        "intro": (
+            "Taklif qilingan odam xarid qilganda taklif qilgan odamga beriladi.\n"
+            "Miqdorni qat'iy summa (<code>5000</code>) yoki foiz (<code>5%</code>) sifatida yozish mumkin.\n"
+            "Eslatma: mukofot faqat mahsulot sahifasida \"Referral: yoqilgan\" bo'lsa beriladi."
+        ),
+        "parent": "referral",
+        "items": [
+            ("toggle", "referral_first_order_enabled", "\U0001F381 1-buyurtma mukofoti"),
+            ("edit", "referral_first_order_value", "✏️ 1-buyurtma miqdori"),
+            ("toggle", "referral_recurring_enabled", "\U0001F501 Doimiy mukofot"),
+            ("edit", "referral_recurring_value", "✏️ Doimiy mukofot miqdori"),
+            ("edit", "referral_currency", "\U0001F4B1 Valyuta nomi"),
+            ("edit", "referral_withdraw_min", "\U0001F4B0 Min. pul yechish miqdori"),
+        ],
+    },
+    "referral_points": {
+        "title": "\U0001F3AF <b>Ball (taklif mukofoti)</b>",
+        "intro": (
+            "Taklif qilingan odam telefon+captcha tasdiqlashidan o'tganda beriladi — xarid shart emas.\n"
+            "Ball faqat referal do'konida sarflanadi, pul sifatida yechilmaydi.\n"
+            "Tasdiqlash botni bloklamaydi: o'tmagan odam ham botdan bemalol foydalanadi, "
+            "shunchaki taklif qilgan odamga hisoblanmaydi."
+        ),
+        "parent": "referral",
+        "items": [
+            ("edit", "referral_points_name", "\U0001F3F7️ Ball nomi"),
+            ("toggle", "referral_confirm_reward_enabled", "\U0001F3AF Taklif mukofoti"),
+            ("edit", "referral_confirm_reward_value", "✏️ Har bir tasdiq uchun ball"),
+            ("toggle", "referral_verification_enabled", "\U0001F4DE Tasdiqlash (telefon+captcha)"),
+            ("phones", None, "☎️ Ruxsat etilgan chet el raqamlari"),
+        ],
+    },
+    "access": {
+        "title": "\U0001F512 <b>Kirish nazorati</b>",
+        "intro": (
+            "Yoqilsa, foydalanuvchi botdan foydalanishdan oldin oferta matniga rozilik beradi "
+            "va majburiy kanalga obuna bo'ladi. Adminlar bu tekshiruvdan ozod.\n"
+            "⚠️ Oferta matni bo'sh bo'lsa, tizim xavfsizlik uchun hech kimni bloklamaydi.\n"
+            "⚠️ Bot majburiy kanalda administrator bo'lishi shart."
+        ),
+        "parent": "root",
+        "items": [
+            ("toggle", "onboarding_gate_enabled", "\U0001F6AA Majburiy oferta + kanal"),
+            ("lang", "oferta_text", "\U0001F4C4 Oferta matni"),
+            ("edit", "required_channel", "\U0001F4E2 Majburiy kanal (@username/ID)"),
+            ("edit", "required_channel_url", "\U0001F517 Kanal havolasi (join link)"),
+        ],
+    },
+    "reseller": {
+        "title": "\U0001F310 <b>Reseller API</b>",
+        "intro": (
+            "Tashqi ta'minotchi API'si (API rejimida yetkazilgan mahsulotlar uchun).\n"
+            "Bo'sh qoldirilsa, .env fayldagi qiymat ishlatiladi."
+        ),
+        "parent": "root",
+        "items": [
+            ("masked", "reseller_api_key", "\U0001F511 API kaliti"),
+            ("edit", "reseller_api_base_url", "\U0001F517 API manzili (URL)"),
+            ("test_reseller", None, "\U0001F50C Ulanishni tekshirish"),
+        ],
+    },
+}
+
+
+def admin_settings_menu_kb(group: str = "root") -> InlineKeyboardMarkup:
+    spec = SETTINGS_GROUPS.get(group) or SETTINGS_GROUPS["root"]
+    rows: list[list[InlineKeyboardButton]] = []
+
+    for kind, key, label in spec["items"]:
+        if kind == "group":
+            cb = AdminSettingsCB(action="group", key=key).pack()
+        elif kind == "toggle":
+            cb = AdminSettingsCB(action="toggle", key=key, group=group).pack()
+        elif kind == "edit":
+            cb = AdminSettingsCB(action="edit", key=key, group=group).pack()
+        elif kind == "masked":
+            cb = AdminSettingsCB(action="edit_masked", key=key, group=group).pack()
+        elif kind == "lang":
+            cb = AdminSettingsCB(action="pick_lang", key=key, group=group).pack()
+        elif kind == "phones":
+            cb = AdminPhoneCB(action="list").pack()
+        elif kind == "test_reseller":
+            cb = AdminSettingsCB(action="test_reseller", group=group).pack()
+        else:  # pragma: no cover - guards against a typo'd spec entry
+            continue
+        rows.append([InlineKeyboardButton(text=label, callback_data=cb)])
+
+    parent = spec.get("parent")
+    if parent:
+        rows.append(
+            [InlineKeyboardButton(text="\U0001F519 Orqaga", callback_data=AdminSettingsCB(action="group", key=parent).pack())]
+        )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -337,7 +481,14 @@ def admin_phone_whitelist_kb(entries: list) -> InlineKeyboardMarkup:
         for e in entries
     ]
     rows.append([InlineKeyboardButton(text="➕ Raqam qo'shish", callback_data=AdminPhoneCB(action="add").pack())])
-    rows.append([InlineKeyboardButton(text="\U0001F519 Sozlamalarga qaytish", callback_data=AdminMenuCB(action="settings").pack())])
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="\U0001F519 Orqaga",
+                callback_data=AdminSettingsCB(action="group", key="referral_points").pack(),
+            )
+        ]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -476,16 +627,21 @@ def admin_user_profile_kb(user_id: int) -> InlineKeyboardMarkup:
     )
 
 
-def settings_language_pick_kb(base_key: str) -> InlineKeyboardMarkup:
+def settings_language_pick_kb(base_key: str, group: str = "root") -> InlineKeyboardMarkup:
     labels = {"uz": "\U0001F1FA\U0001F1FF UZ", "ru": "\U0001F1F7\U0001F1FA RU", "en": "\U0001F1EC\U0001F1E7 EN"}
     rows = [
         [
             InlineKeyboardButton(
-                text=label, callback_data=AdminSettingsCB(action="edit", key=f"{base_key}_{code}").pack()
+                text=label,
+                callback_data=AdminSettingsCB(action="edit", key=f"{base_key}_{code}", group=group).pack(),
             )
             for code, label in labels.items()
         ],
-        [InlineKeyboardButton(text="\U0001F519 Orqaga", callback_data=AdminMenuCB(action="settings").pack())],
+        [
+            InlineKeyboardButton(
+                text="\U0001F519 Orqaga", callback_data=AdminSettingsCB(action="group", key=group).pack()
+            )
+        ],
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

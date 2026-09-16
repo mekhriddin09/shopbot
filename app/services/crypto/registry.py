@@ -1,4 +1,10 @@
-"""Selects the active crypto provider based on the `crypto_provider` setting."""
+"""Crypto provider registry.
+
+Every provider whose API token is configured in .env is offered to the
+customer at checkout and *they* pick which one to pay with — there is no
+single admin-selected "active provider" (an early design that was replaced;
+the leftover `crypto_provider` setting has been removed).
+"""
 from __future__ import annotations
 
 from app.services.crypto.base import CryptoProvider

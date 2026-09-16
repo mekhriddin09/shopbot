@@ -116,9 +116,11 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "proof_channel_url": "",
 
     # Crypto payments (CryptoBot / xRocket). Off by default until the admin
-    # configures an API token in .env and enables it here.
+    # configures an API token in .env and enables it here. NOTE: there is
+    # deliberately no "which provider" setting — every provider with a token
+    # in .env is offered to the customer at checkout and they pick
+    # (see services/crypto/registry.py:available_crypto_providers).
     "crypto_payment_enabled": "0",
-    "crypto_provider": "cryptobot",  # cryptobot | xrocket
 
     # Referral program. Off by default until the admin sets real reward
     # values below and flips this on. Reward "value" fields accept either a

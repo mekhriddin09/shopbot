@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.filters.is_admin import IsAdmin
 from app.keyboards.admin_kb import (
+    SETTINGS_GROUPS,
     admin_settings_menu_kb,
     settings_language_pick_kb,
 )
@@ -22,26 +23,76 @@ router = Router(name="admin_settings")
 router.message.filter(IsAdmin())
 router.callback_query.filter(IsAdmin())
 
-TOGGLE_LABELS = {
-    "automatic_delivery_enabled": "Avto-yetkazish (inventar)",
-    "manual_delivery_enabled": "Qo'lda yetkazish",
-    "api_delivery_enabled": "API orqali yetkazish",
-    "crypto_payment_enabled": "Kripto to'lov",
-    "stars_payment_enabled": "Telegram Stars to'lov",
-    "referral_enabled": "Referral tizimi",
-    "referral_first_order_enabled": "1-buyurtma mukofoti",
-    "referral_recurring_enabled": "Doimiy mukofot",
-    "preorder_enabled": "Oldindan buyurtma",
-    "onboarding_gate_enabled": "Majburiy oferta+kanal",
-    "referral_verification_enabled": "Referral tasdiqlash (telefon+captcha)",
-    "referral_confirm_reward_enabled": "Taklif mukofoti (ball)",
-}
+_LANGS = ("uz", "ru", "en")
+
+
+def _short(value: str, limit: int = 40) -> str:
+    """One-line preview of a possibly long/multi-line setting value."""
+    flat = " ".join((value or "").split())
+    if not flat:
+        return "—"
+    return flat if len(flat) <= limit else flat[: limit - 1] + "…"
+
+
+async def render_settings_group(session: AsyncSession, group: str) -> tuple[str, object]:
+    """Build the text + keyboard for one settings group, listing each
+    setting's *current value* inline. Driven entirely by SETTINGS_GROUPS
+    (see app/keyboards/admin_kb.py) so the summary can never drift out of
+    sync with the buttons actually shown."""
+    spec = SETTINGS_GROUPS.get(group) or SETTINGS_GROUPS["root"]
+    settings_repo = SettingRepository(session)
+
+    lines = [spec["title"]]
+    if spec.get("intro"):
+        lines.append("")
+        lines.append(spec["intro"])
+
+    value_lines: list[str] = []
+    for kind, key, label in spec["items"]:
+        if kind == "toggle":
+            state = "✅ yoqilgan" if await settings_repo.get_bool(key, False) else "❌ o'chirilgan"
+            value_lines.append(f"• {label}: <b>{state}</b>")
+        elif kind == "edit":
+            value_lines.append(f"• {label}: <code>{_short(await settings_repo.get(key))}</code>")
+        elif kind == "masked":
+            value_lines.append(f"• {label}: <code>{_mask_secret(await settings_repo.get(key))}</code>")
+        elif kind == "lang":
+            filled = [
+                code.upper() for code in _LANGS if (await settings_repo.get(f"{key}_{code}", "")).strip()
+            ]
+            value_lines.append(
+                f"• {label}: {('✅ ' + ', '.join(filled)) if filled else '❌ hech biri kiritilmagan'}"
+            )
+        # "group" / "phones" / "test_reseller" hold no value of their own.
+
+    if value_lines:
+        lines.append("")
+        lines.extend(value_lines)
+
+    return "\n".join(lines), admin_settings_menu_kb(group)
+
+
+@router.callback_query(AdminSettingsCB.filter(F.action == "group"))
+async def settings_open_group(callback: CallbackQuery, callback_data: AdminSettingsCB, session: AsyncSession) -> None:
+    """Navigate between settings groups (including "back"), editing the
+    same message in place so the admin doesn't end up with a long trail of
+    menu messages in the chat."""
+    text, kb = await render_settings_group(session, callback_data.key or "root")
+    try:
+        await callback.message.edit_text(text, reply_markup=kb)
+    except TelegramBadRequest as exc:
+        if "message is not modified" not in str(exc):
+            # Can't edit (e.g. the message was a photo/too old) — send fresh.
+            await callback.message.answer(text, reply_markup=kb)
+    await callback.answer()
 
 
 @router.callback_query(AdminSettingsCB.filter(F.action == "pick_lang"))
 async def settings_pick_lang(callback: CallbackQuery, callback_data: AdminSettingsCB) -> None:
     try:
-        await callback.message.edit_reply_markup(reply_markup=settings_language_pick_kb(callback_data.key))
+        await callback.message.edit_reply_markup(
+            reply_markup=settings_language_pick_kb(callback_data.key, callback_data.group or "root")
+        )
     except TelegramBadRequest as exc:
         if "message is not modified" not in str(exc):
             raise
@@ -52,9 +103,10 @@ async def settings_pick_lang(callback: CallbackQuery, callback_data: AdminSettin
 async def settings_edit_start(callback: CallbackQuery, callback_data: AdminSettingsCB, session: AsyncSession, state: FSMContext) -> None:
     current = await SettingRepository(session).get(callback_data.key)
     await state.set_state(AdminInput.waiting_text)
-    await state.update_data(action="settings_edit", key=callback_data.key)
+    await state.update_data(action="settings_edit", key=callback_data.key, group=callback_data.group or "root")
+    shown = current if current else "(bo'sh)"
     await callback.message.answer(
-        f"Joriy qiymat:\n\n{current}\n\n"
+        f"Joriy qiymat:\n\n{shown}\n\n"
         f"👇 Yangi matnni yozing, YOKI matn juda uzun bo'lsa, .txt fayl qilib yuboring:"
     )
     await callback.answer()
@@ -79,7 +131,7 @@ async def settings_edit_masked_start(
     the shared "settings_edit" action in generic_input.py)."""
     current = await SettingRepository(session).get(callback_data.key)
     await state.set_state(AdminInput.waiting_text)
-    await state.update_data(action="settings_edit", key=callback_data.key)
+    await state.update_data(action="settings_edit", key=callback_data.key, group=callback_data.group or "root")
     await callback.message.answer(
         f"Joriy qiymat (oxirgi 4 belgi): {_mask_secret(current)}\n\n"
         f"👇 Yangi qiymatni yozing (bekor qilish uchun '-' yuboring — o'zgarishsiz qoladi):"
@@ -109,20 +161,33 @@ async def settings_test_reseller(callback: CallbackQuery, session: AsyncSession)
         )
 
 
+def _label_for(key: str) -> str:
+    """Human label for a settings key, taken from whichever group lists it
+    (see SETTINGS_GROUPS) — no separate label dict to keep in sync."""
+    for spec in SETTINGS_GROUPS.values():
+        for kind, item_key, label in spec["items"]:
+            if item_key == key and kind in ("toggle", "edit", "masked", "lang"):
+                return label
+    return key
+
+
 @router.callback_query(AdminSettingsCB.filter(F.action == "toggle"))
 async def settings_toggle(callback: CallbackQuery, callback_data: AdminSettingsCB, session: AsyncSession) -> None:
     settings_repo = SettingRepository(session)
-    current = await settings_repo.get_bool(callback_data.key, True)
+    # Default False, not True: every toggle's real default now lives in
+    # DEFAULT_SETTINGS (seeded at startup), and defaulting to True here made
+    # an unseeded key read as "on" and flip to "off" on its first tap.
+    current = await settings_repo.get_bool(callback_data.key, False)
     await settings_repo.set(callback_data.key, "0" if current else "1")
-    label = TOGGLE_LABELS.get(callback_data.key, callback_data.key)
     state_text = "o'chirildi" if current else "yoqildi"
-    await callback.answer(f"{label}: {state_text} ✅")
+    await callback.answer(f"{_label_for(callback_data.key)}: {state_text} ✅")
+
+    # Re-render the whole group so the "current value" line next to this
+    # toggle updates too — not just the keyboard.
+    text, kb = await render_settings_group(session, callback_data.group or "root")
     try:
-        await callback.message.edit_reply_markup(reply_markup=admin_settings_menu_kb())
+        await callback.message.edit_text(text, reply_markup=kb)
     except TelegramBadRequest as exc:
-        # Markup is static text regardless of toggle state, so Telegram often
-        # reports "message is not modified" — harmless, the toggle itself
-        # already succeeded above.
         if "message is not modified" not in str(exc):
             raise
 

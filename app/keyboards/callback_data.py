@@ -79,8 +79,15 @@ class AdminOrderListCB(CallbackData, prefix="aordl"):
 
 
 class AdminSettingsCB(CallbackData, prefix="aset"):
-    action: str  # edit | edit_masked | toggle | pick_lang | test_reseller
+    action: str  # edit | edit_masked | toggle | pick_lang | test_reseller | group
     key: str | None = None
+    # Which settings group the button lives in, so after a toggle (or a
+    # "back" from the language picker) we can re-render that same submenu
+    # instead of dumping the admin at the top level. `str | None` — never
+    # plain `str` — because aiogram unpacks an absent/empty CallbackData
+    # field as None, which fails validation on a non-Optional str field
+    # and makes the button silently match no handler at all.
+    group: str | None = None
 
 
 class AdminAdminsCB(CallbackData, prefix="aadm"):

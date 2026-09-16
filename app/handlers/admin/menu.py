@@ -4,6 +4,7 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.filters.is_admin import IsAdmin
 from app.keyboards.admin_kb import (
@@ -14,7 +15,6 @@ from app.keyboards.admin_kb import (
     admin_broadcast_menu_kb,
     admin_main_menu_kb,
     admin_orders_menu_kb,
-    admin_settings_menu_kb,
 )
 from app.keyboards.user_kb import ADMIN_PANEL_BTN, main_menu_kb
 
@@ -36,8 +36,11 @@ async def goto_orders(message: Message) -> None:
 
 
 @router.message(F.text == ADMIN_BTN_SETTINGS)
-async def goto_settings(message: Message) -> None:
-    await message.answer("⚙️ Sozlamalar:", reply_markup=admin_settings_menu_kb())
+async def goto_settings(message: Message, session: AsyncSession) -> None:
+    from app.handlers.admin.settings import render_settings_group  # local import avoids a cycle
+
+    text, kb = await render_settings_group(session, "root")
+    await message.answer(text, reply_markup=kb)
 
 
 @router.message(F.text == ADMIN_BTN_BROADCAST)

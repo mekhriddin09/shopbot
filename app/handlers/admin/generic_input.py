@@ -257,6 +257,7 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
 
     if action == "settings_edit":
         key = data["key"]
+        group = data.get("group", "root")
         if text == "-":
             # Convention for the masked-secret edit flow (API keys/tokens):
             # "-" means "leave it as it is", never a literal value to save.
@@ -266,7 +267,15 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
         await SettingRepository(session).set(key, text)
         admin_actions_logger.info("setting_changed key=%s admin=%s", key, message.from_user.id)
         await state.clear()
+
+        # Re-show the group the setting belongs to, so the admin lands back
+        # where they were (with the new value visible) instead of having to
+        # navigate in from "⚙️ Sozlamalar" again.
+        from app.handlers.admin.settings import render_settings_group  # local import avoids a cycle
+
+        group_text, group_kb = await render_settings_group(session, group)
         await message.answer("✅ Sozlama yangilandi.")
+        await message.answer(group_text, reply_markup=group_kb)
         return
 
     if action == "reject_reason":
@@ -528,10 +537,16 @@ async def handle_document_as_text_value(message: Message, session: AsyncSession,
         return
 
     key = data["key"]
+    group = data.get("group", "root")
     await SettingRepository(session).set(key, text)
     admin_actions_logger.info("setting_changed_via_file key=%s chars=%s admin=%s", key, len(text), message.from_user.id)
     await state.clear()
     await message.answer(f"✅ Sozlama fayldan yangilandi ({len(text)} belgi).")
+
+    from app.handlers.admin.settings import render_settings_group  # local import avoids a cycle
+
+    group_text, group_kb = await render_settings_group(session, group)
+    await message.answer(group_text, reply_markup=group_kb)
 
 
 @router.message(AdminInput.waiting_image, F.photo)
