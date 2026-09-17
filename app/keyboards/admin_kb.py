@@ -277,7 +277,58 @@ def admin_orders_menu_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="📦 Yetkazilgan", callback_data=AdminOrderListCB(action="delivered").pack())],
         [InlineKeyboardButton(text="⚠️ Yetkazilmagan", callback_data=AdminOrderListCB(action="failed").pack())],
         [InlineKeyboardButton(text="❌ Rad etilgan", callback_data=AdminOrderListCB(action="rejected").pack())],
+        [InlineKeyboardButton(text="\U0001F50D ID orqali qidirish", callback_data=AdminOrderListCB(action="search").pack())],
     ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_order_detail_kb(order) -> InlineKeyboardMarkup:
+    """Actions available on a single looked-up order. Which ones appear
+    depends on where the order currently is, so the admin can't e.g. try to
+    approve something already delivered."""
+    from app.database.models.enums import OrderStatus
+
+    rows: list[list[InlineKeyboardButton]] = []
+    oid = order.id
+
+    undecided = {
+        OrderStatus.AWAITING_PROOF,
+        OrderStatus.AWAITING_CRYPTO_PAYMENT,
+        OrderStatus.AWAITING_STARS_PAYMENT,
+        OrderStatus.AWAITING_CARD_PAYMENT,
+        OrderStatus.PENDING_APPROVAL,
+    }
+    if order.status in undecided:
+        rows.append(
+            [
+                InlineKeyboardButton(text="✅ Tasdiqlash va yetkazish", callback_data=OrderCB(action="approve", order_id=oid).pack()),
+                InlineKeyboardButton(text="❌ Rad etish", callback_data=OrderCB(action="reject", order_id=oid).pack()),
+            ]
+        )
+    if order.status in (OrderStatus.APPROVED, OrderStatus.FAILED):
+        rows.append(
+            [InlineKeyboardButton(text="✍️ Qo'lda yuborish", callback_data=OrderCB(action="write_manual", order_id=oid).pack())]
+        )
+    if order.user is not None:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="✉️ Mijozga xabar yozish",
+                    callback_data=AdminUserCB(action="message", user_id=order.user.id).pack(),
+                )
+            ]
+        )
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="\U0001F464 Mijoz profili",
+                    callback_data=AdminUserCB(action="profile", user_id=order.user.id).pack(),
+                )
+            ]
+        )
+    rows.append(
+        [InlineKeyboardButton(text="\U0001F50D Boshqa buyurtma qidirish", callback_data=AdminOrderListCB(action="search").pack())]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -394,6 +445,7 @@ SETTINGS_GROUPS: dict[str, dict] = {
             ("toggle", "card_payment_enabled", "⚡️ Avtomatik karta to'lovi"),
             ("toggle", "card_auto_deliver_enabled", "\U0001F680 Avtomatik yetkazish"),
             ("edit", "card_payment_timeout_minutes", "⏱ To'lov kutish (daqiqa)"),
+            ("toggle", "card_notify_unmatched", "\U0001F514 Nomos to'lovlar haqida ogohlantirish"),
             ("edit", "card_notify_sender", "\U0001F4B3 Karta xabarchisi (CardXabarBot)"),
             ("edit", "card_business_connection_id", "\U0001F512 Karta hisobi ulanishi"),
         ],

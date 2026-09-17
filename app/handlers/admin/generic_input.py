@@ -29,6 +29,7 @@ from app.keyboards.admin_kb import (
     admin_user_search_results_kb,
 )
 from app.repositories.inventory_repo import InventoryRepository
+from app.repositories.order_repo import OrderRepository
 from app.repositories.product_repo import ProductRepository
 from app.repositories.referral_repo import ReferralRepository
 from app.repositories.setting_repo import SettingRepository
@@ -339,6 +340,25 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
 
         await state.clear()
         await message.answer("✅ Xabar mijozga yuborildi va buyurtma yakunlandi.")
+        return
+
+    if action == "order_search":
+        query = text.strip().lstrip("#").upper()
+        orders_repo = OrderRepository(session)
+        order = await orders_repo.get_by_uuid(query)
+        if order is None and query.isdigit():
+            # Also accept the internal numeric id — it shows up in logs and
+            # in some admin messages, and typing it should just work.
+            order = await orders_repo.get_by_id(int(query))
+        await state.clear()
+        if order is None:
+            await message.answer(
+                "❌ Bunday buyurtma topilmadi.\n\nID'ni tekshirib, qaytadan urinib ko'ring."
+            )
+            return
+        from app.handlers.admin.orders import show_order_detail  # local import avoids a cycle
+
+        await show_order_detail(message, session, order)
         return
 
     if action == "user_search":

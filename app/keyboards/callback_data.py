@@ -82,7 +82,7 @@ class AdminInventoryCB(CallbackData, prefix="ainv"):
 
 
 class AdminOrderListCB(CallbackData, prefix="aordl"):
-    action: str  # pending | approved | delivered | failed | rejected
+    action: str  # pending | approved | delivered | failed | rejected | search
 
 
 class AdminSettingsCB(CallbackData, prefix="aset"):

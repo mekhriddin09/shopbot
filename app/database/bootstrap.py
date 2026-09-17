@@ -196,6 +196,10 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # awaiting payment at once means fewer amounts in play, and a stale
     # payment can't be credited to a long-forgotten order.
     "card_payment_timeout_minutes": "5",
+    # Ping the admin when money arrives that no order was expecting. Off by
+    # default: this card also receives unrelated deposits, and alerting on
+    # each one is noise. Everything is recorded either way.
+    "card_notify_unmatched": "0",
     "card_notify_sender": "CardXabarBot",
     # SECURITY: the one business connection allowed to deliver card
     # notifications. Anyone can connect this bot to their own account, so

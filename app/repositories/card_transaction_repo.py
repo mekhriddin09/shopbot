@@ -33,6 +33,20 @@ class CardTransactionRepository:
             tx.matched_order_id = matched_order_id
         await self.session.commit()
 
+    async def get_matched_for_order(self, order_id: int) -> CardTransaction | None:
+        """The alert that actually paid for this order, if any — lets the
+        admin see the real incoming amount next to the expected one."""
+        result = await self.session.execute(
+            select(CardTransaction)
+            .where(
+                CardTransaction.matched_order_id == order_id,
+                CardTransaction.status == CardTransactionStatus.MATCHED,
+            )
+            .order_by(CardTransaction.id.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def list_recent(self, limit: int = 30) -> list[CardTransaction]:
         result = await self.session.execute(
             select(CardTransaction)

@@ -11,12 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models.enums import DeliveryMode, OrderStatus
 from app.filters.is_admin import IsAdmin
-from app.keyboards.admin_kb import admin_write_manual_kb
+from app.keyboards.admin_kb import admin_order_detail_kb, admin_orders_menu_kb, admin_write_manual_kb
 from app.keyboards.callback_data import AdminOrderListCB, OrderCB
 from app.repositories.order_repo import OrderRepository
 from app.services.delivery_service import DeliveryService
 from app.services.exceptions import DeliveryFailedError, InvalidOrderStateError
 from app.services.referral_service import ReferralService
+from app.repositories.card_transaction_repo import CardTransactionRepository
 from app.states.admin_states import AdminInput
 from app.utils.formatting import build_delivered_message, fmt_datetime, fmt_price, fmt_time
 
@@ -91,6 +92,79 @@ async def _edit_order_message_with_confirmation(callback: CallbackQuery, block: 
         await callback.message.edit_reply_markup(reply_markup=None)
     except TelegramBadRequest:
         pass
+
+
+_STATUS_LABELS = {
+    OrderStatus.AWAITING_PROOF: "⏳ To'lov cheki kutilmoqda",
+    OrderStatus.AWAITING_CRYPTO_PAYMENT: "⏳ Kripto to'lov kutilmoqda",
+    OrderStatus.AWAITING_STARS_PAYMENT: "⏳ Stars to'lovi kutilmoqda",
+    OrderStatus.AWAITING_CARD_PAYMENT: "⏳ Karta to'lovi kutilmoqda",
+    OrderStatus.PENDING_APPROVAL: "\U0001F50D Tekshirilmoqda (tasdiqlashingiz kerak)",
+    OrderStatus.APPROVED: "✅ Tasdiqlangan (hali yetkazilmagan)",
+    OrderStatus.REJECTED: "❌ Rad etilgan",
+    OrderStatus.DELIVERED: "\U0001F4E6 Yetkazilgan",
+    OrderStatus.CANCELLED: "\U0001F6D1 Bekor qilingan",
+    OrderStatus.FAILED: "⚠️ Yetkazib bo'lmadi",
+}
+
+
+async def render_order_detail(session: AsyncSession, order) -> str:
+    """Everything an admin needs to answer "what happened with this order?"
+    in one message: whether it was delivered, exactly what was sent, who
+    bought it, and how they paid."""
+    delivered_block = ""
+    if order.delivered_payload:
+        payload = html_escape(order.delivered_payload)
+        delivered_block = (
+            f"\n\n\U0001F4E4 <b>Yuborilgan:</b>\n<code>{payload}</code>"
+            f"\n\U0001F550 Yetkazilgan: {fmt_datetime(order.delivered_at)}"
+        )
+
+    expected_block = ""
+    if order.expected_amount is not None:
+        expected_block = f"\n\U0001F3AF Kutilgan summa: <b>{fmt_price(float(order.expected_amount))}</b>"
+        matched = await CardTransactionRepository(session).get_matched_for_order(order.id)
+        if matched is not None:
+            expected_block += (
+                f"\n\U0001F4B3 Kelgan to'lov: {fmt_price(float(matched.amount or 0))} "
+                f"(karta ***{matched.card_last4 or '-'}, {fmt_datetime(matched.created_at)})"
+            )
+
+    reason_block = f"\n\U0001F4DD Sabab: {html_escape(order.rejection_reason)}" if order.rejection_reason else ""
+    qty_block = f" × {order.quantity}" if order.quantity and order.quantity > 1 else ""
+    preorder_block = "\n⏳ <b>Oldindan buyurtma</b>" if order.is_preorder else ""
+
+    return (
+        f"\U0001F9FE <b>Buyurtma</b> <code>{order.order_uuid}</code>\n\n"
+        f"\U0001F4CC Holat: <b>{_STATUS_LABELS.get(order.status, order.status.value)}</b>\n"
+        f"\U0001F4E6 Mahsulot: {order.product.name if order.product else '-'}{qty_block}\n"
+        f"\U0001F4B0 Narxi: {fmt_price(float(order.price_at_purchase))} {order.currency}\n"
+        f"\U0001F4B3 To'lov usuli: {order.payment_method.value}"
+        f"{expected_block}{preorder_block}\n\n"
+        f"\U0001F464 Mijoz: {order.user.full_name if order.user else '-'} "
+        f"(@{order.user.username if order.user and order.user.username else '-'})\n"
+        f"\U0001F194 <code>{order.user.telegram_id if order.user else '-'}</code>\n"
+        f"\U0001F4C5 Yaratilgan: {fmt_datetime(order.created_at)}"
+        f"{reason_block}{delivered_block}"
+    )
+
+
+async def show_order_detail(message, session: AsyncSession, order) -> None:
+    await message.answer(
+        await render_order_detail(session, order), reply_markup=admin_order_detail_kb(order)
+    )
+
+
+@router.callback_query(AdminOrderListCB.filter(F.action == "search"))
+async def order_search_prompt(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(AdminInput.waiting_text)
+    await state.update_data(action="order_search")
+    await callback.message.answer(
+        "\U0001F50D Buyurtma ID'sini yuboring.\n\n"
+        "Masalan: <code>46C94A7FC616</code>\n"
+        "(mijozga ko'rsatiladigan ID yoki ichki raqam ham bo'ladi)"
+    )
+    await callback.answer()
 
 
 @router.callback_query(AdminOrderListCB.filter())

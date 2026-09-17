@@ -150,54 +150,33 @@ async def deliver_paid_order(bot: Bot, session: AsyncSession, order: Order, amou
 
 
 async def notify_unmatched(bot: Bot, session: AsyncSession, tx) -> None:
-    """Money arrived that no order claimed. Surface it with a best-guess
-    link to a near-miss order, because by far the most common cause is a
-    customer rounding the amount (paying 30 000 for a 29 973 order)."""
+    """Money arrived that no awaiting order claimed.
+
+    Always recorded in `card_transactions` for audit, but by default the
+    admin is NOT pinged: this card also receives plenty of deposits that
+    have nothing to do with the shop, so alerting on each one is noise. An
+    earlier version additionally guessed at "near-miss" orders (in case a
+    customer rounded 29 973 up to 30 000) — that was removed deliberately:
+    against a stream of unrelated deposits those guesses are mostly wrong,
+    and a wrong guess invites the admin to hand out a product nobody paid
+    for. A customer whose payment isn't recognised already has their own
+    route out (wait for the window to close, then "I did pay" -> receipt).
+
+    Set `card_notify_unmatched` to "1" to get the alerts anyway.
+    """
+    if not await SettingRepository(session).get_bool("card_notify_unmatched", False):
+        return
+
     amount = float(tx.amount) if tx.amount is not None else 0.0
-    near = await _find_near_matches(session, amount)
-
-    text = (
-        f"\U0001F4B8 <b>Karta to'lovi keldi, lekin mos buyurtma topilmadi</b>\n\n"
+    await notify_admins_text(
+        bot,
+        session,
+        f"\U0001F4B8 <b>Karta to'lovi keldi, mos buyurtma topilmadi</b>\n\n"
         f"\U0001F4B0 Summa: <b>{fmt_price(amount)} {tx.currency or ''}</b>\n"
-        f"\U0001F4B3 Karta: ***{tx.card_last4 or '-'}\n"
+        f"\U0001F4B3 Karta: ***{tx.card_last4 or '-'}\n\n"
+        f"Agar bu mijozning to'lovi bo'lsa, u chek yuborishi mumkin "
+        f"yoki buyurtmani ID orqali topib qo'lda tasdiqlang.",
     )
-    if near:
-        text += "\n\U0001F50D <b>Yaqin buyurtmalar</b> (mijoz summani yumaloqlagan bo'lishi mumkin):\n"
-        for order, diff in near:
-            text += (
-                f"• <code>{order.order_uuid}</code> — kutilgan "
-                f"{fmt_price(float(order.expected_amount))} (farq {fmt_price(abs(diff))}), "
-                f"@{order.user.username or '-'}\n"
-            )
-        text += "\nTo'g'ri bo'lsa, buyurtmani qo'lda tasdiqlang."
-    else:
-        text += "\n Hech qanday yaqin buyurtma topilmadi."
-
-    await notify_admins_text(bot, session, text)
-
-
-async def _find_near_matches(session: AsyncSession, amount: float, window: float = 200.0):
-    """Awaiting/recently-cancelled orders whose expected amount is close to
-    what actually arrived. Covers both the rounding case and the
-    paid-just-after-expiry case."""
-    orders_repo = OrderRepository(session)
-    from sqlalchemy import select
-
-    result = await session.execute(
-        select(Order).where(
-            Order.expected_amount.is_not(None),
-            Order.status.in_([OrderStatus.AWAITING_CARD_PAYMENT, OrderStatus.CANCELLED]),
-        ).order_by(Order.id.desc()).limit(200)
-    )
-    near = []
-    for order in result.scalars().all():
-        diff = amount - float(order.expected_amount)
-        if abs(diff) <= window:
-            full = await orders_repo.get_by_id(order.id)
-            if full is not None:
-                near.append((full, diff))
-    near.sort(key=lambda pair: abs(pair[1]))
-    return near[:5]
 
 
 async def sweep_expired_card_orders(bot: Bot, session: AsyncSession) -> int:
