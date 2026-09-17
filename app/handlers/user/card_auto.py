@@ -37,17 +37,41 @@ def _fmt_deadline(order) -> str:
 
 
 async def _payment_text(session: AsyncSession, order, lang: str) -> str:
+    """The whole payment guide is generated, not hand-written: the card
+    number, holder, exact amount and deadline are pulled from live data, so
+    they can never go stale the way a manually-typed instruction block
+    does. The admin only supplies the card details (Settings -> Payments)
+    and, optionally, one extra sentence per language."""
     settings_repo = SettingRepository(session)
-    instructions = (
-        order.product.payment_instructions
-        or await settings_repo.get(f"payment_instructions_{lang}")
-        or await settings_repo.get("payment_instructions_en")
-    )
+
+    card_number = (await settings_repo.get("card_auto_number", "")).strip()
+    card_holder = (await settings_repo.get("card_auto_holder", "")).strip()
+    if card_number:
+        card_block = t(
+            lang,
+            "msg_card_auto_card_block",
+            card_number=card_number,
+            card_holder=card_holder or "-",
+        )
+    else:
+        # No card configured yet — fall back to whatever free-text payment
+        # details the shop already uses, so the flow still works.
+        card_block = (
+            order.product.payment_instructions
+            or await settings_repo.get(f"payment_instructions_{lang}")
+            or await settings_repo.get("payment_instructions_en")
+            or ""
+        ) + "\n"
+
+    note = (await settings_repo.get(f"card_auto_note_{lang}", "")).strip()
+    note_block = f"\n\n{note}" if note else ""
+
     minutes = await CardPaymentService(session).timeout_minutes()
     return t(
         lang,
         "msg_card_auto_payment",
-        instructions=instructions,
+        card_block=card_block,
+        note_block=note_block,
         amount=fmt_price(float(order.expected_amount)),
         currency=order.currency,
         product_name=product_name(order.product, lang),

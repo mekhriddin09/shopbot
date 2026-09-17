@@ -434,6 +434,8 @@ SETTINGS_GROUPS: dict[str, dict] = {
         "intro": (
             "Karta orqali to'lov doim ishlaydi (chek/skrinshot bilan).\n"
             "Kripto to'lov uchun mahsulotga USD narx, Stars uchun Stars narxi kiritilgan bo'lishi kerak.\n\n"
+            "⚠️ <b>Karta raqami</b> — mijozlar shu kartaga to'laydi. Uning oxirgi 4 raqami "
+            "tekshiruv uchun ham ishlatiladi: boshqa kartangizga tushgan pul buyurtmani yopmaydi.\n"
             "⚠️ <b>Karta hisobi ulanishi</b> — avtomatik karta tekshiruvi uchun. "
             "Faqat shu ulanishdan kelgan CardXabar xabarlari hisobga olinadi. "
             "Bo'sh bo'lsa, avtomatik tekshiruv umuman ishlamaydi."
@@ -443,6 +445,9 @@ SETTINGS_GROUPS: dict[str, dict] = {
             ("toggle", "crypto_payment_enabled", "\U0001FA99 Kripto to'lov"),
             ("toggle", "stars_payment_enabled", "⭐ Telegram Stars to'lov"),
             ("toggle", "card_payment_enabled", "⚡️ Avtomatik karta to'lovi"),
+            ("edit", "card_auto_number", "\U0001F4B3 Karta raqami (to'lov uchun)"),
+            ("edit", "card_auto_holder", "\U0001F464 Karta egasi"),
+            ("lang", "card_auto_note", "\U0001F4DD Qo'shimcha izoh (ixtiyoriy)"),
             ("toggle", "card_auto_deliver_enabled", "\U0001F680 Avtomatik yetkazish"),
             ("edit", "card_payment_timeout_minutes", "⏱ To'lov kutish (daqiqa)"),
             ("toggle", "card_notify_unmatched", "\U0001F514 Nomos to'lovlar haqida ogohlantirish"),

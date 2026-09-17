@@ -97,6 +97,16 @@ class CardPaymentService:
             return None
         return random.choice(free)
 
+    async def configured_last4(self) -> str | None:
+        """Last 4 digits of the shop's payment card, derived from the number
+        the admin entered. Used to reject alerts for the owner's *other*
+        cards: one CardXabar account can report several cards, and money
+        landing on a card customers were never told to pay must not close
+        an order. Returns None when no card is configured, in which case
+        the check is skipped entirely."""
+        digits = "".join(ch for ch in await self.settings.get("card_auto_number", "") if ch.isdigit())
+        return digits[-4:] if len(digits) >= 4 else None
+
     async def timeout_minutes(self) -> int:
         raw = await self.settings.get("card_payment_timeout_minutes", "5")
         try:
@@ -183,6 +193,22 @@ class CardPaymentService:
             if not notification.is_incoming:
                 # A debit from the card — nothing to do with a customer
                 # paying us. Recorded (so the ledger is complete) and skipped.
+                tx = await self.transactions.create(status=CardTransactionStatus.IGNORED, **base)
+                return tx, None
+
+            expected_last4 = await self.configured_last4()
+            if (
+                expected_last4
+                and notification.card_last4
+                and notification.card_last4 != expected_last4
+            ):
+                # Money arrived on a different card of the owner's. Customers
+                # were told to pay the configured one, so this cannot belong
+                # to any order — recorded, never matched.
+                logger.info(
+                    "card_notification_other_card got=%s expected=%s key=%s",
+                    notification.card_last4, expected_last4, message_key,
+                )
                 tx = await self.transactions.create(status=CardTransactionStatus.IGNORED, **base)
                 return tx, None
 

@@ -199,6 +199,18 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # Ping the admin when money arrives that no order was expecting. Off by
     # default: this card also receives unrelated deposits, and alerting on
     # each one is noise. Everything is recorded either way.
+    # The ONE card customers pay into. Its last 4 digits are also used to
+    # verify incoming alerts: the same CardXabar account may report several
+    # of the owner's cards, and money landing on a different card must
+    # never be credited to an order.
+    "card_auto_number": "",
+    "card_auto_holder": "",
+    # Optional extra sentence appended to the auto-generated payment guide
+    # (per language). The card/holder/amount/deadline parts are always
+    # generated, so they can never drift out of sync with reality.
+    "card_auto_note_uz": "",
+    "card_auto_note_ru": "",
+    "card_auto_note_en": "",
     "card_notify_unmatched": "0",
     "card_notify_sender": "CardXabarBot",
     # SECURITY: the one business connection allowed to deliver card

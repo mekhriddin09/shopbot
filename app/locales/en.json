@@ -136,9 +136,10 @@
   "btn_card_auto_i_did_pay": "💸 I did pay",
   "msg_card_auto_disabled": "❌ Automatic card payment is currently disabled.",
   "msg_card_auto_busy": "⚠️ Too many payments are pending right now. Please try again in a couple of minutes.",
-  "msg_card_auto_payment": "💳 <b>Card payment</b>\n\n{instructions}\n\n⚠️ <b>SEND EXACTLY THIS AMOUNT:</b>\n\n<code>{amount}</code> {currency}\n\n👆 Tap the number to copy it.\n\n❗️ Don't round it up! Any other amount won't be recognised automatically.\n\n📦 {product_name}\n🆔 <code>{order_uuid}</code>\n⏱ until {deadline} ({minutes} min)",
+  "msg_card_auto_payment": "💳 <b>Card payment</b>\n\n<b>1️⃣ Transfer the money to this card:</b>\n\n{card_block}\n<b>2️⃣ Send EXACTLY this amount:</b>\n\n<code>{amount}</code> {currency}\n<i>👆 tap to copy</i>\n\n❗️ <b>Don't round it up!</b> Any other amount won't be recognised automatically — if you send something other than {amount}, the payment won't confirm by itself.\n\n<b>3️⃣ After paying, tap \"✅ I've paid\".</b>\nAs soon as the money arrives, the product is sent automatically (usually 1-2 minutes).\n\n━━━━━━━━━━━━━━\n📦 Product: {product_name}\n🆔 Order: <code>{order_uuid}</code>\n⏱ Valid until <b>{deadline}</b> ({minutes} min)\n\n⚠️ <b>If something goes wrong:</b> if the payment isn't detected, send your receipt using the \"❓ Not detected?\" button — an admin will check it by hand. For questions, write to 💬 Support.{note_block}",
   "msg_card_auto_waiting": "⏳ <b>Waiting for your payment...</b>\n\nAs soon as <code>{amount}</code> {currency} arrives, the product is sent automatically.\nThis usually takes 1-2 minutes.\n\nIf it's taking too long, you can send a receipt using the button below.",
   "msg_card_auto_cancelled": "🛑 Payment cancelled.\n\n🆔 <code>{order_uuid}</code>\n\nThe product has been returned to stock; you can order again any time.",
   "msg_card_auto_expired": "⏰ <b>The automatic payment window has closed</b>\n\n🆔 <code>{order_uuid}</code>\n\nIf you haven't paid — please order again.\nIf you did pay — tap the button below.",
-  "msg_card_auto_send_receipt": "🧾 Please send your payment receipt — an image (screenshot) or a file (PDF etc.).\n\nAn admin will check it and send the product manually."
+  "msg_card_auto_send_receipt": "🧾 Please send your payment receipt — an image (screenshot) or a file (PDF etc.).\n\nAn admin will check it and send the product manually.",
+  "msg_card_auto_card_block": "💳 <code>{card_number}</code>\n<i>👆 tap to copy</i>\n👤 {card_holder}\n"
 }

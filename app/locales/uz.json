@@ -136,9 +136,10 @@
   "btn_card_auto_i_did_pay": "💸 Men pul tashlagandim",
   "msg_card_auto_disabled": "❌ Avtomatik karta to'lovi hozircha o'chirilgan.",
   "msg_card_auto_busy": "⚠️ Hozir juda ko'p to'lov kutilmoqda. Bir-ikki daqiqadan so'ng qayta urinib ko'ring.",
-  "msg_card_auto_payment": "💳 <b>Karta orqali to'lov</b>\n\n{instructions}\n\n⚠️ <b>AYNAN SHU SUMMANI yuboring:</b>\n\n<code>{amount}</code> {currency}\n\n👆 Raqamni bosing — nusxalanadi.\n\n❗️ Yumaloqlamang! Boshqa summa avtomatik tanilmaydi.\n\n📦 {product_name}\n🆔 <code>{order_uuid}</code>\n⏱ {deadline} gacha ({minutes} daqiqa)",
+  "msg_card_auto_payment": "💳 <b>Karta orqali to'lov</b>\n\n<b>1️⃣ Quyidagi kartaga pul o'tkazing:</b>\n\n{card_block}\n<b>2️⃣ AYNAN shu summani yuboring:</b>\n\n<code>{amount}</code> {currency}\n<i>👆 bosing — nusxalanadi</i>\n\n❗️ <b>Yumaloqlamang!</b> Boshqa summa avtomatik tanilmaydi — masalan {amount} o'rniga boshqa raqam yuborsangiz, to'lov o'zi tasdiqlanmaydi.\n\n<b>3️⃣ To'lagach «✅ To'lovni qildim» tugmasini bosing.</b>\nPul kelishi bilan mahsulot avtomatik yuboriladi (odatda 1-2 daqiqa).\n\n━━━━━━━━━━━━━━\n📦 Mahsulot: {product_name}\n🆔 Buyurtma: <code>{order_uuid}</code>\n⏱ Muddat: <b>{deadline}</b> gacha ({minutes} daqiqa)\n\n⚠️ <b>Muammo bo'lsa:</b> to'lov aniqlanmasa «❓ Aniqlanmadi?» tugmasi orqali chekni yuboring — admin qo'lda tekshirib beradi. Savol bo'lsa 💬 Yordam bo'limiga yozing.{note_block}",
   "msg_card_auto_waiting": "⏳ <b>To'lovingiz kutilmoqda...</b>\n\n<code>{amount}</code> {currency} kelishi bilan mahsulot avtomatik yuboriladi.\nOdatda 1-2 daqiqa oladi.\n\nAgar uzoq kutsangiz, pastdagi tugma orqali chek yuborishingiz mumkin.",
   "msg_card_auto_cancelled": "🛑 To'lov bekor qilindi.\n\n🆔 <code>{order_uuid}</code>\n\nMahsulot stokga qaytarildi, xohlagan paytda qayta buyurtma berishingiz mumkin.",
   "msg_card_auto_expired": "⏰ <b>Avtomatik to'lov vaqti tugadi</b>\n\n🆔 <code>{order_uuid}</code>\n\nAgar pul tashlamagan bo'lsangiz — qaytadan buyurtma bering.\nAgar tashlagan bo'lsangiz — pastdagi tugmani bosing.",
-  "msg_card_auto_send_receipt": "🧾 To'lov chekini yuboring — rasm (skrinshot) yoki fayl (PDF va h.k.) bo'lishi mumkin.\n\nAdmin tekshirib, mahsulotni qo'lda yuboradi."
+  "msg_card_auto_send_receipt": "🧾 To'lov chekini yuboring — rasm (skrinshot) yoki fayl (PDF va h.k.) bo'lishi mumkin.\n\nAdmin tekshirib, mahsulotni qo'lda yuboradi.",
+  "msg_card_auto_card_block": "💳 <code>{card_number}</code>\n<i>👆 bosing — nusxalanadi</i>\n👤 {card_holder}\n"
 }
