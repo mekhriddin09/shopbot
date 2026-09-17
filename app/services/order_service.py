@@ -28,7 +28,16 @@ class OrderService:
         self.products = ProductRepository(session)
         self.inventory = InventoryRepository(session)
 
-    async def start_purchase(self, user: User, product_id: int, quantity: int = 1) -> Order:
+    async def start_purchase(
+        self,
+        user: User,
+        product_id: int,
+        quantity: int = 1,
+        status: OrderStatus = OrderStatus.AWAITING_PROOF,
+    ) -> Order:
+        """`status` lets a payment flow open the order in its own waiting
+        state (e.g. AWAITING_CARD_PAYMENT) while still going through the
+        one code path that reserves inventory."""
         quantity = max(1, quantity)
         product = await self.products.get_by_id(product_id)
         if product is None or not product.is_visible:
@@ -45,6 +54,7 @@ class OrderService:
             price=float(product.price) * quantity,
             currency=product.currency,
             quantity=quantity,
+            status=status,
         )
 
         if product.delivery_mode == DeliveryMode.INVENTORY:
@@ -69,6 +79,7 @@ class OrderService:
         OrderStatus.AWAITING_PROOF,
         OrderStatus.AWAITING_CRYPTO_PAYMENT,
         OrderStatus.AWAITING_STARS_PAYMENT,
+        OrderStatus.AWAITING_CARD_PAYMENT,
     )
 
     async def start_preorder(self, user: User, product_id: int) -> Order:

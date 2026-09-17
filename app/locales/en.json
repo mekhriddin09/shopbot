@@ -26,30 +26,24 @@
   "btn_confirm": "✅ Confirm",
   "btn_preorder": "📦 Pre-order",
   "btn_notify_stock": "🔔 Notify when in stock",
-
   "msg_choose_language": "🌐 Choose a language:",
   "msg_language_set": "✅ Language set to English.",
-
   "msg_shop_empty": "No products available yet.",
   "msg_product_not_found": "Product not found or hidden.",
   "msg_out_of_stock": "❌ This product is currently out of stock.",
   "msg_stock_label": "Available: {stock}",
   "msg_out_of_stock_label": "❌ Out of Stock",
   "msg_unlimited_label": "Available",
-
   "msg_product_card": "{emoji} <b>{name}</b>\n\n{description}\n\n💰 Price: {price} {currency}\n{stock_line}",
   "msg_crypto_price_label": "🪙 Crypto price: ${price}",
-
   "msg_payment_header": "💳 Payment details:\n\n{instructions}\n\n🔹 Order: <code>{order_uuid}</code>\n🔹 Product: {product_name}\n🔹 Price: {price} {currency}",
   "msg_preorder_payment_header": "⏳ <b>Pre-order</b> (not in stock yet, will be sent once it arrives)\n\n💳 Payment details:\n\n{instructions}\n\n🔹 Order: <code>{order_uuid}</code>\n🔹 Product: {product_name}\n🔹 Price: {price} {currency}",
   "msg_send_screenshot": "🖼 Please send your payment proof — a screenshot (image) or a file (PDF, DOCX, etc.).",
   "msg_screenshot_required": "Please send the proof as an image or a file (e.g. PDF, DOCX).",
   "msg_order_sent_to_admin": "✅ Your proof has been received and is being reviewed by the admin. You'll hear back soon!",
   "msg_order_already_processed": "⚠️ This order has already been processed.",
-
   "msg_my_orders_empty": "You don't have any orders yet.",
   "msg_order_item": "🔹 <b>{product_name}</b>\n🆔 <code>{order_uuid}</code>\nStatus: {status}\nPrice: {price} {currency}\n📅 {created_at}",
-
   "status_awaiting_proof": "⏳ Awaiting payment",
   "status_pending_approval": "🔍 Under review",
   "status_approved": "✅ Approved",
@@ -57,10 +51,8 @@
   "status_delivered": "📦 Delivered",
   "status_cancelled": "🛑 Cancelled",
   "status_failed": "⚠️ Failed",
-
   "msg_delivered_product": "🎉 Your order has been approved!\n\n🆔 Order: <code>{order_uuid}</code>\n📦 Your product:\n\n<code>{payload}</code>\n\nThank you for your purchase! ❤️",
   "msg_order_rejected_notify": "❌ Your order has been rejected.\n\n🆔 Order: <code>{order_uuid}</code>\nReason: {reason}",
-
   "msg_reviews_empty": "No reviews yet. Be the first!",
   "msg_review_list_item": "{stars} — {author}\n{text}",
   "msg_review_prompt_rating": "How would you rate your purchase?",
@@ -68,7 +60,6 @@
   "msg_review_thanks": "✅ Thanks for your review!",
   "msg_anonymous_author": "Anonymous",
   "msg_proof_channel_prompt": "📢 You can see proof of past deliveries in our channel:",
-
   "msg_product_unavailable": "❌ This product is no longer available.",
   "msg_order_not_found": "❌ Order not found.",
   "msg_proof_already_submitted": "⚠️ A payment proof has already been submitted for this order (status: {status}).",
@@ -79,7 +70,6 @@
   "msg_provider_fetch_failed": "❌ Couldn't get the product from the supplier: {error}",
   "msg_manual_delivery_disabled": "❌ Manual delivery is currently disabled. Please contact support.",
   "msg_cant_send_message": "⚠️ Can't send a message for this order (status: {status}).",
-
   "msg_crypto_disabled": "❌ Crypto payment is currently disabled.",
   "msg_crypto_provider_not_configured": "❌ This crypto provider isn't configured.",
   "msg_crypto_invoice_failed": "❌ Couldn't create the crypto invoice: {error}",
@@ -92,16 +82,13 @@
   "msg_crypto_payment_confirmed_alert": "✅ Payment confirmed",
   "msg_crypto_cancelled_by_user": "🛑 Payment cancelled.\n\n🆔 Order: <code>{order_uuid}</code>\n\nThe product has been returned to stock. You can purchase it again anytime.",
   "msg_crypto_payment_timeout": "⏰ Payment time expired.\n\n🆔 Order: <code>{order_uuid}</code>\n\nSince payment wasn't detected in time, the order was cancelled and the product returned to stock. You can purchase it again.",
-
   "btn_buy_stars": "⭐ Buy with Stars",
   "btn_pay_stars": "⭐ Pay",
   "msg_stars_price_label": "⭐ Stars price: {price} ⭐",
   "msg_stars_disabled": "❌ Telegram Stars payment is currently disabled.",
   "msg_not_awaiting_stars": "⚠️ This order isn't awaiting a Stars payment (status: {status}).",
-
   "msg_support_type_here": "✍️ Type your question here — the admin will reply. To exit, choose another section from the menu.",
   "msg_support_sent": "✅ Your message has been sent. The admin will reply shortly.",
-
   "msg_stock_notify_subscribed": "🔔 Done! We'll let you know when it's back in stock.",
   "msg_stock_back_in_stock": "🔔 Good news! \"{name}\" is back in stock — you can purchase it now!",
   "msg_referral_disabled": "🤝 The referral program isn't active yet.",
@@ -124,10 +111,8 @@
   "msg_referral_reward_requested": "✅ Your request has been received: <b>{name}</b>.\n\nThe amount was deducted from your balance, the admin will contact you shortly.",
   "msg_referral_reward_fulfilled": "🎉 Your reward has been delivered: <b>{name}</b>. Thank you!",
   "msg_referral_reward_rejected": "❌ Your reward request ({name}) was rejected. {amount} has been refunded to your balance. Contact the admin for details.",
-
   "msg_balance_adjusted_by_admin": "💳 Your referral balance has been adjusted: {sign}{amount} {currency}.\n\nNew balance: {balance} {currency}.",
   "msg_admin_direct_message_prefix": "📩 <b>Message from the admin:</b>",
-
   "btn_offer_accept": "✅ I agree",
   "btn_channel_open": "📢 Open the channel",
   "btn_channel_check": "✅ Check",
@@ -141,10 +126,19 @@
   "msg_captcha_prompt": "🤖 Confirm you're not a robot:\n\n{question}",
   "msg_captcha_wrong": "❌ Wrong answer, try again.",
   "msg_referral_confirmed": "✅ Confirmed! You're now a full participant in the referral program.",
-
   "msg_error_generic": "⚠️ Something went wrong. Please try again shortly.",
   "msg_not_admin": "⛔ You don't have access to this section.",
   "msg_rate_limited": "⏱ Please slow down a bit.",
-
-  "main_menu_hint": "Choose a section below 👇"
+  "main_menu_hint": "Choose a section below 👇",
+  "btn_pay_card_auto": "⚡️ Card (automatic)",
+  "btn_card_auto_paid": "✅ I've paid",
+  "btn_card_auto_not_detected": "❓ Not detected? Send receipt",
+  "btn_card_auto_i_did_pay": "💸 I did pay",
+  "msg_card_auto_disabled": "❌ Automatic card payment is currently disabled.",
+  "msg_card_auto_busy": "⚠️ Too many payments are pending right now. Please try again in a couple of minutes.",
+  "msg_card_auto_payment": "💳 <b>Card payment</b>\n\n{instructions}\n\n⚠️ <b>SEND EXACTLY THIS AMOUNT:</b>\n\n<code>{amount}</code> {currency}\n\n👆 Tap the number to copy it.\n\n❗️ Don't round it up! Any other amount won't be recognised automatically.\n\n📦 {product_name}\n🆔 <code>{order_uuid}</code>\n⏱ until {deadline} ({minutes} min)",
+  "msg_card_auto_waiting": "⏳ <b>Waiting for your payment...</b>\n\nAs soon as <code>{amount}</code> {currency} arrives, the product is sent automatically.\nThis usually takes 1-2 minutes.\n\nIf it's taking too long, you can send a receipt using the button below.",
+  "msg_card_auto_cancelled": "🛑 Payment cancelled.\n\n🆔 <code>{order_uuid}</code>\n\nThe product has been returned to stock; you can order again any time.",
+  "msg_card_auto_expired": "⏰ <b>The automatic payment window has closed</b>\n\n🆔 <code>{order_uuid}</code>\n\nIf you haven't paid — please order again.\nIf you did pay — tap the button below.",
+  "msg_card_auto_send_receipt": "🧾 Please send your payment receipt — an image (screenshot) or a file (PDF etc.).\n\nAn admin will check it and send the product manually."
 }

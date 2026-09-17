@@ -3,8 +3,10 @@ create_all, and so relationship() string references resolve correctly."""
 from app.database.models.admin import AdminUser
 from app.database.models.admin_log import AdminActionLog
 from app.database.models.allowed_phone import AllowedPhoneNumber
+from app.database.models.card_transaction import CardTransaction
 from app.database.models.enums import (
     AdminRole,
+    CardTransactionStatus,
     DeliveryMode,
     OrderStatus,
     PaymentMethod,
@@ -28,6 +30,8 @@ __all__ = [
     "AdminUser",
     "AdminActionLog",
     "AllowedPhoneNumber",
+    "CardTransaction",
+    "CardTransactionStatus",
     "AdminRole",
     "DeliveryMode",
     "OrderStatus",

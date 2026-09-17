@@ -20,6 +20,7 @@ from app.middlewares.error_handling import ErrorHandlingMiddleware
 from app.middlewares.onboarding_gate import OnboardingGateMiddleware
 from app.middlewares.throttling import ThrottlingMiddleware
 from app.middlewares.user_context import UserContextMiddleware
+from app.services.card_payment.sweeper import card_expiry_loop
 from app.services.crypto_poller import crypto_poller_loop
 from app.utils.logging_config import setup_logging
 
@@ -60,15 +61,17 @@ async def main() -> None:
     dp.include_router(user_router)
 
     poller_task = asyncio.create_task(crypto_poller_loop(bot))
+    card_sweeper_task = asyncio.create_task(card_expiry_loop(bot))
 
     try:
         await bot.delete_webhook(drop_pending_updates=True)
         logger.info("Bot is polling...")
         await dp.start_polling(bot)
     finally:
-        poller_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await poller_task
+        for task in (poller_task, card_sweeper_task):
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
         await bot.session.close()
 
 

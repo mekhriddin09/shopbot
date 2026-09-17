@@ -49,6 +49,13 @@ class CryptoCB(CallbackData, prefix="crypto"):
     preorder: bool = False
 
 
+class CardAutoCB(CallbackData, prefix="cauto"):
+    action: str  # buy | paid | cancel | manual | admin_confirm | admin_reject
+    product_id: int = 0
+    order_id: int = 0
+    qty: int = 1
+
+
 class StarsCB(CallbackData, prefix="stars"):
     action: str  # buy | cancel
     product_id: int = 0

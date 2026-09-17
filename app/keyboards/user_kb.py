@@ -10,6 +10,7 @@ from aiogram.types import (
 from app.database.models import Product
 from app.keyboards.callback_data import (
     CaptchaCB,
+    CardAutoCB,
     CryptoCB,
     LangCB,
     MyOrderCB,
@@ -47,6 +48,57 @@ def main_menu_kb(lang: str, is_admin: bool = False) -> ReplyKeyboardMarkup:
         # never see this row, so there is nothing to hide-by-obscurity here.
         rows.append([KeyboardButton(text=ADMIN_PANEL_BTN)])
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
+
+
+def card_auto_waiting_kb(lang: str, order_id: int, paid_pressed: bool = False) -> InlineKeyboardMarkup:
+    """Payment screen for the automatic-card flow.
+
+    Once the customer has pressed "I paid", a "not detected? send receipt"
+    escape hatch appears immediately rather than after the countdown — a
+    customer whose payment isn't being picked up should never have to sit
+    out the full timer before they can reach a human.
+    """
+    rows = []
+    if not paid_pressed:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=t(lang, "btn_card_auto_paid"),
+                    callback_data=CardAutoCB(action="paid", order_id=order_id).pack(),
+                )
+            ]
+        )
+    else:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=t(lang, "btn_card_auto_not_detected"),
+                    callback_data=CardAutoCB(action="manual", order_id=order_id).pack(),
+                )
+            ]
+        )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text=t(lang, "btn_cancel"),
+                callback_data=CardAutoCB(action="cancel", order_id=order_id).pack(),
+            )
+        ]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def card_auto_expired_kb(lang: str, order_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=t(lang, "btn_card_auto_i_did_pay"),
+                    callback_data=CardAutoCB(action="manual", order_id=order_id).pack(),
+                )
+            ]
+        ]
+    )
 
 
 def oferta_accept_kb(lang: str) -> InlineKeyboardMarkup:
@@ -108,9 +160,26 @@ def product_detail_kb(
     max_order_qty: int = 1,
     show_notify_button: bool = False,
     show_preorder_button: bool = False,
+    show_card_auto: bool = False,
 ) -> InlineKeyboardMarkup:
     rows = []
     if in_stock:
+        if show_card_auto:
+            # Automatic card verification: the customer transfers a unique
+            # amount and the bot recognises it from the bank alert. Listed
+            # first because it's the fastest path for the customer.
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=t(lang, "btn_pay_card_auto"),
+                        callback_data=(
+                            QtyCB(action="show", product_id=product_id, flow="cardauto").pack()
+                            if max_order_qty > 1
+                            else CardAutoCB(action="buy", product_id=product_id).pack()
+                        ),
+                    )
+                ]
+            )
         buy_label = t(lang, "btn_pay_card") if (show_crypto or show_stars) else t(lang, "btn_buy")
         if max_order_qty > 1:
             rows.append(

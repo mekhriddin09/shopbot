@@ -125,6 +125,18 @@ def admin_product_detail_kb(product: Product) -> InlineKeyboardMarkup:
             ),
         ],
         [
+            InlineKeyboardButton(
+                text=("⚡️ Avto karta: yoqilgan ✅" if product.card_auto_enabled else "⚡️ Avto karta: o'chirilgan"),
+                callback_data=cb("toggle_card_auto"),
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text=("\U0001F512 Qo'lda tasdiqlash ✅" if product.card_manual_confirm else "\U0001F513 Avtomatik yetkazish"),
+                callback_data=cb("toggle_card_manual"),
+            ),
+        ],
+        [
             InlineKeyboardButton(text="\U0001F522 Min. buyurtma soni", callback_data=cb("edit_field", "min_order_qty")),
             InlineKeyboardButton(text="\U0001F522 Max. buyurtma soni", callback_data=cb("edit_field", "max_order_qty")),
         ],
@@ -280,6 +292,28 @@ def admin_order_action_kb(order_id: int) -> InlineKeyboardMarkup:
     )
 
 
+def admin_card_confirm_kb(order_id: int) -> InlineKeyboardMarkup:
+    """Shown when a card payment matched but delivery is held for a human —
+    either because global auto-delivery is off, or the product is flagged
+    manual-confirm."""
+    from app.keyboards.callback_data import CardAutoCB  # local import avoids a cycle
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Yetkazish",
+                    callback_data=CardAutoCB(action="admin_confirm", order_id=order_id).pack(),
+                ),
+                InlineKeyboardButton(
+                    text="❌ Rad etish",
+                    callback_data=CardAutoCB(action="admin_reject", order_id=order_id).pack(),
+                ),
+            ]
+        ]
+    )
+
+
 def admin_write_manual_kb(order_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -357,6 +391,9 @@ SETTINGS_GROUPS: dict[str, dict] = {
         "items": [
             ("toggle", "crypto_payment_enabled", "\U0001FA99 Kripto to'lov"),
             ("toggle", "stars_payment_enabled", "⭐ Telegram Stars to'lov"),
+            ("toggle", "card_payment_enabled", "⚡️ Avtomatik karta to'lovi"),
+            ("toggle", "card_auto_deliver_enabled", "\U0001F680 Avtomatik yetkazish"),
+            ("edit", "card_payment_timeout_minutes", "⏱ To'lov kutish (daqiqa)"),
             ("edit", "card_notify_sender", "\U0001F4B3 Karta xabarchisi (CardXabarBot)"),
             ("edit", "card_business_connection_id", "\U0001F512 Karta hisobi ulanishi"),
         ],

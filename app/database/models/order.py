@@ -38,6 +38,14 @@ class Order(TimestampMixin, Base):
     payment_method: Mapped[PaymentMethod] = mapped_column(
         Enum(PaymentMethod, native_enum=False), default=PaymentMethod.CARD
     )
+    # Automatic card verification: the unique amount this specific order
+    # must be paid with (price minus a small random discount), and the
+    # deadline after which an arriving payment no longer counts. Uniqueness
+    # among currently-awaiting orders is what lets an anonymous bank alert
+    # be attributed to one order — see services/card_payment/service.py.
+    expected_amount: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True, index=True)
+    payment_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     crypto_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
     crypto_invoice_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     crypto_pay_url: Mapped[str | None] = mapped_column(Text, nullable=True)

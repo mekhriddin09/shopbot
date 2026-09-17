@@ -34,6 +34,7 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.types import BusinessConnection, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database.models.enums import CardTransactionStatus
 from app.repositories.setting_repo import SettingRepository
 from app.services.notify import notify_admins_text
 
@@ -156,6 +157,8 @@ async def business_message_probe(message: Message, session: AsyncSession) -> Non
         return
 
     text = message.text or message.caption or ""
+    if not text.strip():
+        return
 
     logger.info(
         "card_notification from=%s chat=%s len=%s",
@@ -164,25 +167,57 @@ async def business_message_probe(message: Message, session: AsyncSession) -> Non
         len(text),
     )
 
+    if not await SettingRepository(session).get_bool("card_payment_enabled", False):
+        # Feature switched off: show the alert so the admin still sees
+        # what's arriving, but never touch any order.
+        await _forward_raw(message, session, text, note="ℹ️ Avtomatik karta to'lovi o'chirilgan.")
+        return
+
+    # Stable per-alert key: the same message redelivered after a reconnect
+    # produces the same key and is rejected as a duplicate.
+    message_key = (
+        f"{message.business_connection_id}:{message.chat.id if message.chat else '?'}:{message.message_id}"
+    )
+
+    from app.services.card_payment.flow import complete_matched_payment, notify_unmatched
+    from app.services.card_payment.service import CardPaymentService
+
+    transaction, order = await CardPaymentService(session).process_notification(message_key, text)
+
+    if order is not None:
+        await complete_matched_payment(message.bot, session, order, float(transaction.amount))
+        return
+
+    if transaction.status == CardTransactionStatus.DUPLICATE:
+        return
+    if transaction.status == CardTransactionStatus.IGNORED:
+        return  # outgoing debit — not a customer payment
+    if transaction.status == CardTransactionStatus.UNPARSED:
+        await _forward_raw(
+            message, session, text,
+            note="⚠️ Bu xabardan summani o'qib bo'lmadi — qo'lda tekshiring.",
+        )
+        return
+
+    # UNMATCHED / AMBIGUOUS -> money arrived, needs a human
+    await notify_unmatched(message.bot, session, transaction)
+
+
+async def _forward_raw(message: Message, session: AsyncSession, text: str, note: str = "") -> None:
+    """Show the admin the raw alert (used when the feature is off or the
+    text couldn't be parsed)."""
+    sender = message.from_user
     header = (
         "💳 <b>Karta xabari keldi</b>\n\n"
         f"👤 Kimdan: {html.escape(sender.full_name or '-') if sender else '-'} "
         f"(@{html.escape(sender.username or '-') if sender else '-'})\n"
-        f"🆔 ID: <code>{sender.id if sender else '-'}</code>\n"
-        f"🤖 Botmi: <b>{'HA' if (sender and sender.is_bot) else 'yo‘q'}</b>\n"
-        f"💬 Chat ID: <code>{message.chat.id if message.chat else '-'}</code>\n"
-        f"🔗 Connection: <code>{html.escape(str(message.business_connection_id or '-'))}</code>\n"
     )
-    body = (
-        f"\n📝 <b>Matn:</b>\n<pre>{html.escape(text)}</pre>"
-        if text
-        else "\n📝 (matnsiz xabar — rasm/fayl/boshqa tur)"
-    )
-
+    body = f"\n📝 <b>Matn:</b>\n<pre>{html.escape(text)}</pre>"
+    tail = f"\n\n{note}" if note else ""
     try:
-        await notify_admins_text(message.bot, session, header + body)
+        await notify_admins_text(message.bot, session, header + body + tail)
     except TelegramAPIError:
-        logger.exception("Failed to forward business message to admins")
+        logger.exception("Failed to forward card alert to admins")
 
 
 __all__ = ["router"]

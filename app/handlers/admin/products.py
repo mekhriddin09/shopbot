@@ -213,6 +213,35 @@ async def product_toggle_visibility(callback: CallbackQuery, callback_data: Admi
     await callback.answer()
 
 
+@router.callback_query(AdminProductCB.filter(F.action == "toggle_card_auto"))
+async def product_toggle_card_auto(callback: CallbackQuery, callback_data: AdminProductCB, session: AsyncSession) -> None:
+    """Offer (or stop offering) the automatic card payment option for this
+    product. Rolled out per product so the feature can be trialled on one
+    item before the whole catalogue depends on it."""
+    products = ProductRepository(session)
+    product = await products.get_by_id(callback_data.product_id)
+    if product is None:
+        await callback.answer("Mahsulot topilmadi", show_alert=True)
+        return
+    await products.update(product, card_auto_enabled=not product.card_auto_enabled)
+    await callback.message.edit_text(_product_summary(product), reply_markup=admin_product_detail_kb(product))
+    await callback.answer("Yoqildi ✅" if product.card_auto_enabled else "O'chirildi")
+
+
+@router.callback_query(AdminProductCB.filter(F.action == "toggle_card_manual"))
+async def product_toggle_card_manual(callback: CallbackQuery, callback_data: AdminProductCB, session: AsyncSession) -> None:
+    """Force a human tap before delivering this product, even when global
+    auto-delivery is on — intended for higher-value items."""
+    products = ProductRepository(session)
+    product = await products.get_by_id(callback_data.product_id)
+    if product is None:
+        await callback.answer("Mahsulot topilmadi", show_alert=True)
+        return
+    await products.update(product, card_manual_confirm=not product.card_manual_confirm)
+    await callback.message.edit_text(_product_summary(product), reply_markup=admin_product_detail_kb(product))
+    await callback.answer("Qo'lda tasdiqlash ✅" if product.card_manual_confirm else "Avtomatik yetkazish")
+
+
 @router.callback_query(AdminProductCB.filter(F.action == "toggle_referral"))
 async def product_toggle_referral(callback: CallbackQuery, callback_data: AdminProductCB, session: AsyncSession) -> None:
     products = ProductRepository(session)

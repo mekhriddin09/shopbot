@@ -122,6 +122,11 @@ async def open_product(callback: CallbackQuery, callback_data: ShopCB, session: 
     stars_enabled = await settings_repo.get_bool("stars_payment_enabled", False)
     show_stars = stars_enabled and view.product.price_stars is not None
 
+    card_auto_enabled = (
+        view.product.card_auto_enabled
+        and await settings_repo.get_bool("card_payment_enabled", False)
+    )
+
     preorder_enabled = not view.in_stock and await settings_repo.get_bool("preorder_enabled", False)
     show_notify = not view.in_stock and not preorder_enabled
 
@@ -140,6 +145,7 @@ async def open_product(callback: CallbackQuery, callback_data: ShopCB, session: 
         max_order_qty=view.product.max_order_qty,
         show_notify_button=show_notify,
         show_preorder_button=preorder_enabled,
+        show_card_auto=card_auto_enabled,
     )
     if view.product.image_file_id:
         await callback.message.delete()
@@ -245,6 +251,10 @@ async def qty_confirm(
         from app.handlers.user.stars import start_stars_purchase
 
         await start_stars_purchase(callback, session, user, lang, product, qty)
+    elif callback_data.flow == "cardauto":
+        from app.handlers.user.card_auto import start_card_auto_purchase
+
+        await start_card_auto_purchase(callback, session, user, lang, product.id, qty)
     else:
         await _show_card_payment_instructions(callback, session, product, lang, qty)
 

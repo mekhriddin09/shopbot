@@ -60,6 +60,10 @@ _NEW_COLUMNS: list[tuple[str, str, str]] = [
     ("users", "referral_confirm_rewarded", "BOOLEAN NOT NULL DEFAULT 0"),
     ("referral_rewards", "currency_type", "VARCHAR(32) NOT NULL DEFAULT 'BALANCE'"),
     ("referral_redemptions", "currency_type", "VARCHAR(32) NOT NULL DEFAULT 'BALANCE'"),
+    ("orders", "expected_amount", "NUMERIC(14, 2)"),
+    ("orders", "payment_expires_at", "DATETIME"),
+    ("products", "card_auto_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("products", "card_manual_confirm", "BOOLEAN NOT NULL DEFAULT 0"),
 ]
 
 DEFAULT_SETTINGS: dict[str, str] = {
@@ -180,6 +184,18 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # Telegram Business connection — see app/handlers/business.py). Only
     # messages from this exact sender are ever read; everything else in the
     # connected account's chats is ignored. Username or numeric id.
+    # Automatic card payment verification. Off by default — it must not
+    # start running the moment this version is deployed; the admin has to
+    # approve the business connection and switch it on deliberately.
+    "card_payment_enabled": "0",
+    # When on, a matched payment delivers immediately. When off, every
+    # match waits for an admin tap. Products flagged `card_manual_confirm`
+    # always wait regardless of this setting.
+    "card_auto_deliver_enabled": "0",
+    # Minutes an issued amount stays valid. Short is safer: fewer orders
+    # awaiting payment at once means fewer amounts in play, and a stale
+    # payment can't be credited to a long-forgotten order.
+    "card_payment_timeout_minutes": "5",
     "card_notify_sender": "CardXabarBot",
     # SECURITY: the one business connection allowed to deliver card
     # notifications. Anyone can connect this bot to their own account, so

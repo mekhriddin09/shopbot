@@ -26,30 +26,24 @@
   "btn_confirm": "✅ Подтвердить",
   "btn_preorder": "📦 Предзаказ",
   "btn_notify_stock": "🔔 Сообщить о поступлении",
-
   "msg_choose_language": "🌐 Выберите язык:",
   "msg_language_set": "✅ Язык изменён на русский.",
-
   "msg_shop_empty": "Пока нет доступных товаров.",
   "msg_product_not_found": "Товар не найден или скрыт.",
   "msg_out_of_stock": "❌ Этот товар временно закончился.",
   "msg_stock_label": "В наличии: {stock} шт.",
   "msg_out_of_stock_label": "❌ Нет в наличии",
   "msg_unlimited_label": "В наличии",
-
   "msg_product_card": "{emoji} <b>{name}</b>\n\n{description}\n\n💰 Цена: {price} {currency}\n{stock_line}",
   "msg_crypto_price_label": "🪙 Цена в крипто: ${price}",
-
   "msg_payment_header": "💳 Информация об оплате:\n\n{instructions}\n\n🔹 Заказ: <code>{order_uuid}</code>\n🔹 Товар: {product_name}\n🔹 Цена: {price} {currency}",
   "msg_preorder_payment_header": "⏳ <b>Предзаказ</b> (товара пока нет в наличии, будет отправлен после поступления)\n\n💳 Информация об оплате:\n\n{instructions}\n\n🔹 Заказ: <code>{order_uuid}</code>\n🔹 Товар: {product_name}\n🔹 Цена: {price} {currency}",
   "msg_send_screenshot": "🖼 Отправьте чек об оплате — скриншот (изображение) или файл (PDF, DOCX и т.д.).",
   "msg_screenshot_required": "Пожалуйста, отправьте чек в виде изображения или файла (например PDF, DOCX).",
   "msg_order_sent_to_admin": "✅ Ваш чек принят и проверяется администратором. Скоро вы получите ответ!",
   "msg_order_already_processed": "⚠️ Этот заказ уже был обработан.",
-
   "msg_my_orders_empty": "У вас пока нет заказов.",
   "msg_order_item": "🔹 <b>{product_name}</b>\n🆔 <code>{order_uuid}</code>\nСтатус: {status}\nЦена: {price} {currency}\n📅 {created_at}",
-
   "status_awaiting_proof": "⏳ Ожидание оплаты",
   "status_pending_approval": "🔍 На проверке",
   "status_approved": "✅ Подтверждён",
@@ -57,10 +51,8 @@
   "status_delivered": "📦 Доставлен",
   "status_cancelled": "🛑 Отменён",
   "status_failed": "⚠️ Ошибка",
-
   "msg_delivered_product": "🎉 Ваш заказ подтверждён!\n\n🆔 Заказ: <code>{order_uuid}</code>\n📦 Ваш товар:\n\n<code>{payload}</code>\n\nСпасибо за покупку! ❤️",
   "msg_order_rejected_notify": "❌ Ваш заказ отклонён.\n\n🆔 Заказ: <code>{order_uuid}</code>\nПричина: {reason}",
-
   "msg_reviews_empty": "Пока нет отзывов. Будьте первым!",
   "msg_review_list_item": "{stars} — {author}\n{text}",
   "msg_review_prompt_rating": "Как вы оцениваете покупку?",
@@ -68,7 +60,6 @@
   "msg_review_thanks": "✅ Спасибо за отзыв!",
   "msg_anonymous_author": "Аноним",
   "msg_proof_channel_prompt": "📢 Доказательства прошлых доставок можно увидеть в нашем канале:",
-
   "msg_product_unavailable": "❌ Этот товар больше недоступен.",
   "msg_order_not_found": "❌ Заказ не найден.",
   "msg_proof_already_submitted": "⚠️ Чек об оплате для этого заказа уже был отправлен (статус: {status}).",
@@ -79,7 +70,6 @@
   "msg_provider_fetch_failed": "❌ Не удалось получить товар от поставщика: {error}",
   "msg_manual_delivery_disabled": "❌ Ручная доставка временно отключена. Пожалуйста, обратитесь в поддержку.",
   "msg_cant_send_message": "⚠️ Невозможно отправить сообщение для этого заказа (статус: {status}).",
-
   "msg_crypto_disabled": "❌ Крипто-оплата временно отключена.",
   "msg_crypto_provider_not_configured": "❌ Этот крипто-провайдер не настроен.",
   "msg_crypto_invoice_failed": "❌ Не удалось создать крипто-инвойс: {error}",
@@ -92,16 +82,13 @@
   "msg_crypto_payment_confirmed_alert": "✅ Оплата подтверждена",
   "msg_crypto_cancelled_by_user": "🛑 Оплата отменена.\n\n🆔 Заказ: <code>{order_uuid}</code>\n\nТовар возвращён в наличие. Вы можете оформить покупку заново в любое время.",
   "msg_crypto_payment_timeout": "⏰ Время на оплату истекло.\n\n🆔 Заказ: <code>{order_uuid}</code>\n\nТак как оплата не была обнаружена вовремя, заказ отменён, а товар возвращён в наличие. Вы можете оформить покупку заново.",
-
   "btn_buy_stars": "⭐ Купить за Stars",
   "btn_pay_stars": "⭐ Оплатить",
   "msg_stars_price_label": "⭐ Цена в Stars: {price} ⭐",
   "msg_stars_disabled": "❌ Оплата через Telegram Stars временно отключена.",
   "msg_not_awaiting_stars": "⚠️ Этот заказ не ожидает оплаты Stars (статус: {status}).",
-
   "msg_support_type_here": "✍️ Напишите свой вопрос здесь — администратор ответит. Чтобы выйти, выберите другой раздел в меню.",
   "msg_support_sent": "✅ Ваше сообщение отправлено. Администратор скоро ответит.",
-
   "msg_stock_notify_subscribed": "🔔 Готово! Сообщим вам, когда товар появится в наличии.",
   "msg_stock_back_in_stock": "🔔 Хорошие новости! \"{name}\" снова в наличии — можно оформить покупку!",
   "msg_referral_disabled": "🤝 Реферальная программа пока не активна.",
@@ -124,10 +111,8 @@
   "msg_referral_reward_requested": "✅ Ваш запрос принят: <b>{name}</b>.\n\nСумма списана с баланса, администратор скоро свяжется с вами.",
   "msg_referral_reward_fulfilled": "🎉 Ваша награда выдана: <b>{name}</b>. Спасибо!",
   "msg_referral_reward_rejected": "❌ Запрос на награду ({name}) отклонён. {amount} возвращено на ваш баланс. Свяжитесь с администратором для уточнения.",
-
   "msg_balance_adjusted_by_admin": "💳 Ваш реферальный баланс изменён: {sign}{amount} {currency}.\n\nНовый баланс: {balance} {currency}.",
   "msg_admin_direct_message_prefix": "📩 <b>Сообщение от администратора:</b>",
-
   "btn_offer_accept": "✅ Согласен",
   "btn_channel_open": "📢 Перейти в канал",
   "btn_channel_check": "✅ Проверить",
@@ -141,10 +126,19 @@
   "msg_captcha_prompt": "🤖 Подтвердите, что вы не робот:\n\n{question}",
   "msg_captcha_wrong": "❌ Неверный ответ, попробуйте ещё раз.",
   "msg_referral_confirmed": "✅ Подтверждено! Теперь вы полноценный участник реферальной программы.",
-
   "msg_error_generic": "⚠️ Произошла ошибка. Попробуйте ещё раз чуть позже.",
   "msg_not_admin": "⛔ У вас нет доступа к этому разделу.",
   "msg_rate_limited": "⏱ Пожалуйста, не так быстро.",
-
-  "main_menu_hint": "Выберите нужный раздел 👇"
+  "main_menu_hint": "Выберите нужный раздел 👇",
+  "btn_pay_card_auto": "⚡️ Карта (автоматически)",
+  "btn_card_auto_paid": "✅ Я оплатил",
+  "btn_card_auto_not_detected": "❓ Не определилось? Отправить чек",
+  "btn_card_auto_i_did_pay": "💸 Я всё-таки оплатил",
+  "msg_card_auto_disabled": "❌ Автоматическая оплата картой сейчас отключена.",
+  "msg_card_auto_busy": "⚠️ Сейчас слишком много ожидающих платежей. Попробуйте через пару минут.",
+  "msg_card_auto_payment": "💳 <b>Оплата картой</b>\n\n{instructions}\n\n⚠️ <b>ОТПРАВЬТЕ РОВНО ЭТУ СУММУ:</b>\n\n<code>{amount}</code> {currency}\n\n👆 Нажмите на число — оно скопируется.\n\n❗️ Не округляйте! Другая сумма не будет распознана автоматически.\n\n📦 {product_name}\n🆔 <code>{order_uuid}</code>\n⏱ до {deadline} ({minutes} мин.)",
+  "msg_card_auto_waiting": "⏳ <b>Ожидаем ваш платёж...</b>\n\nКак только придёт <code>{amount}</code> {currency}, товар отправится автоматически.\nОбычно это занимает 1-2 минуты.\n\nЕсли ждёте слишком долго — отправьте чек через кнопку ниже.",
+  "msg_card_auto_cancelled": "🛑 Оплата отменена.\n\n🆔 <code>{order_uuid}</code>\n\nТовар возвращён в наличие, вы можете оформить заказ снова в любое время.",
+  "msg_card_auto_expired": "⏰ <b>Время автоматической оплаты истекло</b>\n\n🆔 <code>{order_uuid}</code>\n\nЕсли вы не оплачивали — оформите заказ заново.\nЕсли оплатили — нажмите кнопку ниже.",
+  "msg_card_auto_send_receipt": "🧾 Отправьте чек об оплате — изображением (скриншот) или файлом (PDF и т.д.).\n\nАдминистратор проверит и отправит товар вручную."
 }

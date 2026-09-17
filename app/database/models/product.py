@@ -72,6 +72,28 @@ class Product(TimestampMixin, Base):
         doc="Whether purchases of this product count toward referral rewards.",
     )
 
+    card_auto_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="0",
+        doc=(
+            "Offer the automatic card payment option (unique amount verified against "
+            "CardXabar alerts) for this product. Off by default so the feature can be "
+            "rolled out one product at a time."
+        ),
+    )
+
+    card_manual_confirm: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="0",
+        doc=(
+            "Automatic card payments for this product always wait for an admin tap, "
+            "even when global auto-delivery is on. Meant for higher-value items where "
+            "a mis-matched payment would be expensive to get wrong."
+        ),
+    )
+
     min_order_qty: Mapped[int] = mapped_column(
         Integer, default=1, server_default="1", doc="Minimum quantity a customer must buy per order."
     )

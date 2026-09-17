@@ -26,30 +26,24 @@
   "btn_confirm": "✅ Tasdiqlash",
   "btn_preorder": "📦 Oldindan buyurtma berish",
   "btn_notify_stock": "🔔 Kelganda ogohlantir",
-
   "msg_choose_language": "🌐 Tilni tanlang:",
   "msg_language_set": "✅ Til o'zbekchaga o'zgartirildi.",
-
   "msg_shop_empty": "Hozircha mahsulotlar mavjud emas.",
   "msg_product_not_found": "Mahsulot topilmadi yoki yashirilgan.",
   "msg_out_of_stock": "❌ Ushbu mahsulot hozircha tugagan.",
   "msg_stock_label": "Mavjud: {stock} dona",
   "msg_out_of_stock_label": "❌ Tugadi",
   "msg_unlimited_label": "Mavjud",
-
   "msg_product_card": "{emoji} <b>{name}</b>\n\n{description}\n\n💰 Narxi: {price} {currency}\n{stock_line}",
   "msg_crypto_price_label": "🪙 Kripto narxi: ${price}",
-
   "msg_payment_header": "💳 To'lov ma'lumotlari:\n\n{instructions}\n\n🔹 Buyurtma: <code>{order_uuid}</code>\n🔹 Mahsulot: {product_name}\n🔹 Narxi: {price} {currency}",
   "msg_preorder_payment_header": "⏳ <b>Oldindan buyurtma</b> (mahsulot hozircha stokda yo'q, kelgach yuboriladi)\n\n💳 To'lov ma'lumotlari:\n\n{instructions}\n\n🔹 Buyurtma: <code>{order_uuid}</code>\n🔹 Mahsulot: {product_name}\n🔹 Narxi: {price} {currency}",
   "msg_send_screenshot": "🖼 To'lov chekini yuboring — skrinshot (rasm) yoki fayl (PDF, DOCX va h.k.) ko'rinishida bo'lishi mumkin.",
   "msg_screenshot_required": "Iltimos, chekni rasm yoki fayl (masalan PDF, DOCX) sifatida yuboring.",
   "msg_order_sent_to_admin": "✅ Chekingiz qabul qilindi va admin tomonidan tekshirilmoqda. Tez orada javob olasiz!",
   "msg_order_already_processed": "⚠️ Bu buyurtma allaqachon ko'rib chiqilgan.",
-
   "msg_my_orders_empty": "Sizda hali buyurtmalar yo'q.",
   "msg_order_item": "🔹 <b>{product_name}</b>\n🆔 <code>{order_uuid}</code>\nHolat: {status}\nNarxi: {price} {currency}\n📅 {created_at}",
-
   "status_awaiting_proof": "⏳ To'lov kutilmoqda",
   "status_pending_approval": "🔍 Tekshirilmoqda",
   "status_approved": "✅ Tasdiqlandi",
@@ -57,10 +51,8 @@
   "status_delivered": "📦 Yetkazib berildi",
   "status_cancelled": "🛑 Bekor qilindi",
   "status_failed": "⚠️ Xatolik yuz berdi",
-
   "msg_delivered_product": "🎉 Buyurtmangiz tasdiqlandi!\n\n🆔 Buyurtma: <code>{order_uuid}</code>\n📦 Mahsulotingiz:\n\n<code>{payload}</code>\n\nXaridingiz uchun rahmat! ❤️",
   "msg_order_rejected_notify": "❌ Buyurtmangiz rad etildi.\n\n🆔 Buyurtma: <code>{order_uuid}</code>\nSabab: {reason}",
-
   "msg_reviews_empty": "Hozircha sharhlar yo'q. Birinchi bo'ling!",
   "msg_review_list_item": "{stars} — {author}\n{text}",
   "msg_review_prompt_rating": "Xaridingizni qanday baholaysiz?",
@@ -68,7 +60,6 @@
   "msg_review_thanks": "✅ Sharhingiz uchun rahmat!",
   "msg_anonymous_author": "Anonim",
   "msg_proof_channel_prompt": "📢 Xaridlar isbotini kanalimizda ko'rishingiz mumkin:",
-
   "msg_product_unavailable": "❌ Bu mahsulot endi mavjud emas.",
   "msg_order_not_found": "❌ Buyurtma topilmadi.",
   "msg_proof_already_submitted": "⚠️ Ushbu buyurtma uchun to'lov cheki allaqachon yuborilgan (holat: {status}).",
@@ -79,7 +70,6 @@
   "msg_provider_fetch_failed": "❌ Ta'minotchidan mahsulotni olib bo'lmadi: {error}",
   "msg_manual_delivery_disabled": "❌ Qo'lda yetkazish hozircha o'chirilgan. Iltimos, yordam bo'limiga murojaat qiling.",
   "msg_cant_send_message": "⚠️ Ushbu buyurtma uchun xabar yuborib bo'lmaydi (holat: {status}).",
-
   "msg_crypto_disabled": "❌ Kripto to'lov hozircha o'chirilgan.",
   "msg_crypto_provider_not_configured": "❌ Bu kripto provayder sozlanmagan.",
   "msg_crypto_invoice_failed": "❌ Kripto invoys yaratilmadi: {error}",
@@ -92,16 +82,13 @@
   "msg_crypto_payment_confirmed_alert": "✅ To'lov tasdiqlandi",
   "msg_crypto_cancelled_by_user": "🛑 To'lov bekor qilindi.\n\n🆔 Buyurtma: <code>{order_uuid}</code>\n\nMahsulot qayta stokka qaytarildi. Xohlasangiz, qayta xarid qilishingiz mumkin.",
   "msg_crypto_payment_timeout": "⏰ To'lov vaqti tugadi.\n\n🆔 Buyurtma: <code>{order_uuid}</code>\n\nBelgilangan vaqt ichida to'lov aniqlanmagani uchun buyurtma bekor qilindi va mahsulot qayta stokka qaytarildi. Xohlasangiz, qayta xarid qilishingiz mumkin.",
-
   "btn_buy_stars": "⭐ Stars orqali sotib olish",
   "btn_pay_stars": "⭐ To'lash",
   "msg_stars_price_label": "⭐ Stars narxi: {price} ⭐",
   "msg_stars_disabled": "❌ Telegram Stars orqali to'lov hozircha o'chirilgan.",
   "msg_not_awaiting_stars": "⚠️ Bu buyurtma Stars to'lovini kutmayapti (holat: {status}).",
-
   "msg_support_type_here": "✍️ Savolingizni shu yerga yozing — admin javob beradi. Chiqish uchun menyudan boshqa bo'limni tanlang.",
   "msg_support_sent": "✅ Xabaringiz yuborildi. Admin tez orada javob beradi.",
-
   "msg_stock_notify_subscribed": "🔔 Bo'ldi! Mahsulot stokga kelganda sizga xabar beramiz.",
   "msg_stock_back_in_stock": "🔔 Xushxabar! \"{name}\" mahsuloti stokga qaytdi — xarid qilishingiz mumkin!",
   "msg_referral_disabled": "🤝 Referral tizimi hozircha faol emas.",
@@ -124,10 +111,8 @@
   "msg_referral_reward_requested": "✅ So'rovingiz qabul qilindi: <b>{name}</b>.\n\nBalansingizdan yechildi, admin tez orada siz bilan bog'lanadi.",
   "msg_referral_reward_fulfilled": "🎉 Sovg'angiz yetkazildi: <b>{name}</b>. Rahmat!",
   "msg_referral_reward_rejected": "❌ Sovg'a so'rovingiz ({name}) rad etildi. Balansingizga {amount} qaytarildi. Aniqlik uchun admin bilan bog'laning.",
-
   "msg_balance_adjusted_by_admin": "💳 Referral balansingiz o'zgartirildi: {sign}{amount} {currency}.\n\nYangi balans: {balance} {currency}.",
   "msg_admin_direct_message_prefix": "📩 <b>Administratordan xabar:</b>",
-
   "btn_offer_accept": "✅ Roziman",
   "btn_channel_open": "📢 Kanalga o'tish",
   "btn_channel_check": "✅ Tekshirish",
@@ -141,10 +126,19 @@
   "msg_captcha_prompt": "🤖 Robot emasligingizni tasdiqlang:\n\n{question}",
   "msg_captcha_wrong": "❌ Noto'g'ri javob, qayta urinib ko'ring.",
   "msg_referral_confirmed": "✅ Tasdiqlandi! Endi siz to'liq referral dasturi ishtirokchisisiz.",
-
   "msg_error_generic": "⚠️ Xatolik yuz berdi. Iltimos, birozdan so'ng qayta urinib ko'ring.",
   "msg_not_admin": "⛔ Sizda ushbu bo'limga kirish huquqi yo'q.",
   "msg_rate_limited": "⏱ Iltimos, biroz sekinroq harakat qiling.",
-
-  "main_menu_hint": "Kerakli bo'limni tanlang 👇"
+  "main_menu_hint": "Kerakli bo'limni tanlang 👇",
+  "btn_pay_card_auto": "⚡️ Karta (avtomatik)",
+  "btn_card_auto_paid": "✅ To'lovni qildim",
+  "btn_card_auto_not_detected": "❓ Aniqlanmadi? Chek yuborish",
+  "btn_card_auto_i_did_pay": "💸 Men pul tashlagandim",
+  "msg_card_auto_disabled": "❌ Avtomatik karta to'lovi hozircha o'chirilgan.",
+  "msg_card_auto_busy": "⚠️ Hozir juda ko'p to'lov kutilmoqda. Bir-ikki daqiqadan so'ng qayta urinib ko'ring.",
+  "msg_card_auto_payment": "💳 <b>Karta orqali to'lov</b>\n\n{instructions}\n\n⚠️ <b>AYNAN SHU SUMMANI yuboring:</b>\n\n<code>{amount}</code> {currency}\n\n👆 Raqamni bosing — nusxalanadi.\n\n❗️ Yumaloqlamang! Boshqa summa avtomatik tanilmaydi.\n\n📦 {product_name}\n🆔 <code>{order_uuid}</code>\n⏱ {deadline} gacha ({minutes} daqiqa)",
+  "msg_card_auto_waiting": "⏳ <b>To'lovingiz kutilmoqda...</b>\n\n<code>{amount}</code> {currency} kelishi bilan mahsulot avtomatik yuboriladi.\nOdatda 1-2 daqiqa oladi.\n\nAgar uzoq kutsangiz, pastdagi tugma orqali chek yuborishingiz mumkin.",
+  "msg_card_auto_cancelled": "🛑 To'lov bekor qilindi.\n\n🆔 <code>{order_uuid}</code>\n\nMahsulot stokga qaytarildi, xohlagan paytda qayta buyurtma berishingiz mumkin.",
+  "msg_card_auto_expired": "⏰ <b>Avtomatik to'lov vaqti tugadi</b>\n\n🆔 <code>{order_uuid}</code>\n\nAgar pul tashlamagan bo'lsangiz — qaytadan buyurtma bering.\nAgar tashlagan bo'lsangiz — pastdagi tugmani bosing.",
+  "msg_card_auto_send_receipt": "🧾 To'lov chekini yuboring — rasm (skrinshot) yoki fayl (PDF va h.k.) bo'lishi mumkin.\n\nAdmin tekshirib, mahsulotni qo'lda yuboradi."
 }
