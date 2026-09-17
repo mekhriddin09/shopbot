@@ -176,6 +176,12 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "oferta_text_ru": "",
     "oferta_text_en": "",
 
+    # Card payment notifications (UZCARD/Humo alerts forwarded through a
+    # Telegram Business connection — see app/handlers/business.py). Only
+    # messages from this exact sender are ever read; everything else in the
+    # connected account's chats is ignored. Username or numeric id.
+    "card_notify_sender": "CardXabarBot",
+
     # Second referral currency ("Ball"): earned per referred user who
     # passes the phone+captcha confirmation, spendable only in the referral
     # shop (never withdrawable — see ReferralCurrency in models/enums.py).

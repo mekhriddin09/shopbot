@@ -34,6 +34,7 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.types import BusinessConnection, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.repositories.setting_repo import SettingRepository
 from app.services.notify import notify_admins_text
 
 router = Router(name="business_probe")
@@ -64,23 +65,54 @@ async def business_connection_changed(
     )
 
 
+async def _is_card_notifier(session: AsyncSession, sender) -> bool:
+    """True only for the configured card-notification sender (CardXabar).
+
+    PRIVACY: the business connection carries *every* private chat of the
+    connected account, including personal conversations. Everything that
+    isn't the card notifier is dropped here and never logged, forwarded or
+    stored — the bot has no business reading the owner's private messages
+    just because it needs to see bank alerts.
+
+    Matched by username (case-insensitive) or numeric id, so the admin can
+    set either in the "card_notify_sender" setting.
+    """
+    if sender is None:
+        return False
+    configured = (await SettingRepository(session).get("card_notify_sender", "CardXabarBot")).strip()
+    if not configured:
+        return False
+    configured = configured.lstrip("@").lower()
+    if configured.isdigit():
+        return str(sender.id) == configured
+    return (sender.username or "").lower() == configured
+
+
 @router.business_message()
 async def business_message_probe(message: Message, session: AsyncSession) -> None:
-    """Forward every business message to the admins so we can see exactly
-    what does (and doesn't) come through the connection."""
+    """Forward card-notification messages to the admins.
+
+    Still a diagnostic at this stage: it shows the raw CardXabar text so
+    the payment-amount parser can be written against the real format. Once
+    that parser exists this same entry point becomes the card-payment
+    listener (parse -> match a pending order -> deliver).
+    """
     sender = message.from_user
+    if not await _is_card_notifier(session, sender):
+        # Not the card notifier — ignore silently (see _is_card_notifier).
+        return
+
     text = message.text or message.caption or ""
 
     logger.info(
-        "business_message from=%s is_bot=%s chat=%s len=%s",
+        "card_notification from=%s chat=%s len=%s",
         sender.id if sender else "?",
-        sender.is_bot if sender else "?",
         message.chat.id if message.chat else "?",
         len(text),
     )
 
     header = (
-        "📡 <b>Business xabar keldi</b>\n\n"
+        "💳 <b>Karta xabari keldi</b>\n\n"
         f"👤 Kimdan: {html.escape(sender.full_name or '-') if sender else '-'} "
         f"(@{html.escape(sender.username or '-') if sender else '-'})\n"
         f"🆔 ID: <code>{sender.id if sender else '-'}</code>\n"

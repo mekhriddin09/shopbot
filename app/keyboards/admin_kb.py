@@ -354,6 +354,7 @@ SETTINGS_GROUPS: dict[str, dict] = {
         "items": [
             ("toggle", "crypto_payment_enabled", "\U0001FA99 Kripto to'lov"),
             ("toggle", "stars_payment_enabled", "⭐ Telegram Stars to'lov"),
+            ("edit", "card_notify_sender", "\U0001F4B3 Karta xabarchisi (CardXabarBot)"),
         ],
     },
     "referral": {
