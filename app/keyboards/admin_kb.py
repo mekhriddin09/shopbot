@@ -348,13 +348,17 @@ SETTINGS_GROUPS: dict[str, dict] = {
         "title": "\U0001F4B3 <b>To'lov usullari</b>",
         "intro": (
             "Karta orqali to'lov doim ishlaydi (chek/skrinshot bilan).\n"
-            "Kripto to'lov uchun mahsulotga USD narx, Stars uchun Stars narxi kiritilgan bo'lishi kerak."
+            "Kripto to'lov uchun mahsulotga USD narx, Stars uchun Stars narxi kiritilgan bo'lishi kerak.\n\n"
+            "⚠️ <b>Karta hisobi ulanishi</b> — avtomatik karta tekshiruvi uchun. "
+            "Faqat shu ulanishdan kelgan CardXabar xabarlari hisobga olinadi. "
+            "Bo'sh bo'lsa, avtomatik tekshiruv umuman ishlamaydi."
         ),
         "parent": "root",
         "items": [
             ("toggle", "crypto_payment_enabled", "\U0001FA99 Kripto to'lov"),
             ("toggle", "stars_payment_enabled", "⭐ Telegram Stars to'lov"),
             ("edit", "card_notify_sender", "\U0001F4B3 Karta xabarchisi (CardXabarBot)"),
+            ("edit", "card_business_connection_id", "\U0001F512 Karta hisobi ulanishi"),
         ],
     },
     "referral": {

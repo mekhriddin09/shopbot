@@ -181,6 +181,12 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # messages from this exact sender are ever read; everything else in the
     # connected account's chats is ignored. Username or numeric id.
     "card_notify_sender": "CardXabarBot",
+    # SECURITY: the one business connection allowed to deliver card
+    # notifications. Anyone can connect this bot to their own account, so
+    # without pinning this a stranger could relay genuine CardXabar alerts
+    # for payments made to their own card and collect products for free.
+    # Empty = card notifications are ignored entirely (fails closed).
+    "card_business_connection_id": "",
 
     # Second referral currency ("Ball"): earned per referred user who
     # passes the phone+captcha confirmation, spendable only in the referral

@@ -46,23 +46,59 @@ logger = logging.getLogger("business")
 async def business_connection_changed(
     connection: BusinessConnection, session: AsyncSession
 ) -> None:
-    """Fires when the user connects/disconnects/reconfigures the bot in
-    Telegram Business -> Chatbots. Mostly a "yes, the link is live"
-    confirmation — and it carries the `connection_id` that any future
-    send-on-behalf-of-user call would need."""
+    """Fires when someone connects/disconnects/reconfigures this bot in
+    their Telegram Business -> Chatbots settings.
+
+    Note that *anyone* can do this — a business bot is connectable by any
+    user, not just the owner. So this handler never grants trust; it only
+    reports the connection and tells the admin how to approve it if it's
+    the real card account (see `_is_approved_connection`).
+    """
     enabled = getattr(connection, "is_enabled", None)
+    user_id = connection.user.id if connection.user else None
     logger.info(
-        "business_connection id=%s user=%s enabled=%s",
-        connection.id, connection.user.id if connection.user else "?", enabled,
+        "business_connection id=%s user=%s enabled=%s", connection.id, user_id, enabled
     )
+
+    approved = (await SettingRepository(session).get("card_business_connection_id", "")).strip()
+    is_approved = approved and approved == str(connection.id)
+
+    if is_approved:
+        status_line = "✅ Bu ulanish <b>tasdiqlangan</b> karta hisobi."
+    else:
+        status_line = (
+            "⚠️ Bu ulanish <b>tasdiqlanmagan</b> — undan kelgan karta xabarlari hisobga olinmaydi.\n\n"
+            "Agar bu sizning karta hisobingiz bo'lsa, quyidagi Connection ID'ni nusxalab, "
+            "Admin panel → Sozlamalar → 💳 To'lov usullari → "
+            "<b>Karta hisobi ulanishi</b> ga joylashtiring."
+        )
+
     await notify_admins_text(
         connection.bot,
         session,
         "🔌 <b>Business ulanish yangilandi</b>\n\n"
         f"Holat: {'✅ faol' if enabled else '❌ o‘chirilgan'}\n"
-        f"Foydalanuvchi: <code>{connection.user.id if connection.user else '-'}</code>\n"
-        f"Connection ID: <code>{html.escape(str(connection.id))}</code>",
+        f"Foydalanuvchi: <code>{user_id if user_id is not None else '-'}</code>\n"
+        f"Connection ID:\n<code>{html.escape(str(connection.id))}</code>\n\n"
+        f"{status_line}",
     )
+
+
+async def _is_approved_connection(session: AsyncSession, connection_id: str | None) -> bool:
+    """SECURITY: only the admin-approved business connection may deliver
+    card notifications.
+
+    Without this check the payment flow is trivially exploitable: any
+    stranger can connect this bot to their own Telegram account, transfer
+    money to *their own* card, and let the resulting genuine @CardXabarBot
+    alert flow through their connection. The amount would match a pending
+    order and the bot would hand over the product for free. Filtering on
+    the sender alone cannot catch that — the sender really is CardXabar.
+
+    Fails closed: if nothing is approved yet, nothing is accepted.
+    """
+    approved = (await SettingRepository(session).get("card_business_connection_id", "")).strip()
+    return bool(approved) and approved == (connection_id or "")
 
 
 async def _is_card_notifier(session: AsyncSession, sender) -> bool:
@@ -100,6 +136,23 @@ async def business_message_probe(message: Message, session: AsyncSession) -> Non
     sender = message.from_user
     if not await _is_card_notifier(session, sender):
         # Not the card notifier — ignore silently (see _is_card_notifier).
+        return
+
+    # Right sender, but is it the right *account*? Both locks must hold.
+    if not await _is_approved_connection(session, message.business_connection_id):
+        logger.warning(
+            "card_notification_from_unapproved_connection connection=%s sender=%s",
+            message.business_connection_id, sender.id if sender else "?",
+        )
+        await notify_admins_text(
+            message.bot,
+            session,
+            "🚨 <b>Tasdiqlanmagan ulanishdan karta xabari keldi — E'TIBORSIZ QOLDIRILDI</b>\n\n"
+            f"Connection ID: <code>{html.escape(str(message.business_connection_id or '-'))}</code>\n\n"
+            "Agar bu siz emas bo'lsangiz, kimdir botni o'z hisobiga ulab, "
+            "o'z kartasiga tushgan pul bilan mahsulot olishga urinayotgan bo'lishi mumkin. "
+            "Hech qanday buyurtma to'langan deb belgilanmadi.",
+        )
         return
 
     text = message.text or message.caption or ""
