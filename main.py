@@ -13,6 +13,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from app.config.settings import settings
 from app.database.bootstrap import bootstrap_database
 from app.handlers.admin import admin_router
+from app.handlers.business import router as business_router
 from app.handlers.user import user_router
 from app.middlewares.db_session import DbSessionMiddleware
 from app.middlewares.error_handling import ErrorHandlingMiddleware
@@ -47,6 +48,14 @@ async def main() -> None:
     dp.update.outer_middleware(UserContextMiddleware())
     dp.update.outer_middleware(OnboardingGateMiddleware())
 
+    # Business-connection updates (Telegram Business "Secretary Mode").
+    # Registered first and separately from the user/admin routers: those
+    # two filter on ordinary `message`/`callback_query` updates, while this
+    # one only ever sees `business_message`/`business_connection`, so the
+    # two sets can't shadow each other. Registering it also makes aiogram
+    # include those update types in the polling `allowed_updates` — without
+    # a registered handler Telegram would never deliver them at all.
+    dp.include_router(business_router)
     dp.include_router(admin_router)
     dp.include_router(user_router)
 
