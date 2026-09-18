@@ -218,6 +218,24 @@ async def settings_test_fragment(callback: CallbackQuery, session: AsyncSession)
         logger.exception("fragment_test_price_failed")
         out.append(f"❌ Kutilmagan xato:\n<code>{type(exc).__name__}: {exc}</code>")
 
+    # Wallet: the single most common reason a purchase fails is an empty
+    # wallet, and the second is the seed deriving a different address than
+    # the one connected to Fragment. Both are visible here.
+    try:
+        w_ok, address, balance = await asyncio.wait_for(provider.get_wallet_info(), timeout=30)
+        if w_ok:
+            shown = f"{balance:.3f} TON" if balance is not None else "?"
+            out.append(f"\U0001F45B Hamyon: <code>{address}</code>\n   Balans: <b>{shown}</b>")
+            if balance is not None and balance < 0.5:
+                out.append("   ⚠️ Balans juda kam — xarid uchun TON tashlang.")
+        else:
+            out.append(f"❌ Hamyonni o'qib bo'lmadi:\n<code>{address}</code>")
+    except asyncio.TimeoutError:
+        out.append("❌ Hamyon ma'lumoti 30 soniyada kelmadi.")
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("fragment_test_wallet_failed")
+        out.append(f"❌ Hamyon tekshiruvi xato berdi:\n<code>{type(exc).__name__}: {exc}</code>")
+
     handle = callback.from_user.username
     if handle:
         try:
@@ -238,8 +256,9 @@ async def settings_test_fragment(callback: CallbackQuery, session: AsyncSession)
     if ok:
         out += [
             "",
-            "Hammasi joyida. Endi <code>stars:50</code> mahsulotini yaratib, o'zingizga "
-            "bitta sinov xaridi qiling — to'lov zanjiri faqat haqiqiy xaridda tekshiriladi.",
+            "Hammasi joyida. Yuqoridagi hamyon manzili Fragment'ga ulagan hamyoningiz "
+            "bilan bir xil ekanini bir tekshiring, keyin <code>stars:50</code> mahsulotini "
+            "yaratib o'zingizga sinov xaridi qiling.",
         ]
     await callback.message.answer("\n".join(out))
 

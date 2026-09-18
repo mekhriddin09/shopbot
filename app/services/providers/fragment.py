@@ -240,7 +240,29 @@ class FragmentProvider(BaseProvider):
     # Pre-purchase checks
     # ------------------------------------------------------------------
 
-    async def search_recipient(self, username: str) -> tuple[bool, str | None]:
+    async def get_wallet_info(self) -> tuple[bool, str | None, float | None]:
+        """(ok, address, GRAM/TON balance) for the shop's own wallet.
+
+        Used by the admin's connection test: it answers "is the address the
+        bot derives from the seed the same one I connected to Fragment, and
+        does it have enough to buy anything" — the two questions that decide
+        whether a purchase will work, neither of which a price lookup can
+        answer.
+        """
+        client, reason = await self._client()
+        if client is None:
+            return False, reason, None
+        try:
+            async with client as c:
+                info = await c.get_wallet()
+        except Exception as exc:  # noqa: BLE001
+            return False, f"{type(exc).__name__}: {exc}", None
+        balance = getattr(info, "gram_balance", None)
+        if balance is None:
+            balance = getattr(info, "balance_ton", None)
+        return True, getattr(info, "address", None), float(balance) if balance is not None else None
+
+    async def search_recipient(self, username: str, kind: str = "stars") -> tuple[bool, str | None]:
         """Confirm Fragment can deliver to this username *before* the
         customer is asked to pay. Fails open (returns ok) when the check
         itself can't run — a flaky check must not block sales, since the
@@ -256,9 +278,13 @@ class FragmentProvider(BaseProvider):
 
         try:
             async with client as c:
-                info = await c.search_stars_recipient(handle) if hasattr(
-                    c, "search_stars_recipient"
-                ) else await c.search_usernames(handle)
+                # NOT search_usernames() — that searches the marketplace for
+                # usernames on sale, which has nothing to do with whether a
+                # gift can be delivered to this person.
+                if kind == "premium":
+                    info = await c.get_premium_recipient(handle)
+                else:
+                    info = await c.get_stars_recipient(handle)
         except Exception as exc:  # noqa: BLE001
             name = type(exc).__name__
             if "UserNotFound" in name:
@@ -292,8 +318,23 @@ class FragmentProvider(BaseProvider):
         except Exception as exc:  # noqa: BLE001
             return False, None, f"{type(exc).__name__}: {exc}"
 
-        price = getattr(quote, "price", None) or getattr(quote, "ton", None)
-        return True, float(price) if price is not None else None, None
+        # StarsPrice/PremiumPriceOption carry `gram_price` (a string, with
+        # `ton_price` kept as an alias); there is no `.price`.
+        raw = None
+        if kind == "stars":
+            raw = getattr(quote, "gram_price", None) or getattr(quote, "ton_price", None)
+        else:
+            options = getattr(quote, "options", None) or []
+            for option in options:
+                if int(getattr(option, "months", 0) or 0) == amount:
+                    raw = getattr(option, "gram_price", None) or getattr(option, "ton_price", None)
+                    break
+        if raw is None:
+            return True, None, None
+        try:
+            return True, float(str(raw).replace(",", "").strip()), None
+        except ValueError:
+            return True, None, None
 
     # ------------------------------------------------------------------
     # The purchase itself
