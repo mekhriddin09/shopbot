@@ -650,6 +650,7 @@ SETTINGS_GROUPS: dict[str, dict] = {
             ("masked", "fragment_ton_api_key", "\U0001F310 TON API kaliti (Toncenter)"),
             ("masked", "fragment_cookies", "\U0001F36A fragment.com cookie'lari"),
             ("edit", "fragment_wallet_version", "\U0001F45B Hamyon versiyasi (V5R1/V4R2)"),
+            ("edit", "fragment_api_provider", "\U0001F6F0️ TON API turi (auto/tonapi/toncenter)"),
             ("test_fragment", None, "\U0001F50C Ulanishni tekshirish (pul sarflamaydi)"),
         ],
     },

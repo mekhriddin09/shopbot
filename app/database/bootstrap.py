@@ -197,6 +197,8 @@ DEFAULT_SETTINGS: dict[str, str] = {
     # when deliveries start failing with a login error, refresh them here.
     "fragment_cookies": "",
     "fragment_wallet_version": "V5R1",
+    # auto | tonapi | toncenter — which RPC the TON key belongs to.
+    "fragment_api_provider": "auto",
 
     # Card payment notifications (UZCARD/Humo alerts forwarded through a
     # Telegram Business connection — see app/handlers/business.py). Only

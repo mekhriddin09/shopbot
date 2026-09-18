@@ -192,6 +192,9 @@ async def settings_test_fragment(callback: CallbackQuery, session: AsyncSession)
         lines.append(f"✅ Cookie'lar ({', '.join(sorted(cookies))})")
     version = cfg.get("wallet_version") or "-"
     lines.append(f"\U0001F45B Hamyon versiyasi: <code>{version}</code>")
+    rpc = provider.detect_api_provider(cfg.get("api_key", ""), cfg.get("api_provider", "auto"))
+    how = "avtomatik aniqlandi" if cfg.get("api_provider", "auto") == "auto" else "qo'lda tanlangan"
+    lines.append(f"\U0001F6F0️ TON API: <code>{rpc}</code> ({how})")
 
     ready = bool(cfg.get("seed") and cfg.get("api_key") and not missing_cookies)
     if not ready:
@@ -234,6 +237,11 @@ async def settings_test_fragment(callback: CallbackQuery, session: AsyncSession)
                 out.append("   ⚠️ Balans juda kam — xarid uchun TON tashlang.")
         else:
             out.append(f"❌ Hamyonni o'qib bo'lmadi:\n<code>{address}</code>")
+            if "401" in str(address) or "403" in str(address):
+                out.append(
+                    "   ℹ️ Bu balans muammosi emas — TON API kaliti rad etildi. "
+                    "Sozlamalarda 'TON API turi'ni kalitingizga moslang."
+                )
     except asyncio.TimeoutError:
         out.append("❌ Hamyon ma'lumoti 30 soniyada kelmadi.")
     except Exception as exc:  # noqa: BLE001

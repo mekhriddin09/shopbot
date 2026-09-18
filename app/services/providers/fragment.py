@@ -119,10 +119,33 @@ class FragmentProvider(BaseProvider):
                     "wallet_version": (
                         await settings.get("fragment_wallet_version", "V5R1")
                     ).strip().upper() or "V5R1",
+                    "api_provider": (
+                        await settings.get("fragment_api_provider", "auto")
+                    ).strip().lower() or "auto",
                 }
         except Exception:  # noqa: BLE001 - never let config lookup break a purchase path
             logger.exception("fragment_config_read_failed")
             return {}
+
+    @staticmethod
+    def detect_api_provider(api_key: str, configured: str = "auto") -> str:
+        """Which RPC the TON key belongs to: "tonapi" or "toncenter".
+
+        The library defaults to tonapi.io and sends the key as-is, so a
+        Toncenter key produces a baffling `401 illegal base32 data` from
+        tonapi — an error that names neither the key nor the provider. The
+        two key formats are easy to tell apart, so guess by default and let
+        the admin override when the guess is wrong.
+
+        Toncenter keys are exactly 64 hex characters; tonapi/tonconsole
+        keys are much longer base64url strings.
+        """
+        if configured in ("tonapi", "toncenter"):
+            return configured
+        key = (api_key or "").strip()
+        if len(key) == 64 and all(ch in "0123456789abcdefABCDEF" for ch in key):
+            return "toncenter"
+        return "tonapi"
 
     @staticmethod
     def _parse_cookies(raw: str) -> dict[str, str]:
@@ -227,12 +250,14 @@ class FragmentProvider(BaseProvider):
         # NOTE: marketapp_token is intentionally NOT passed. That would
         # switch the library into no-KYC mode, which forwards the seed to a
         # third-party service. Local signing only.
+        provider_name = self.detect_api_provider(cfg["api_key"], cfg.get("api_provider", "auto"))
         try:
             client = FragmentClient(
                 cookies=cookies,
                 seed=cfg["seed"],
                 api_key=cfg["api_key"],
                 wallet_version=cfg["wallet_version"],
+                api_provider=provider_name,
             )
         except Exception as exc:  # noqa: BLE001
             # Most often a malformed seed or an unsupported wallet version.
@@ -432,6 +457,14 @@ class FragmentProvider(BaseProvider):
         if "UserNotFound" in exc_name:
             return "Qabul qiluvchi username topilmadi."
         if "Wallet" in exc_name:
+            text = str(exc)
+            if "401" in text or "403" in text:
+                # Not a money problem at all — the RPC rejected our key.
+                return (
+                    "⚠️ TON API kaliti rad etildi (401). Sozlamalarda 'TON API turi'ni "
+                    "kalitingizga moslang: toncenter kaliti uchun 'toncenter', "
+                    "tonapi/tonconsole kaliti uchun 'tonapi'."
+                )
             return "⚠️ HAMYON: balans yetarli emas yoki hamyonda muammo. To'ldirish kerak."
         if "Cookie" in exc_name or "Verification" in exc_name:
             return "⚠️ KIRISH: fragment.com cookie'lari eskirgan. Sozlamalardan yangilash kerak."
