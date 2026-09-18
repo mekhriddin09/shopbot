@@ -249,6 +249,29 @@ async def settings_test_fragment(callback: CallbackQuery, session: AsyncSession)
         logger.exception("fragment_test_wallet_failed")
         out.append(f"❌ Hamyon tekshiruvi xato berdi:\n<code>{type(exc).__name__}: {exc}</code>")
 
+    # Every wallet version's address, so a mismatch above can be diagnosed
+    # without a second round-trip through the admin.
+    try:
+        addresses, addr_err = await asyncio.wait_for(provider.derive_addresses(), timeout=30)
+        if addresses:
+            out.append("")
+            out.append("\U0001F511 Shu seed'dan chiqadigan manzillar:")
+            for version, addr in sorted(addresses.items()):
+                mark = " ← hozir tanlangan" if version == cfg.get("wallet_version") else ""
+                out.append(f"   <b>{version}</b>{mark}\n   <code>{addr}</code>")
+            out.append(
+                "Tonkeeper'dagi manzilingiz shulardan biriga to'g'ri kelsa — "
+                "'Hamyon versiyasi'ni o'shanga o'zgartiring. Hech biriga to'g'ri kelmasa — "
+                "seed boshqa hamyonniki (masalan 12 so'zli multichain akkaunt)."
+            )
+        elif addr_err:
+            out.append(f"❌ Manzillarni hisoblab bo'lmadi:\n<code>{addr_err}</code>")
+    except asyncio.TimeoutError:
+        out.append("❌ Manzillarni hisoblash 30 soniyada ulgurmadi.")
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("fragment_test_addresses_failed")
+        out.append(f"❌ Manzillarni hisoblashda xato:\n<code>{type(exc).__name__}: {exc}</code>")
+
     handle = callback.from_user.username
     if handle:
         try:

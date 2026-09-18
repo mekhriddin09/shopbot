@@ -319,6 +319,40 @@ class FragmentProvider(BaseProvider):
             balance = getattr(info, "balance_ton", None)
         return True, getattr(info, "address", None), float(balance) if balance is not None else None
 
+    async def derive_addresses(self) -> tuple[dict[str, str], str | None]:
+        """Address this seed produces under *each* wallet version.
+
+        One seed gives a different address per wallet version, so "the bot
+        shows a different address than my wallet app" usually means the
+        version setting is wrong — not that the seed is wrong. Showing both
+        turns a guessing game into a glance: if one of them matches the
+        wallet app, switch the setting; if neither does, the seed itself is
+        for a different wallet (e.g. a 12-word multichain account whose TON
+        address is derived differently).
+        """
+        client, reason = await self._client()
+        if client is None:
+            return {}, reason
+
+        found: dict[str, str] = {}
+        try:
+            async with client as c:
+                from FragmentAPI.types.constants import WALLET_CLASSES
+                from FragmentAPI.utils.wallet import _make_ton_client
+
+                async with _make_ton_client(c) as ton:
+                    for version, wallet_cls in WALLET_CLASSES.items():
+                        try:
+                            wallet, _, _, _ = wallet_cls.from_mnemonic(client=ton, mnemonic=c.seed)
+                            found[version] = wallet.address.to_str(
+                                is_user_friendly=True, is_bounceable=False
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            found[version] = f"(xato: {type(exc).__name__})"
+        except Exception as exc:  # noqa: BLE001
+            return found, f"{type(exc).__name__}: {exc}"
+        return found, None
+
     async def search_recipient(self, username: str, kind: str = "stars") -> tuple[bool, str | None]:
         """Confirm Fragment can deliver to this username *before* the
         customer is asked to pay. Fails open (returns ok) when the check
