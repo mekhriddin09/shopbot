@@ -175,14 +175,17 @@ async def settings_test_fragment(callback: CallbackQuery, session: AsyncSession)
     lines = ["\U0001F50C <b>1/2 — Sozlamalar</b>", ""]
     lines.append(("✅" if cfg.get("seed") else "❌") + " Hamyon seed iborasi")
     lines.append(("✅" if cfg.get("api_key") else "❌") + " TON API kaliti")
-    if cookies.get("stel_ssid"):
-        lines.append(f"✅ Cookie'lar ({', '.join(sorted(cookies))})")
+    from app.services.providers.fragment import REQUIRED_COOKIES
+
+    missing_cookies = [name for name in REQUIRED_COOKIES if not cookies.get(name)]
+    if missing_cookies:
+        lines.append(f"❌ Cookie'lar — yetishmayapti: {', '.join(missing_cookies)}")
     else:
-        lines.append("❌ Cookie'lar (stel_ssid topilmadi)")
+        lines.append(f"✅ Cookie'lar ({', '.join(sorted(cookies))})")
     version = cfg.get("wallet_version") or "-"
     lines.append(f"\U0001F45B Hamyon versiyasi: <code>{version}</code>")
 
-    ready = bool(cfg.get("seed") and cfg.get("api_key") and cookies.get("stel_ssid"))
+    ready = bool(cfg.get("seed") and cfg.get("api_key") and not missing_cookies)
     if not ready:
         lines += ["", "Avval yuqoridagi ❌ bandlarni to'ldiring."]
         await callback.message.answer("\n".join(lines))

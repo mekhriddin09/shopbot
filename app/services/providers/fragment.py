@@ -35,6 +35,10 @@ _MIN_STARS = 50
 _MAX_STARS = 1_000_000
 _PREMIUM_MONTHS = (3, 6, 12)
 
+# fragment-api-py refuses to start without all three of these, so we check
+# them up front and name the missing one.
+REQUIRED_COOKIES = ("stel_ssid", "stel_token", "stel_dt")
+
 
 def parse_external_ref(ref: str | None) -> tuple[str, int] | None:
     """`"stars:100"` -> `("stars", 100)`, `"premium:3"` -> `("premium", 3)`.
@@ -144,8 +148,15 @@ class FragmentProvider(BaseProvider):
         if not cfg.get("api_key"):
             return None, "Fragment: TON API kaliti (Toncenter/Tonconsole) sozlanmagan."
         cookies = self._parse_cookies(cfg.get("cookies_raw", ""))
-        if not cookies.get("stel_ssid"):
-            return None, "Fragment: fragment.com cookie'lari sozlanmagan yoki eskirgan."
+        # The library demands all three; checking here (instead of letting it
+        # raise deep inside) means the admin is told exactly which one is
+        # missing rather than a generic "cookies are invalid".
+        missing = [name for name in REQUIRED_COOKIES if not cookies.get(name)]
+        if missing:
+            return None, (
+                f"Fragment: cookie'lar to'liq emas — yetishmayapti: {', '.join(missing)}. "
+                "Brauzerda fragment.com → F12 → Application → Cookies dan uchalasini ko'chiring."
+            )
 
         try:
             from FragmentAPI import FragmentClient  # type: ignore
