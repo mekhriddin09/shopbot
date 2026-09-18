@@ -11,7 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models.enums import DeliveryMode, OrderStatus
 from app.filters.is_admin import IsAdmin
-from app.keyboards.admin_kb import admin_order_detail_kb, admin_orders_menu_kb, admin_write_manual_kb
+from app.keyboards.admin_kb import (
+    admin_order_detail_kb,
+    admin_orders_menu_kb,
+    admin_retry_all_kb,
+    admin_write_manual_kb,
+)
 from app.keyboards.callback_data import AdminOrderListCB, OrderCB
 from app.repositories.order_repo import OrderRepository
 from app.services.delivery_service import DeliveryService
@@ -181,12 +186,98 @@ async def list_orders(callback: CallbackQuery, callback_data: AdminOrderListCB, 
         return
     if len(orders) == 50:
         await callback.message.answer("ℹ️ Faqat so'nggi 50 ta buyurtma ko'rsatilmoqda.")
+    if status == OrderStatus.FAILED:
+        await callback.message.answer(
+            f"❌ {len(orders)} ta buyurtma avtomatik yetkazilmagan.\n"
+            f"Sababini (masalan hamyon balansi) bartaraf etgan bo'lsangiz, "
+            f"hammasini bir tugma bilan qayta urinib ko'rish mumkin:",
+            reply_markup=admin_retry_all_kb(),
+        )
     for order in orders:
         if status in _NEEDS_MANUAL_BUTTON:
             await callback.message.answer(_order_line(order), reply_markup=admin_write_manual_kb(order.id))
         else:
             await callback.message.answer(_order_line(order))
     await callback.answer()
+
+
+async def _retry_one(bot, session: AsyncSession, order_id: int) -> tuple[bool, str]:
+    """Re-run automatic delivery for one order. (ok, short report line).
+
+    Never raises: a bulk retry over a dozen stranded orders must report on
+    every one of them, not stop at the first that still fails.
+    """
+    from app.services.notify import notify_delivery_failure
+
+    delivery = DeliveryService(session)
+    try:
+        result = await delivery.retry_delivery(order_id)
+    except InvalidOrderStateError as exc:
+        return False, f"#{order_id}: {exc}"
+    except DeliveryFailedError as exc:
+        fresh = await OrderRepository(session).get_by_id(order_id)
+        if fresh is not None:
+            await notify_delivery_failure(bot, session, fresh, str(exc), tell_customer=False)
+        return False, f"#{order_id}: {exc}"
+
+    order = result.order
+    lang = order.user.language
+    if result.delivered_now and result.payload:
+        try:
+            await bot.send_message(
+                order.user.telegram_id, build_delivered_message(lang, order, result.payload)
+            )
+        except Exception:  # noqa: BLE001 - customer may have blocked the bot
+            pass
+        await ReferralService(session).credit_for_delivered_order(order, bot)
+        return True, f"#{order_id}: ✅ yetkazildi"
+    return False, f"#{order_id}: qo'lda yuborish kerak"
+
+
+@router.callback_query(OrderCB.filter(F.action == "retry_auto"))
+async def retry_order_delivery(
+    callback: CallbackQuery, callback_data: OrderCB, session: AsyncSession
+) -> None:
+    await callback.answer("Qayta urinilmoqda…")
+    ok, line = await _retry_one(callback.bot, session, callback_data.order_id)
+    admin_actions_logger.info(
+        "order_retry order=%s admin=%s ok=%s", callback_data.order_id, callback.from_user.id, ok
+    )
+    if ok:
+        await callback.message.answer(f"✅ Buyurtma <code>{callback_data.order_id}</code> yetkazildi.")
+    else:
+        await callback.message.answer(
+            f"❌ Hali ham bo'lmadi.\n{line}\n\n"
+            f"Sababni bartaraf etib yana urinib ko'ring yoki qo'lda yuboring:",
+            reply_markup=admin_write_manual_kb(callback_data.order_id),
+        )
+
+
+@router.callback_query(AdminOrderListCB.filter(F.action == "retry_all"))
+async def retry_all_failed(callback: CallbackQuery, session: AsyncSession) -> None:
+    """One tap for the whole backlog: the usual cause (empty wallet, stale
+    cookies) strands every order that arrived while it lasted."""
+    from app.database.models.enums import OrderStatus
+
+    failed = await OrderRepository(session).list_by_status(OrderStatus.FAILED)
+    if not failed:
+        await callback.answer("Muvaffaqiyatsiz buyurtma yo'q.", show_alert=True)
+        return
+
+    await callback.answer(f"{len(failed)} ta buyurtma qayta urinilmoqda…")
+    lines, done = [], 0
+    for order in failed:
+        ok, line = await _retry_one(callback.bot, session, order.id)
+        done += int(ok)
+        lines.append(line)
+    admin_actions_logger.info(
+        "orders_retry_all admin=%s total=%s ok=%s", callback.from_user.id, len(failed), done
+    )
+    await callback.message.answer(
+        f"\U0001F501 <b>Qayta urinish natijasi</b>\n\n"
+        f"Jami: {len(failed)} ta · Yetkazildi: {done} ta · Qoldi: {len(failed) - done} ta\n\n"
+        + "\n".join(lines[:30])
+    )
 
 
 @router.callback_query(OrderCB.filter(F.action == "approve"))

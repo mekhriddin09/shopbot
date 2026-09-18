@@ -416,6 +416,16 @@ def admin_order_detail_kb(order) -> InlineKeyboardMarkup:
             ]
         )
     if order.status in (OrderStatus.APPROVED, OrderStatus.FAILED):
+        # Retry first: when the cause was a flat wallet or stale cookies,
+        # one tap after topping up is the whole fix.
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="\U0001F501 Avtomatik qayta urinish",
+                    callback_data=OrderCB(action="retry_auto", order_id=oid).pack(),
+                )
+            ]
+        )
         rows.append(
             [InlineKeyboardButton(text="✍️ Qo'lda yuborish", callback_data=OrderCB(action="write_manual", order_id=oid).pack())]
         )
@@ -475,9 +485,28 @@ def admin_card_confirm_kb(order_id: int) -> InlineKeyboardMarkup:
     )
 
 
+def admin_retry_all_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="\U0001F501 Hammasini qayta urinish",
+                    callback_data=AdminOrderListCB(action="retry_all").pack(),
+                )
+            ]
+        ]
+    )
+
+
 def admin_write_manual_kb(order_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="\U0001F501 Avtomatik qayta urinish",
+                    callback_data=OrderCB(action="retry_auto", order_id=order_id).pack(),
+                )
+            ],
             [InlineKeyboardButton(text="✍️ Xabar yozish", callback_data=OrderCB(action="write_manual", order_id=order_id).pack())]
         ]
     )

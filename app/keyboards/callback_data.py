@@ -17,7 +17,7 @@ class ShopCB(CallbackData, prefix="shop"):
 
 
 class OrderCB(CallbackData, prefix="order"):
-    action: str  # approve | reject | ask_reject_reason
+    action: str  # approve | reject | ask_reject_reason | write_manual | retry_auto
     order_id: int
 
 
@@ -87,7 +87,7 @@ class AdminInventoryCB(CallbackData, prefix="ainv"):
 
 
 class AdminOrderListCB(CallbackData, prefix="aordl"):
-    action: str  # pending | approved | delivered | failed | rejected | search
+    action: str  # pending | approved | delivered | failed | rejected | search | retry_all
 
 
 class AdminSettingsCB(CallbackData, prefix="aset"):

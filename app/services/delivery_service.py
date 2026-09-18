@@ -103,6 +103,33 @@ class DeliveryService:
             )
             return await self._run_delivery(order)
 
+    async def retry_delivery(self, order_id: int) -> ApprovalResult:
+        """Re-attempt automatic delivery for an order that already failed.
+
+        The common case is a temporary, fixable cause — an empty TON wallet,
+        expired cookies, a supplier hiccup — which typically strands several
+        orders at once. Once the cause is fixed those orders are perfectly
+        deliverable, and making the admin retype each one by hand is exactly
+        the manual work this bot exists to avoid.
+
+        Money was already taken, so the order is only ever moved forward:
+        FAILED (or APPROVED, if it stalled before delivery) back into the
+        normal delivery path. DELIVERED orders are refused outright — a
+        second attempt would hand out the goods twice.
+        """
+        async with lock_for(f"order:{order_id}"):
+            order = await self.orders.get_by_id(order_id)
+            if order is None:
+                raise InvalidOrderStateError("msg_order_not_found")
+            if order.status not in (OrderStatus.FAILED, OrderStatus.APPROVED):
+                raise InvalidOrderStateError(
+                    "msg_order_already_reviewed", status=order.status.value
+                )
+            if order.status == OrderStatus.FAILED:
+                await self.orders.set_status(order, OrderStatus.APPROVED)
+            order_logger.info("order_delivery_retry id=%s", order.order_uuid)
+            return await self._run_delivery(order)
+
     async def _run_delivery(self, order: Order) -> ApprovalResult:
         """Shared mode-dispatch logic for both manual admin approval and
         automatic crypto-confirmed delivery. Assumes the order is already
