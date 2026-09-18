@@ -520,45 +520,51 @@ class FragmentProvider(BaseProvider):
     def _friendly_error(exc_name: str, exc: Exception) -> str:
         """Turn the library's exception into something an admin can act on.
 
-        The distinction that matters most: "our wallet is empty / our login
-        expired" (admin must fix something) vs "this recipient can't
-        receive it" (customer-side, refund or ask for another username).
+        Every branch appends the library's own message. An earlier version
+        replaced it entirely and that cost real debugging time: a KYC
+        rejection was matched by a loose "Verification" check and reported
+        as "cookies expired", sending the admin to re-copy cookies that were
+        perfectly fine. Never hide the original text.
         """
+        raw = str(exc).strip()
+        detail = f"\n\nAsl xabar: {raw[:400]}" if raw else ""
+
+        if "Verification" in exc_name or "need_verify" in raw or "KYC" in raw.upper():
+            return (
+                "\u26d4 KYC TASDIQLANMAGAN. Fragment bu hamyon/akkaunt uchun shaxsni "
+                "tasdiqlashni talab qilyapti.\n"
+                "fragment.com/my/profile \u2192 Verify \u2192 tasdiqdan o'ting, keyin qayta urinib ko'ring."
+                + detail
+            )
         if "AlreadySubscribed" in exc_name:
-            return "Bu foydalanuvchida Premium allaqachon faol."
+            return "Bu foydalanuvchida Premium allaqachon faol." + detail
         if "UserNotFound" in exc_name:
-            return "Qabul qiluvchi username topilmadi."
+            return "Qabul qiluvchi username topilmadi." + detail
+        if "Cookie" in exc_name:
+            return (
+                "\u26a0\ufe0f KIRISH: fragment.com cookie'lari eskirgan yoki to'liq emas. "
+                "Sozlamalardan yangilash kerak." + detail
+            )
         if "Wallet" in exc_name:
-            text = str(exc)
-            if "401" in text or "403" in text:
-                # Not a money problem at all — the RPC rejected our key.
+            if "401" in raw or "403" in raw:
                 return (
-                    "⚠️ TON API kaliti rad etildi (401). Sozlamalarda 'TON API turi'ni "
-                    "kalitingizga moslang: toncenter kaliti uchun 'toncenter', "
-                    "tonapi/tonconsole kaliti uchun 'tonapi'."
+                    "\u26a0\ufe0f TON API kaliti rad etildi (401). Sozlamalarda 'TON API turi'ni "
+                    "kalitingizga moslang." + detail
                 )
-            if "exit code -13" in text or "get_wallet_data" in text:
-                # The jetton (USDT) contract doesn't exist for this wallet —
-                # normal for a wallet that has only ever held TON, and not a
-                # reason to fail a TON-paid purchase.
-                return (
-                    "⚠️ Hamyonning USDT hisobi yo'q (bu odatiy holat). "
-                    "Agar xarid shu sababdan to'xtagan bo'lsa, xabar bering."
-                )
-            return "⚠️ HAMYON: balans yetarli emas yoki hamyonda muammo. To'ldirish kerak."
-        if "Cookie" in exc_name or "Verification" in exc_name:
-            return "⚠️ KIRISH: fragment.com cookie'lari eskirgan. Sozlamalardan yangilash kerak."
+            if "exit code -13" in raw or "get_wallet_data" in raw:
+                return "\u26a0\ufe0f Hamyonning USDT hisobi yo'q (odatiy holat)." + detail
+            return "\u26a0\ufe0f HAMYON: balans yetarli emas yoki hamyonda muammo." + detail
         if "ConfirmationTimeout" in exc_name:
             return (
-                "⚠️ Tranzaksiya vaqtida tasdiqlanmadi. Pul yechilgan bo'lishi mumkin — "
-                "Fragment tarixini tekshiring, takrorlamang."
+                "\u26a0\ufe0f Tranzaksiya vaqtida tasdiqlanmadi. Pul yechilgan bo'lishi mumkin \u2014 "
+                "Fragment tarixini tekshiring, takrorlamang." + detail
             )
         if "FragmentPage" in exc_name or "Parse" in exc_name:
             return (
-                "⚠️ Fragment sayti o'zgargan ko'rinadi (kutubxona moslashishi kerak). "
-                "Qo'lda bajarish lozim."
+                "\u26a0\ufe0f Fragment sayti o'zgargan ko'rinadi (kutubxona moslashishi kerak). "
+                "Qo'lda bajarish lozim." + detail
             )
-        return f"{exc_name}: {exc}"
+        return f"{exc_name}: {raw}"
 
 
 __all__ = ["FragmentProvider", "parse_external_ref", "normalize_username"]
