@@ -228,6 +228,7 @@ async def settings_test_fragment(callback: CallbackQuery, session: AsyncSession)
     # Wallet: the single most common reason a purchase fails is an empty
     # wallet, and the second is the seed deriving a different address than
     # the one connected to Fragment. Both are visible here.
+    w_ok = False
     try:
         w_ok, address, balance = await asyncio.wait_for(provider.get_wallet_info(), timeout=30)
         if w_ok:
@@ -265,7 +266,7 @@ async def settings_test_fragment(callback: CallbackQuery, session: AsyncSession)
     else:
         out.append("ℹ️ Sizda username yo'q, shu sabab username tekshiruvi o'tkazilmadi.")
 
-    if ok:
+    if ok and w_ok:
         out += [
             "",
             "Hammasi joyida. Yuqoridagi hamyon manzili Fragment'ga ulagan hamyoningiz "

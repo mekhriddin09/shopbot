@@ -274,22 +274,46 @@ class FragmentProvider(BaseProvider):
     # ------------------------------------------------------------------
 
     async def get_wallet_info(self) -> tuple[bool, str | None, float | None]:
-        """(ok, address, GRAM/TON balance) for the shop's own wallet.
+        """(ok, address, TON balance) for the shop's own wallet.
 
-        Used by the admin's connection test: it answers "is the address the
-        bot derives from the seed the same one I connected to Fragment, and
-        does it have enough to buy anything" — the two questions that decide
-        whether a purchase will work, neither of which a price lookup can
-        answer.
+        Deliberately does NOT use the library's `get_wallet()`. That call
+        also reads the wallet's USDT balance, and on a wallet that has never
+        held USDT the jetton contract simply doesn't exist — the get-method
+        fails with `exit code -13` and takes the whole call down with it,
+        hiding the TON balance we actually care about. A fresh, correctly
+        configured shop wallet is exactly the case that breaks, so we read
+        the TON side ourselves and fall back to the library only if that
+        fails.
         """
         client, reason = await self._client()
         if client is None:
             return False, reason, None
+
         try:
             async with client as c:
+                # Same wallet construction the library uses internally to
+                # sign, so the address shown here is precisely the one that
+                # will pay — which is the whole point of showing it.
+                try:
+                    # Imported inside the try on purpose: these are the
+                    # library's internals, so a version that moves or
+                    # renames them must fall back, not crash.
+                    from FragmentAPI.types.constants import WALLET_CLASSES
+                    from FragmentAPI.utils.wallet import _make_ton_client
+
+                    async with _make_ton_client(c) as ton:
+                        wallet_cls = WALLET_CLASSES[c.wallet_version]
+                        wallet, _, _, _ = wallet_cls.from_mnemonic(client=ton, mnemonic=c.seed)
+                        await wallet.refresh()
+                        address = wallet.address.to_str(is_user_friendly=True, is_bounceable=False)
+                        return True, address, round(wallet.balance / 1_000_000_000, 4)
+                except Exception as exc:  # noqa: BLE001 - fall back below
+                    logger.warning("fragment_wallet_direct_read_failed err=%s", type(exc).__name__)
+
                 info = await c.get_wallet()
         except Exception as exc:  # noqa: BLE001
             return False, f"{type(exc).__name__}: {exc}", None
+
         balance = getattr(info, "gram_balance", None)
         if balance is None:
             balance = getattr(info, "balance_ton", None)
@@ -464,6 +488,14 @@ class FragmentProvider(BaseProvider):
                     "⚠️ TON API kaliti rad etildi (401). Sozlamalarda 'TON API turi'ni "
                     "kalitingizga moslang: toncenter kaliti uchun 'toncenter', "
                     "tonapi/tonconsole kaliti uchun 'tonapi'."
+                )
+            if "exit code -13" in text or "get_wallet_data" in text:
+                # The jetton (USDT) contract doesn't exist for this wallet —
+                # normal for a wallet that has only ever held TON, and not a
+                # reason to fail a TON-paid purchase.
+                return (
+                    "⚠️ Hamyonning USDT hisobi yo'q (bu odatiy holat). "
+                    "Agar xarid shu sababdan to'xtagan bo'lsa, xabar bering."
                 )
             return "⚠️ HAMYON: balans yetarli emas yoki hamyonda muammo. To'ldirish kerak."
         if "Cookie" in exc_name or "Verification" in exc_name:
