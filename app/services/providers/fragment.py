@@ -149,21 +149,33 @@ class FragmentProvider(BaseProvider):
 
         try:
             from FragmentAPI import FragmentClient  # type: ignore
-        except ImportError:
-            return None, "Fragment: 'fragment-api-py' kutubxonasi o'rnatilmagan."
+        except ImportError as exc:
+            # Either the package itself or one of its binary deps
+            # (curl_cffi, tonutils, PyNaCl) is missing — say which, because
+            # "not installed" and "installed but broken" need different fixes.
+            return None, f"Fragment: kutubxona yuklanmadi — {exc}"
+        except Exception as exc:  # noqa: BLE001 - import-time crash, not just absence
+            return None, f"Fragment: kutubxona import qilishda xato — {type(exc).__name__}: {exc}"
 
         # NOTE: marketapp_token is intentionally NOT passed. That would
         # switch the library into no-KYC mode, which forwards the seed to a
         # third-party service. Local signing only.
-        return (
-            FragmentClient(
+        try:
+            client = FragmentClient(
                 cookies=cookies,
                 seed=cfg["seed"],
                 api_key=cfg["api_key"],
                 wallet_version=cfg["wallet_version"],
-            ),
-            None,
-        )
+            )
+        except Exception as exc:  # noqa: BLE001
+            # Most often a malformed seed or an unsupported wallet version.
+            # The message must never echo the seed itself.
+            logger.error("fragment_client_init_failed err=%s", type(exc).__name__)
+            return None, (
+                f"Fragment: hamyonni ochib bo'lmadi — {type(exc).__name__}: {exc}. "
+                "Seed iborasi (24 so'z) va hamyon versiyasini tekshiring."
+            )
+        return client, None
 
     # ------------------------------------------------------------------
     # Pre-purchase checks

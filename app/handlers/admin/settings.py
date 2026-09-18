@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -18,6 +20,8 @@ from app.repositories.setting_repo import SettingRepository
 from app.states.admin_states import AdminInput
 from app.utils.formatting import fmt_price
 from app.utils.i18n import t
+
+logger = logging.getLogger("admin")
 
 router = Router(name="admin_settings")
 router.message.filter(IsAdmin())
@@ -144,59 +148,93 @@ async def settings_edit_masked_start(
 async def settings_test_fragment(callback: CallbackQuery, session: AsyncSession) -> None:
     """Dry-run the whole Fragment setup without spending a coin.
 
-    Deliberately checks the three things that fail independently, and
-    reports each one separately, because "it doesn't work" is useless to an
-    admin: the wallet/API key can be fine while the cookies are stale, and
-    the reverse. Nothing here buys anything — it only reads a price and
-    looks a username up.
+    Reports in TWO messages on purpose. The first (config summary) is sent
+    immediately, before anything touches the network, because the network
+    part talks to an unofficial site through a library that can hang or
+    raise anything at all — and a diagnostic tool that goes silent when the
+    thing it's diagnosing misbehaves is worse than no tool. Every live call
+    is therefore wrapped in both a timeout and a bare except, and whatever
+    happens gets reported, including the exception type.
     """
+    import asyncio
+
     from app.services.providers.fragment import FragmentProvider
 
     await callback.answer("Tekshirilmoqda…")
-    provider = FragmentProvider()
-    cfg = await provider._config()  # noqa: SLF001 - same module family
 
-    lines = ["\U0001F50C <b>Fragment ulanish tekshiruvi</b>", ""]
+    try:
+        provider = FragmentProvider()
+        cfg = await provider._config()  # noqa: SLF001 - same module family
+        cookies = provider._parse_cookies(cfg.get("cookies_raw", ""))  # noqa: SLF001
+    except Exception as exc:  # noqa: BLE001
+        await callback.message.answer(
+            f"❌ Sozlamalarni o'qib bo'lmadi:\n<code>{type(exc).__name__}: {exc}</code>"
+        )
+        return
+
+    lines = ["\U0001F50C <b>1/2 — Sozlamalar</b>", ""]
     lines.append(("✅" if cfg.get("seed") else "❌") + " Hamyon seed iborasi")
     lines.append(("✅" if cfg.get("api_key") else "❌") + " TON API kaliti")
-    cookies = provider._parse_cookies(cfg.get("cookies_raw", ""))  # noqa: SLF001
     if cookies.get("stel_ssid"):
         lines.append(f"✅ Cookie'lar ({', '.join(sorted(cookies))})")
     else:
         lines.append("❌ Cookie'lar (stel_ssid topilmadi)")
-    lines.append(f"\U0001F45B Hamyon versiyasi: <code>{cfg.get('wallet_version') or '-'}</code>")
+    version = cfg.get("wallet_version") or "-"
+    lines.append(f"\U0001F45B Hamyon versiyasi: <code>{version}</code>")
 
-    if not (cfg.get("seed") and cfg.get("api_key") and cookies.get("stel_ssid")):
+    ready = bool(cfg.get("seed") and cfg.get("api_key") and cookies.get("stel_ssid"))
+    if not ready:
         lines += ["", "Avval yuqoridagi ❌ bandlarni to'ldiring."]
         await callback.message.answer("\n".join(lines))
         return
 
-    # Live check 1: read a price. Exercises wallet auth + cookies + parsing,
-    # which is everything a purchase needs except actually paying.
-    ok, price, error = await provider.get_price("stars:50")
-    lines.append("")
-    if ok:
-        lines.append(f"✅ Fragment bilan aloqa bor. 50 Stars narxi: <b>{price if price is not None else '?'} TON</b>")
-    else:
-        lines.append(f"❌ Fragment javob bermadi:\n<code>{error}</code>")
+    lines += ["", "⏳ Endi Fragment bilan aloqa tekshirilmoqda (30 soniyagacha)…"]
+    await callback.message.answer("\n".join(lines))
 
-    # Live check 2: username lookup, using the admin's own handle.
+    # ---- live checks, each isolated: a hang or a crash still reports ----
+    out = ["\U0001F50C <b>2/2 — Fragment bilan aloqa</b>", ""]
+
+    try:
+        ok, price, error = await asyncio.wait_for(provider.get_price("stars:50"), timeout=30)
+        if ok:
+            out.append(f"✅ Aloqa bor. 50 Stars narxi: <b>{price if price is not None else '?'} TON</b>")
+        else:
+            out.append(f"❌ Fragment rad etdi:\n<code>{error}</code>")
+    except asyncio.TimeoutError:
+        ok = False
+        out.append(
+            "❌ 30 soniyada javob bo'lmadi.\n"
+            "Sabablari: TON API kaliti noto'g'ri, cookie'lar eskirgan, yoki Fragment javob bermayapti."
+        )
+    except Exception as exc:  # noqa: BLE001
+        ok = False
+        logger.exception("fragment_test_price_failed")
+        out.append(f"❌ Kutilmagan xato:\n<code>{type(exc).__name__}: {exc}</code>")
+
     handle = callback.from_user.username
     if handle:
-        found, note = await provider.search_recipient(handle)
-        lines.append(
-            f"✅ Username tekshiruvi ishlayapti (@{handle}{' — ' + note if note else ''})"
-            if found
-            else f"❌ Username tekshiruvi: @{handle} — {note}"
-        )
+        try:
+            found, note = await asyncio.wait_for(provider.search_recipient(handle), timeout=30)
+            out.append(
+                f"✅ Username tekshiruvi: @{handle}{' — ' + note if note else ''}"
+                if found
+                else f"❌ Username tekshiruvi: @{handle} — {note}"
+            )
+        except asyncio.TimeoutError:
+            out.append(f"❌ Username tekshiruvi 30 soniyada javob bermadi (@{handle}).")
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("fragment_test_search_failed")
+            out.append(f"❌ Username tekshiruvi xato berdi:\n<code>{type(exc).__name__}: {exc}</code>")
+    else:
+        out.append("ℹ️ Sizda username yo'q, shu sabab username tekshiruvi o'tkazilmadi.")
 
     if ok:
-        lines += [
+        out += [
             "",
-            "Endi <code>stars:50</code> mahsulotini yaratib, o'zingizga bitta sinov "
-            "xaridi qiling — to'liq zanjir faqat haqiqiy to'lovda tekshiriladi.",
+            "Hammasi joyida. Endi <code>stars:50</code> mahsulotini yaratib, o'zingizga "
+            "bitta sinov xaridi qiling — to'lov zanjiri faqat haqiqiy xaridda tekshiriladi.",
         ]
-    await callback.message.answer("\n".join(lines))
+    await callback.message.answer("\n".join(out))
 
 
 @router.callback_query(AdminSettingsCB.filter(F.action == "test_reseller"))
