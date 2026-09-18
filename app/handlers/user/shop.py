@@ -3,12 +3,17 @@ from __future__ import annotations
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Product, User
 from app.database.models.enums import OrderStatus, PaymentMethod
-from app.keyboards.callback_data import CryptoCB, QtyCB, ShopCB, StockNotifyCB
+from app.keyboards.callback_data import CryptoCB, QtyCB, RecipientCB, ShopCB, StockNotifyCB
 from app.keyboards.user_kb import (
     cancel_kb,
     crypto_invoice_kb,
@@ -107,13 +112,23 @@ async def back_to_list(callback: CallbackQuery, session: AsyncSession, lang: str
     await callback.answer()
 
 
-@router.callback_query(ShopCB.filter(F.action == "open"))
-async def open_product(callback: CallbackQuery, callback_data: ShopCB, session: AsyncSession, lang: str) -> None:
-    service = ProductService(session)
-    view = await service.get_view(callback_data.product_id)
+async def build_product_card(
+    session: AsyncSession,
+    product_id: int,
+    lang: str,
+    recipient: str | None = None,
+) -> tuple[str, object, str | None] | None:
+    """Text + keyboard + photo for a product card.
+
+    Split out of `open_product` so the recipient flow (Stars/Premium) can
+    re-render the same card once it knows who the goods are for, instead of
+    duplicating the payment-button logic.
+
+    Returns None when the product is gone or hidden.
+    """
+    view = await ProductService(session).get_view(product_id)
     if view is None or not view.product.is_visible:
-        await callback.answer(t(lang, "msg_product_not_found"), show_alert=True)
-        return
+        return None
 
     settings_repo = SettingRepository(session)
     crypto_enabled = await settings_repo.get_bool("crypto_payment_enabled", False)
@@ -135,6 +150,18 @@ async def open_product(callback: CallbackQuery, callback_data: ShopCB, session: 
         text += "\n" + t(lang, "msg_crypto_price_label", price=f"{float(view.product.price_usd):.2f}")
     if show_stars:
         text += "\n" + t(lang, "msg_stars_price_label", price=view.product.price_stars)
+
+    # Goods that are delivered to a Telegram username (Stars, Premium) must
+    # not reach the payment buttons until we know the recipient — see
+    # handlers/user/recipient.py for why this is asked before payment.
+    from app.handlers.user.recipient import product_requires_recipient
+
+    if await product_requires_recipient(view.product) and not recipient:
+        from app.keyboards.user_kb import recipient_choice_kb
+
+        text += "\n\n" + t(lang, "msg_recipient_choose")
+        return text, recipient_choice_kb(lang, view.product.id), view.product.image_file_id
+
     kb = product_detail_kb(
         lang,
         view.product.id,
@@ -147,9 +174,65 @@ async def open_product(callback: CallbackQuery, callback_data: ShopCB, session: 
         show_preorder_button=preorder_enabled,
         show_card_auto=card_auto_enabled,
     )
-    if view.product.image_file_id:
+    if recipient:
+        # Shown above the payment buttons, with a way back: a typo in the
+        # username is the one mistake here that money can't undo.
+        text += "\n\n" + t(lang, "msg_recipient_selected", username=recipient)
+        rows = list(kb.inline_keyboard)
+        rows.insert(
+            0,
+            [
+                InlineKeyboardButton(
+                    text=t(lang, "btn_recipient_change"),
+                    callback_data=RecipientCB(action="change", product_id=view.product.id).pack(),
+                )
+            ],
+        )
+        kb = InlineKeyboardMarkup(inline_keyboard=rows)
+
+    return text, kb, view.product.image_file_id
+
+
+async def render_product_card(
+    target: Message,
+    session: AsyncSession,
+    product_id: int,
+    lang: str,
+    recipient: str | None = None,
+) -> None:
+    """Send the product card as a new message (used after the recipient
+    question, where the previous message is a plain text prompt)."""
+    built = await build_product_card(session, product_id, lang, recipient)
+    if built is None:
+        await target.answer(t(lang, "msg_product_not_found"))
+        return
+    text, kb, image_file_id = built
+    if image_file_id:
+        await target.answer_photo(image_file_id, caption=text, reply_markup=kb)
+    else:
+        await target.answer(text, reply_markup=kb)
+
+
+@router.callback_query(ShopCB.filter(F.action == "open"))
+async def open_product(
+    callback: CallbackQuery,
+    callback_data: ShopCB,
+    session: AsyncSession,
+    lang: str,
+    state: FSMContext,
+) -> None:
+    from app.handlers.user.recipient import get_chosen_recipient
+
+    built = await build_product_card(
+        session, callback_data.product_id, lang, await get_chosen_recipient(state)
+    )
+    if built is None:
+        await callback.answer(t(lang, "msg_product_not_found"), show_alert=True)
+        return
+    text, kb, image_file_id = built
+    if image_file_id:
         await callback.message.delete()
-        await callback.message.answer_photo(view.product.image_file_id, caption=text, reply_markup=kb)
+        await callback.message.answer_photo(image_file_id, caption=text, reply_markup=kb)
     else:
         await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()
@@ -233,7 +316,12 @@ async def qty_noop(callback: CallbackQuery) -> None:
 
 @router.callback_query(QtyCB.filter(F.action == "confirm"))
 async def qty_confirm(
-    callback: CallbackQuery, callback_data: QtyCB, session: AsyncSession, user: User, lang: str
+    callback: CallbackQuery,
+    callback_data: QtyCB,
+    session: AsyncSession,
+    user: User,
+    lang: str,
+    state: FSMContext,
 ) -> None:
     products = ProductRepository(session)
     product = await products.get_by_id(callback_data.product_id)
@@ -246,15 +334,17 @@ async def qty_confirm(
         return
 
     if callback_data.flow == "crypto":
-        await _start_crypto_purchase(callback, session, user, lang, product, callback_data.provider or "", qty)
+        await _start_crypto_purchase(
+            callback, session, user, lang, product, callback_data.provider or "", qty, state=state
+        )
     elif callback_data.flow == "stars":
         from app.handlers.user.stars import start_stars_purchase
 
-        await start_stars_purchase(callback, session, user, lang, product, qty)
+        await start_stars_purchase(callback, session, user, lang, product, qty, state=state)
     elif callback_data.flow == "cardauto":
         from app.handlers.user.card_auto import start_card_auto_purchase
 
-        await start_card_auto_purchase(callback, session, user, lang, product.id, qty)
+        await start_card_auto_purchase(callback, session, user, lang, product.id, qty, state=state)
     else:
         await _show_card_payment_instructions(callback, session, product, lang, qty)
 
@@ -277,6 +367,10 @@ async def mark_paid(
     except (ProductUnavailableError, OutOfStockError) as exc:
         await callback.answer(exc.localized(lang), show_alert=True)
         return
+
+    from app.handlers.user.recipient import attach_recipient
+
+    await attach_recipient(session, order, state)
 
     await state.set_state(PurchaseStates.waiting_screenshot)
     await state.update_data(order_id=order.id)
@@ -331,6 +425,7 @@ async def _start_crypto_purchase(
     provider_key: str,
     qty: int,
     preorder: bool = False,
+    state: FSMContext | None = None,
 ) -> None:
     settings_repo = SettingRepository(session)
     if not await settings_repo.get_bool("crypto_payment_enabled", False):
@@ -354,6 +449,11 @@ async def _start_crypto_purchase(
         quantity=qty,
         is_preorder=preorder,
     )
+
+    if state is not None:
+        from app.handlers.user.recipient import attach_recipient
+
+        await attach_recipient(session, order, state)
 
     if not preorder and product.delivery_mode.value == "inventory":
         # Reserve the actual code(s) now (not just a count check) so they
@@ -399,7 +499,12 @@ async def _start_crypto_purchase(
 
 @router.callback_query(CryptoCB.filter(F.action == "buy"))
 async def crypto_buy(
-    callback: CallbackQuery, callback_data: CryptoCB, session: AsyncSession, user: User, lang: str
+    callback: CallbackQuery,
+    callback_data: CryptoCB,
+    session: AsyncSession,
+    user: User,
+    lang: str,
+    state: FSMContext,
 ) -> None:
     products = ProductRepository(session)
     product = await products.get_by_id(callback_data.product_id)
@@ -410,7 +515,15 @@ async def crypto_buy(
         await callback.answer(t(lang, "msg_out_of_stock"), show_alert=True)
         return
     await _start_crypto_purchase(
-        callback, session, user, lang, product, callback_data.provider or "", qty=1, preorder=callback_data.preorder
+        callback,
+        session,
+        user,
+        lang,
+        product,
+        callback_data.provider or "",
+        qty=1,
+        preorder=callback_data.preorder,
+        state=state,
     )
 
 

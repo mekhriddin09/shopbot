@@ -21,7 +21,7 @@ from app.repositories.setting_repo import SettingRepository
 from app.services.card_payment.service import CardPaymentService
 from app.services.delivery_service import DeliveryService
 from app.services.exceptions import DeliveryFailedError, InvalidOrderStateError
-from app.services.notify import notify_admins_text
+from app.services.notify import notify_admins_text, notify_delivery_failure
 from app.services.referral_service import ReferralService
 from app.utils.formatting import build_delivered_message, fmt_price
 from app.utils.i18n import t
@@ -107,13 +107,8 @@ async def deliver_paid_order(bot: Bot, session: AsyncSession, order: Order, amou
         return
     except DeliveryFailedError as exc:
         logger.error("card_delivery_failed order=%s err=%s", order.order_uuid, exc)
-        await notify_admins_text(
-            bot,
-            session,
-            await _order_summary(order, amount)
-            + f"\n\n⚠️ To'lov keldi, lekin avtomatik yetkazib bo'lmadi:\n{exc}\n\n"
-            f"Qo'lda yetkazib berishingiz kerak.",
-        )
+        fresh = await OrderRepository(session).get_by_id(order.id) or order
+        await notify_delivery_failure(bot, session, fresh, str(exc))
         return
 
     fresh = result.order

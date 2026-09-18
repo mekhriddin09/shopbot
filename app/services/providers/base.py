@@ -23,9 +23,28 @@ class BaseProvider(abc.ABC):
     #: unique key stored on Product.provider_key
     key: str = "base"
 
+    #: True when the supplier delivers straight to a Telegram @username
+    #: rather than returning a code, so the bot must collect (and verify)
+    #: that username *before* taking payment. Callers check this flag
+    #: instead of hardcoding provider names.
+    requires_recipient: bool = False
+
     @abc.abstractmethod
-    async def fetch(self, *, product_external_ref: str | None, order_uuid: str) -> ProviderResult:
+    async def fetch(
+        self,
+        *,
+        product_external_ref: str | None,
+        order_uuid: str,
+        recipient: str | None = None,
+    ) -> ProviderResult:
         """Request one unit of digital goods from the supplier.
+
+        `recipient` is the Telegram @username the goods must be delivered
+        to, for suppliers that send straight to a third party rather than
+        returning a code (Telegram Stars / Premium — see
+        `FragmentProvider`). Optional and ignored by suppliers that hand
+        back a code for the bot to forward, so existing providers need no
+        changes.
 
         Implementations should apply their own timeout/retry (see
         `mock_provider.py` for the recommended `httpx` + `tenacity` pattern)
@@ -33,6 +52,13 @@ class BaseProvider(abc.ABC):
         exceptions into `ProviderResult(success=False, error=...)`.
         """
         raise NotImplementedError
+
+    async def search_recipient(self, username: str) -> tuple[bool, str | None]:
+        """Optional: check the supplier can actually deliver to this
+        username *before* the customer pays. Returns (ok, display_name or
+        error message). Default: unsupported, treated as "can't tell, let
+        it through" by callers. Must never raise."""
+        return True, None
 
     async def get_stock_count(self, product_external_ref: str) -> int | None:
         """Optional: live remaining-stock count from the supplier, used to

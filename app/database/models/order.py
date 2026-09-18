@@ -46,6 +46,12 @@ class Order(TimestampMixin, Base):
     expected_amount: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True, index=True)
     payment_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Who the goods go to, for suppliers that deliver straight to a third
+    # party instead of returning a code (Telegram Stars / Premium via
+    # Fragment). Normally the buyer's own username, but they can send it to
+    # someone else as a gift — so it can't be derived from the order's user.
+    recipient_username: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     crypto_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
     crypto_invoice_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     crypto_pay_url: Mapped[str | None] = mapped_column(Text, nullable=True)

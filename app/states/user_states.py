@@ -18,3 +18,10 @@ class SupportStates(StatesGroup):
 
 class ReferralRewardStates(StatesGroup):
     waiting_note = State()
+
+
+class RecipientStates(StatesGroup):
+    """Collecting the @username that Stars/Premium should be delivered to,
+    before any payment is taken (see app/handlers/user/recipient.py)."""
+
+    waiting_username = State()

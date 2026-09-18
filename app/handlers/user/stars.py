@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 
 from aiogram import F, Router
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, LabeledPrice, Message, PreCheckoutQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,6 +45,7 @@ async def start_stars_purchase(
     product: Product,
     qty: int,
     preorder: bool = False,
+    state: FSMContext | None = None,
 ) -> None:
     settings_repo = SettingRepository(session)
     if not await settings_repo.get_bool("stars_payment_enabled", False):
@@ -65,6 +67,11 @@ async def start_stars_purchase(
         quantity=qty,
         is_preorder=preorder,
     )
+
+    if state is not None:
+        from app.handlers.user.recipient import attach_recipient
+
+        await attach_recipient(session, order, state)
 
     if not preorder and product.delivery_mode.value == "inventory":
         # Reserve the actual code(s) now — same reasoning as the crypto flow:
@@ -103,7 +110,12 @@ async def start_stars_purchase(
 
 @router.callback_query(StarsCB.filter(F.action == "buy"))
 async def stars_buy(
-    callback: CallbackQuery, callback_data: StarsCB, session: AsyncSession, user: User, lang: str
+    callback: CallbackQuery,
+    callback_data: StarsCB,
+    session: AsyncSession,
+    user: User,
+    lang: str,
+    state: FSMContext,
 ) -> None:
     products = ProductRepository(session)
     product = await products.get_by_id(callback_data.product_id)
@@ -116,7 +128,14 @@ async def stars_buy(
         await callback.answer(t(lang, "msg_out_of_stock"), show_alert=True)
         return
     await start_stars_purchase(
-        callback, session, user, lang, product, qty=callback_data.qty or 1, preorder=callback_data.preorder
+        callback,
+        session,
+        user,
+        lang,
+        product,
+        qty=callback_data.qty or 1,
+        preorder=callback_data.preorder,
+        state=state,
     )
 
 
@@ -190,7 +209,12 @@ async def successful_payment(message: Message, session: AsyncSession, lang: str)
     try:
         result = await delivery.auto_deliver_stars(order.id)
     except (InvalidOrderStateError, DeliveryFailedError) as exc:
-        await message.answer(exc.localized(lang))
+        # The customer has already paid with Stars at this point, so this is
+        # never just an error message: it becomes a manual order.
+        from app.services.notify import notify_delivery_failure
+
+        await notify_delivery_failure(message.bot, session, order, str(exc), tell_customer=False)
+        await message.answer(t(lang, "msg_delivery_manual_fallback", order_uuid=order.order_uuid))
         return
 
     if result.delivered_now and result.payload:

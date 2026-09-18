@@ -160,6 +160,7 @@ class DeliveryService:
                 result = await provider.fetch(
                     product_external_ref=order.product.external_product_id or order.product.provider_key,
                     order_uuid=order.order_uuid,
+                    recipient=order.recipient_username,
                 )
                 await self.provider_logs.log(
                     provider_key=provider.key,

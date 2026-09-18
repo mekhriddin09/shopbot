@@ -11,6 +11,7 @@ from app.database.models import Product
 from app.keyboards.callback_data import (
     CaptchaCB,
     CardAutoCB,
+    RecipientCB,
     CryptoCB,
     LangCB,
     MyOrderCB,
@@ -48,6 +49,47 @@ def main_menu_kb(lang: str, is_admin: bool = False) -> ReplyKeyboardMarkup:
         # never see this row, so there is nothing to hide-by-obscurity here.
         rows.append([KeyboardButton(text=ADMIN_PANEL_BTN)])
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
+
+
+def recipient_choice_kb(lang: str, product_id: int) -> InlineKeyboardMarkup:
+    """Shown instead of the payment buttons until we know where the goods
+    should go (Stars/Premium are delivered to a username, not to the
+    buyer's chat)."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=t(lang, "btn_recipient_myself"),
+                    callback_data=RecipientCB(action="myself", product_id=product_id).pack(),
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=t(lang, "btn_recipient_other"),
+                    callback_data=RecipientCB(action="other", product_id=product_id).pack(),
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=t(lang, "btn_back"),
+                    callback_data=ShopCB(action="back_to_list").pack(),
+                )
+            ],
+        ]
+    )
+
+
+def recipient_change_kb(lang: str, product_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=t(lang, "btn_recipient_change"),
+                    callback_data=RecipientCB(action="change", product_id=product_id).pack(),
+                )
+            ]
+        ]
+    )
 
 
 def card_auto_waiting_kb(lang: str, order_id: int, paid_pressed: bool = False) -> InlineKeyboardMarkup:

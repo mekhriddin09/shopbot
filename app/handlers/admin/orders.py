@@ -19,6 +19,7 @@ from app.services.exceptions import DeliveryFailedError, InvalidOrderStateError
 from app.services.referral_service import ReferralService
 from app.repositories.card_transaction_repo import CardTransactionRepository
 from app.states.admin_states import AdminInput
+from app.utils.i18n import t
 from app.utils.formatting import build_delivered_message, fmt_datetime, fmt_price, fmt_time
 
 router = Router(name="admin_orders")
@@ -209,6 +210,21 @@ async def approve_order(callback: CallbackQuery, callback_data: OrderCB, session
             await callback.message.edit_reply_markup(reply_markup=None)
         except Exception:  # noqa: BLE001 - best-effort, message may not support it
             pass
+        # Keep the customer in the loop too: they've paid and been told
+        # "approved", so silence here reads as a scam.
+        failed_order = await OrderRepository(session).get_by_id(callback_data.order_id)
+        if failed_order is not None and failed_order.user is not None:
+            try:
+                await callback.bot.send_message(
+                    failed_order.user.telegram_id,
+                    t(
+                        failed_order.user.language,
+                        "msg_delivery_manual_fallback",
+                        order_uuid=failed_order.order_uuid,
+                    ),
+                )
+            except Exception:  # noqa: BLE001 - customer may have blocked the bot
+                pass
         await callback.message.answer(
             f"⚠️ Buyurtma <code>{callback_data.order_id}</code> tasdiqlandi, lekin avtomatik yetkazib "
             f"bo'lmadi:\n{exc}\n\nQo'lda yetkazib berishingiz mumkin:",

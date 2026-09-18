@@ -8,3 +8,9 @@ pydantic==2.9.2
 pydantic-settings==2.6.1
 httpx==0.27.2
 tenacity==9.0.0
+
+# Telegram Stars / Premium delivery via Fragment.com.
+# PINNED ON PURPOSE: this library reverse-engineers fragment.com (12 major
+# versions in its first year) and the wallet seed passes through it, so the
+# version is only ever changed deliberately, after re-reading the diff.
+fragment-api-py==12.1.0

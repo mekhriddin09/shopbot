@@ -9,12 +9,14 @@ To add a new supplier:
 from __future__ import annotations
 
 from app.services.providers.base import BaseProvider
+from app.services.providers.fragment import FragmentProvider
 from app.services.providers.mock_provider import MockProvider
 from app.services.providers.reseller_api import ResellerApiProvider
 
 _PROVIDERS: dict[str, BaseProvider] = {
     MockProvider.key: MockProvider(),
     ResellerApiProvider.key: ResellerApiProvider(),
+    FragmentProvider.key: FragmentProvider(),
 }
 
 

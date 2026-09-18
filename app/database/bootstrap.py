@@ -62,6 +62,7 @@ _NEW_COLUMNS: list[tuple[str, str, str]] = [
     ("referral_redemptions", "currency_type", "VARCHAR(32) NOT NULL DEFAULT 'BALANCE'"),
     ("orders", "expected_amount", "NUMERIC(14, 2)"),
     ("orders", "payment_expires_at", "DATETIME"),
+    ("orders", "recipient_username", "VARCHAR(64)"),
     ("products", "card_auto_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
     ("products", "card_manual_confirm", "BOOLEAN NOT NULL DEFAULT 0"),
 ]
@@ -179,6 +180,23 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "oferta_text_uz": "",
     "oferta_text_ru": "",
     "oferta_text_en": "",
+
+    # Fragment.com delivery of Telegram Stars / Premium. All empty by
+    # default = the provider refuses to run, which is the safe state.
+    # SECURITY: fragment_seed is a wallet seed phrase. Use a DEDICATED
+    # wallet holding only a small working float — never a main wallet. It
+    # is only ever used locally (the library derives the key with tonutils
+    # and signs on this machine); it is never sent anywhere. It is shown
+    # masked in the admin panel and never written to logs.
+    "fragment_seed": "",
+    # Toncenter / Tonconsole API key, used to broadcast the SIGNED
+    # transaction and read balances. Sees no key material.
+    "fragment_ton_api_key": "",
+    # fragment.com session cookies (stel_ssid, stel_dt, stel_token,
+    # stel_ton_token). JSON or "name=value; name2=value2". These expire —
+    # when deliveries start failing with a login error, refresh them here.
+    "fragment_cookies": "",
+    "fragment_wallet_version": "V5R1",
 
     # Card payment notifications (UZCARD/Humo alerts forwarded through a
     # Telegram Business connection — see app/handlers/business.py). Only

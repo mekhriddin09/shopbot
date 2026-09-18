@@ -88,6 +88,7 @@ async def start_card_auto_purchase(
     lang: str,
     product_id: int,
     quantity: int = 1,
+    state: FSMContext | None = None,
 ) -> None:
     """Create the order and issue its unique amount. Shared by the plain
     buy button and the quantity-selector flow."""
@@ -118,6 +119,13 @@ async def start_card_auto_purchase(
         await callback.answer(exc.localized(lang), show_alert=True)
         return
 
+    if state is not None:
+        # Stars/Premium: remember who the goods are for while the order is
+        # still unpaid, so delivery and the admin card agree later.
+        from app.handlers.user.recipient import attach_recipient
+
+        await attach_recipient(session, order, state)
+
     order.payment_method = PaymentMethod.CARD_AUTO
     order.expected_amount = amount
     order.payment_expires_at = await card_service.expires_at()
@@ -133,9 +141,16 @@ async def start_card_auto_purchase(
 
 @router.callback_query(CardAutoCB.filter(F.action == "buy"))
 async def card_auto_buy(
-    callback: CallbackQuery, callback_data: CardAutoCB, session: AsyncSession, user: User, lang: str
+    callback: CallbackQuery,
+    callback_data: CardAutoCB,
+    session: AsyncSession,
+    user: User,
+    lang: str,
+    state: FSMContext,
 ) -> None:
-    await start_card_auto_purchase(callback, session, user, lang, callback_data.product_id, quantity=1)
+    await start_card_auto_purchase(
+        callback, session, user, lang, callback_data.product_id, quantity=1, state=state
+    )
 
 
 @router.callback_query(CardAutoCB.filter(F.action == "paid"))

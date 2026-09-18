@@ -514,6 +514,7 @@ SETTINGS_GROUPS: dict[str, dict] = {
             ("group", "referral", "\U0001F91D Referal dasturi"),
             ("group", "access", "\U0001F512 Kirish nazorati"),
             ("group", "reseller", "\U0001F310 Reseller API"),
+            ("group", "fragment", "⭐ Fragment (Stars/Premium)"),
         ],
     },
     "texts": {
@@ -630,6 +631,24 @@ SETTINGS_GROUPS: dict[str, dict] = {
             ("lang", "oferta_text", "\U0001F4C4 Oferta matni"),
             ("edit", "required_channel", "\U0001F4E2 Majburiy kanal (@username/ID)"),
             ("edit", "required_channel_url", "\U0001F517 Kanal havolasi (join link)"),
+        ],
+    },
+    "fragment": {
+        "title": "⭐ <b>Fragment (Stars / Premium)</b>",
+        "intro": (
+            "Telegram Stars va Premium'ni Fragment.com orqali avtomatik yetkazish.\n\n"
+            "⚠️ <b>Seed ibora</b> — faqat shu ish uchun ochilgan <b>alohida hamyon</b>dan foydalaning "
+            "va unda kichik ishchi summa ushlang. Seed hech qayoqqa yuborilmaydi: kalit shu serverda "
+            "hosil qilinadi va tranzaksiya shu yerda imzolanadi.\n"
+            "⚠️ <b>Cookie'lar eskiradi.</b> Yetkazish \"kirish\" xatosi bilan to'xtasa, ularni yangilang.\n\n"
+            "Mahsulotda Tashqi ID quyidagicha yoziladi: <code>stars:100</code> yoki <code>premium:3</code>."
+        ),
+        "parent": "root",
+        "items": [
+            ("masked", "fragment_seed", "\U0001F511 Hamyon seed iborasi"),
+            ("masked", "fragment_ton_api_key", "\U0001F310 TON API kaliti (Toncenter)"),
+            ("masked", "fragment_cookies", "\U0001F36A fragment.com cookie'lari"),
+            ("edit", "fragment_wallet_version", "\U0001F45B Hamyon versiyasi (V5R1/V4R2)"),
         ],
     },
     "reseller": {

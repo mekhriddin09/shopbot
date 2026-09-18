@@ -141,5 +141,15 @@
   "msg_card_auto_cancelled": "🛑 Оплата отменена.\n\n🆔 <code>{order_uuid}</code>\n\nТовар возвращён в наличие, вы можете оформить заказ снова в любое время.",
   "msg_card_auto_expired": "⏰ <b>Время автоматической оплаты истекло</b>\n\n🆔 <code>{order_uuid}</code>\n\nЕсли вы не оплачивали — оформите заказ заново.\nЕсли оплатили — нажмите кнопку ниже.",
   "msg_card_auto_send_receipt": "🧾 Отправьте чек об оплате — изображением (скриншот) или файлом (PDF и т.д.).\n\nАдминистратор проверит и отправит товар вручную.",
-  "msg_card_auto_card_block": "💳 <code>{card_number}</code>\n<i>👆 нажмите — скопируется</i>\n👤 {card_holder}\n"
+  "msg_card_auto_card_block": "💳 <code>{card_number}</code>\n<i>👆 нажмите — скопируется</i>\n👤 {card_holder}\n",
+  "btn_recipient_myself": "👤 Себе",
+  "btn_recipient_other": "🎁 Другому человеку",
+  "btn_recipient_change": "✏️ Изменить получателя",
+  "msg_recipient_choose": "Кому отправить?",
+  "msg_recipient_ask": "Отправьте Telegram username получателя.\n\nНапример: @durov\n\n⚠️ Внимание: при ошибке в username заказ уйдёт другому человеку и вернуть его будет нельзя.",
+  "msg_recipient_invalid": "❌ Неверный username. 5–32 символа, только буквы, цифры и _. Например: @durov",
+  "msg_recipient_not_found": "❌ @{username} не прошёл проверку.\n\nПричина: {reason}\n\nОтправьте другой username.",
+  "msg_recipient_no_username": "❌ У вашего аккаунта нет username. Этот товар доставляется только по username.\n\nЗадайте его в настройках Telegram → Username и попробуйте снова. Либо нажмите «Другому человеку».",
+  "msg_recipient_selected": "👤 Получатель: @{username}",
+  "msg_delivery_manual_fallback": "⏳ Оплата получена, но заказ не удалось выдать автоматически.\n\n🆖 Заказ: {order_uuid}\n\nНе волнуйтесь — деньги на месте, администратор выдаст заказ вручную. Он придёт в этот чат в ближайшее время."
 }

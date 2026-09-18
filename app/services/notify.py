@@ -81,6 +81,76 @@ async def notify_admins_text(bot: Bot, session: AsyncSession, text: str) -> None
             logger.warning("Failed to notify admin %s", admin_id)
 
 
+async def notify_delivery_failure(
+    bot: Bot,
+    session: AsyncSession,
+    order: Order,
+    error_text: str,
+    *,
+    tell_customer: bool = True,
+) -> None:
+    """The single failure path for automatic delivery.
+
+    Every automated supplier we use (Fragment for Stars/Premium, reseller
+    APIs, crypto confirmation) is expected to break sooner or later —
+    unofficial integrations always do. The rule is therefore: a broken
+    supplier turns into a *manual* order, never into silence. So this
+    always does three things at once:
+
+      1. Tells every admin exactly what failed, on which order, for whom,
+         with the supplier's own error text (not a sanitised version — the
+         admin needs to know whether to top up the wallet, refresh cookies,
+         or ask the customer for another username).
+      2. Attaches the one-tap "send by hand" button, so recovering the
+         order is a single press rather than a hunt through the panel.
+      3. Reassures the customer that their money isn't lost and a human is
+         on it, because from their side an auto-shop that goes quiet after
+         payment looks exactly like a scam.
+
+    Kept here, rather than in DeliveryService, because DeliveryService has
+    no Bot and must stay usable from tests without one.
+    """
+    from app.keyboards.admin_kb import admin_order_detail_kb
+    from app.utils.i18n import t
+
+    product = order.product.name if order.product is not None else "-"
+    user = order.user
+    lines = [
+        "🚨 <b>AVTOMATIK YETKAZISH BAJARILMADI</b>",
+        "",
+        f"🆖 Buyurtma: <code>{order.order_uuid}</code> (ID: {order.id})",
+        f"📦 Mahsulot: {product}",
+    ]
+    if order.recipient_username:
+        lines.append(f"🎁 Qabul qiluvchi: @{order.recipient_username}")
+    if user is not None:
+        lines.append(f"👤 Mijoz: @{user.username or '-'} (<code>{user.telegram_id}</code>)")
+    lines += [
+        f"💰 To'lov: {fmt_price(float(order.expected_amount or order.price_at_purchase))} "
+        f"{order.currency}",
+        "",
+        f"⚠️ Xato: {error_text}",
+        "",
+        "To'lov o'z joyida. Qo'lda yetkazib bering ↓",
+    ]
+    text = "\n".join(lines)
+
+    for admin_id in await _all_admin_ids(session):
+        try:
+            await bot.send_message(admin_id, text, reply_markup=admin_order_detail_kb(order))
+        except TelegramAPIError:
+            logger.warning("Failed to alert admin %s about failed delivery %s", admin_id, order.order_uuid)
+
+    if tell_customer and user is not None:
+        try:
+            await bot.send_message(
+                user.telegram_id,
+                t(user.language, "msg_delivery_manual_fallback", order_uuid=order.order_uuid),
+            )
+        except TelegramAPIError:
+            logger.warning("Failed to reassure customer about failed delivery %s", order.order_uuid)
+
+
 async def notify_admins_referral_withdrawal(
     bot: Bot, session: AsyncSession, withdrawal: ReferralWithdrawal, user: User
 ) -> None:

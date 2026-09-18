@@ -1,6 +1,18 @@
 from aiogram import Router
 
-from app.handlers.user import card_auto, language, onboarding, orders, referral, reviews, shop, start, stars, support
+from app.handlers.user import (
+    card_auto,
+    language,
+    onboarding,
+    orders,
+    recipient,
+    referral,
+    reviews,
+    shop,
+    start,
+    stars,
+    support,
+)
 
 user_router = Router(name="user_root")
 user_router.include_router(start.router)
@@ -8,6 +20,7 @@ user_router.include_router(onboarding.router)
 user_router.include_router(shop.router)
 user_router.include_router(stars.router)
 user_router.include_router(card_auto.router)
+user_router.include_router(recipient.router)
 user_router.include_router(orders.router)
 user_router.include_router(reviews.router)
 user_router.include_router(referral.router)

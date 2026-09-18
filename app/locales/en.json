@@ -141,5 +141,15 @@
   "msg_card_auto_cancelled": "🛑 Payment cancelled.\n\n🆔 <code>{order_uuid}</code>\n\nThe product has been returned to stock; you can order again any time.",
   "msg_card_auto_expired": "⏰ <b>The automatic payment window has closed</b>\n\n🆔 <code>{order_uuid}</code>\n\nIf you haven't paid — please order again.\nIf you did pay — tap the button below.",
   "msg_card_auto_send_receipt": "🧾 Please send your payment receipt — an image (screenshot) or a file (PDF etc.).\n\nAn admin will check it and send the product manually.",
-  "msg_card_auto_card_block": "💳 <code>{card_number}</code>\n<i>👆 tap to copy</i>\n👤 {card_holder}\n"
+  "msg_card_auto_card_block": "💳 <code>{card_number}</code>\n<i>👆 tap to copy</i>\n👤 {card_holder}\n",
+  "btn_recipient_myself": "👤 For myself",
+  "btn_recipient_other": "🎁 For someone else",
+  "btn_recipient_change": "✏️ Change recipient",
+  "msg_recipient_choose": "Who should receive it?",
+  "msg_recipient_ask": "Send the recipient's Telegram username.\n\nFor example: @durov\n\n⚠️ Careful: if the username is wrong, the order goes to the wrong person and can't be taken back.",
+  "msg_recipient_invalid": "❌ Invalid username. 5–32 characters, letters, digits and _ only. For example: @durov",
+  "msg_recipient_not_found": "❌ @{username} did not pass the check.\n\nReason: {reason}\n\nPlease send another username.",
+  "msg_recipient_no_username": "❌ Your account has no username. This product can only be delivered to a username.\n\nSet one in Telegram Settings → Username and try again, or tap \"For someone else\".",
+  "msg_recipient_selected": "👤 Recipient: @{username}",
+  "msg_delivery_manual_fallback": "⏳ Your payment went through, but the order couldn't be delivered automatically.\n\n🆖 Order: {order_uuid}\n\nDon't worry — your money is safe and an admin will deliver it by hand. It will arrive in this chat shortly."
 }

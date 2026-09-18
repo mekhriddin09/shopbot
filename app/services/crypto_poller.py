@@ -20,7 +20,7 @@ from app.repositories.order_repo import OrderRepository
 from app.services.crypto.registry import get_crypto_provider
 from app.services.delivery_service import DeliveryService
 from app.services.exceptions import DeliveryFailedError, InvalidOrderStateError
-from app.services.notify import notify_admins_text
+from app.services.notify import notify_admins_text, notify_delivery_failure
 from app.services.order_service import OrderService
 from app.services.referral_service import ReferralService
 from app.utils.formatting import build_delivered_message
@@ -96,10 +96,7 @@ async def _poll_once(bot: Bot) -> None:
                 result = await delivery.auto_deliver_crypto(order.id)
             except (InvalidOrderStateError, DeliveryFailedError) as exc:
                 logger.error("crypto auto-delivery failed for order=%s: %s", order.order_uuid, exc)
-                await notify_admins_text(
-                    bot, session,
-                    f"⚠️ Kripto to'lov tasdiqlandi, lekin yetkazishda xatolik: <code>{order.order_uuid}</code>\n{exc}",
-                )
+                await notify_delivery_failure(bot, session, order, str(exc))
                 continue
 
             lang = order.user.language
