@@ -49,14 +49,131 @@ def admin_main_menu_kb() -> ReplyKeyboardMarkup:
     )
 
 
-def admin_products_list_kb(products: list[Product]) -> InlineKeyboardMarkup:
+# ----------------------------------------------------------------------
+# Product editor — grouped, same data-driven pattern as SETTINGS_GROUPS.
+#
+# The old screen was one flat wall of ~16 button rows with no ordering
+# logic, which made finding anything a hunt. PRODUCT_GROUPS is the single
+# source of truth for both the buttons and the "current values" summary
+# (see app/handlers/admin/products.py:render_product_group).
+#
+# Item kinds:
+#   ("field", attr, label)   -> free-text edit of that column
+#   ("lang",  base, label)   -> per-language edit (base_uz/_ru/_en)
+#   ("image", None, label)   -> photo upload
+#   ("toggle", attr, label)  -> boolean flip (attr MUST be in TOGGLEABLE_FIELDS)
+#   ("mode",  None, label)   -> delivery-mode picker
+#   ("inventory", None, label)
+#   ("group", name, label)   -> open a subgroup
+#   ("api_only", ...)        -> only rendered for API-delivery products
+# ----------------------------------------------------------------------
+
+# Whitelist for the generic toggle handler. Without this a crafted
+# callback could flip *any* column on the product row, so the set is
+# explicit rather than derived.
+TOGGLEABLE_FIELDS = {
+    "is_visible",
+    "referral_eligible",
+    "card_auto_enabled",
+    "card_manual_confirm",
+}
+
+PRODUCT_GROUPS: dict[str, dict] = {
+    "root": {
+        "title": "\U0001F6CD️ <b>Mahsulot sozlamalari</b>",
+        "intro": "Kerakli bo'limni tanlang:",
+        "items": [
+            ("group", "basic", "\U0001F4DD Asosiy ma'lumot"),
+            ("group", "prices", "\U0001F4B0 Narxlar"),
+            ("group", "delivery", "\U0001F4E6 Yetkazib berish"),
+            ("group", "payment", "\U0001F4B3 To'lov usullari"),
+            ("group", "limits", "\U0001F522 Limit va referral"),
+            ("inventory", None, "\U0001F4E6 Inventar (kodlar)"),
+        ],
+    },
+    "basic": {
+        "title": "\U0001F4DD <b>Asosiy ma'lumot</b>",
+        "intro": "Nomi va tavsifi har bir tilga alohida yozilishi mumkin. Til bo'yicha yozilmasa, standart qiymat ishlatiladi.",
+        "parent": "root",
+        "items": [
+            ("field", "name", "✏️ Nomi (standart)"),
+            ("field", "emoji", "\U0001F3F7️ Emoji"),
+            ("field", "description", "\U0001F4C4 Tavsifi (standart)"),
+            ("lang", "name", "\U0001F310 Nomi (til bo'yicha)"),
+            ("lang", "description", "\U0001F310 Tavsifi (til bo'yicha)"),
+            ("image", None, "\U0001F5BC️ Rasm"),
+        ],
+    },
+    "prices": {
+        "title": "\U0001F4B0 <b>Narxlar</b>",
+        "intro": (
+            "Har bir to'lov usuli o'z narxini talab qiladi:\n"
+            "• UZS — karta orqali to'lov uchun (majburiy)\n"
+            "• USD — kripto to'lov uchun (bo'sh bo'lsa, kripto tugmasi chiqmaydi)\n"
+            "• Stars — Telegram Stars uchun (bo'sh bo'lsa, Stars tugmasi chiqmaydi)"
+        ),
+        "parent": "root",
+        "items": [
+            ("field", "price", "\U0001F4B5 Narx (UZS)"),
+            ("field", "price_usd", "\U0001FA99 Narx (USD / kripto)"),
+            ("field", "price_stars", "⭐ Narx (Stars)"),
+        ],
+    },
+    "delivery": {
+        "title": "\U0001F4E6 <b>Yetkazib berish</b>",
+        "intro": (
+            "Uch rejim bor: ichki inventar (tayyor kodlar), qo'lda (o'zingiz yozasiz), "
+            "tashqi API (ta'minotchidan avtomatik olinadi).\n"
+            "Provider va Tashqi ID faqat API rejimida ko'rinadi."
+        ),
+        "parent": "root",
+        "items": [
+            ("mode", None, "\U0001F504 Yetkazish rejimi"),
+            ("api_only_field", "provider_key", "\U0001F511 Provider"),
+            ("api_only_field", "external_product_id", "\U0001F194 Tashqi ID"),
+            ("lang", "delivery_instructions", "\U0001F310 Yetkazishdan keyingi xabar"),
+        ],
+    },
+    "payment": {
+        "title": "\U0001F4B3 <b>To'lov usullari</b>",
+        "intro": (
+            "⚡️ <b>Avto karta</b> — mijoz noyob summa o'tkazadi, bot CardXabar orqali o'zi tanaydi.\n"
+            "\U0001F512 <b>Qo'lda tasdiqlash</b> — to'lov to'g'ri kelsa ham, yetkazishdan oldin sizdan "
+            "tugma bosishni kutadi. Qimmat mahsulotlar uchun."
+        ),
+        "parent": "root",
+        "items": [
+            ("field", "payment_instructions", "\U0001F4B3 To'lov ma'lumoti (shu mahsulot uchun)"),
+            ("toggle", "card_auto_enabled", "⚡️ Avto karta to'lovi"),
+            ("toggle", "card_manual_confirm", "\U0001F512 Qo'lda tasdiqlash"),
+        ],
+    },
+    "limits": {
+        "title": "\U0001F522 <b>Limit va referral</b>",
+        "intro": (
+            "Max. soni 1 dan katta bo'lsa, mijozga miqdor tanlash oynasi chiqadi.\n"
+            "Tartib raqami kichik bo'lsa, mahsulot ro'yxatda yuqorida turadi."
+        ),
+        "parent": "root",
+        "items": [
+            ("field", "min_order_qty", "\U0001F53D Min. buyurtma soni"),
+            ("field", "max_order_qty", "\U0001F53C Max. buyurtma soni"),
+            ("field", "sort_order", "\U0001F500 Tartib raqami"),
+            ("toggle", "referral_eligible", "\U0001F91D Referral mukofoti"),
+        ],
+    },
+}
+
+
+def admin_products_list_kb(products: list[Product], archived_count: int = 0) -> InlineKeyboardMarkup:
+    """Main product list — visible products only. Hidden/archived ones live
+    behind their own button so they stop cluttering the working list."""
     rows = []
     for p in products:
-        mark = "\U0001F7E2" if p.is_visible else "⚪"
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"{mark} {p.emoji} {p.name}",
+                    text=f"{p.emoji} {p.name} — {fmt_price(float(p.price))}",
                     callback_data=AdminProductCB(action="open", product_id=p.id).pack(),
                 )
             ]
@@ -64,88 +181,81 @@ def admin_products_list_kb(products: list[Product]) -> InlineKeyboardMarkup:
     rows.append(
         [InlineKeyboardButton(text="➕ Yangi mahsulot", callback_data=AdminProductCB(action="add").pack())]
     )
+    if archived_count:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"\U0001F5C4️ Arxiv — yashirilganlar ({archived_count})",
+                    callback_data=AdminProductCB(action="archive").pack(),
+                )
+            ]
+        )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def admin_product_detail_kb(product: Product) -> InlineKeyboardMarkup:
+def admin_products_archive_kb(products: list[Product]) -> InlineKeyboardMarkup:
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=f"⚪ {p.emoji} {p.name}",
+                callback_data=AdminProductCB(action="open", product_id=p.id).pack(),
+            )
+        ]
+        for p in products
+    ]
+    rows.append(
+        [InlineKeyboardButton(text="\U0001F519 Faol mahsulotlar", callback_data=AdminProductCB(action="list").pack())]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_product_detail_kb(product: Product, group: str = "root") -> InlineKeyboardMarkup:
+    spec = PRODUCT_GROUPS.get(group) or PRODUCT_GROUPS["root"]
     pid = product.id
-    visibility_text = "\U0001F648 Yashirish" if product.is_visible else "\U0001F441 Ko'rsatish"
+    rows: list[list[InlineKeyboardButton]] = []
 
     def cb(action: str, field: str = "") -> str:
         return AdminProductCB(action=action, product_id=pid, field=field).pack()
 
-    rows = [
-        [
-            InlineKeyboardButton(text="✏️ Nomi", callback_data=cb("edit_field", "name")),
-            InlineKeyboardButton(text="\U0001F3F7️ Emoji", callback_data=cb("edit_field", "emoji")),
-        ],
-        [
-            InlineKeyboardButton(text="\U0001F4DD Tavsif", callback_data=cb("edit_field", "description")),
-            InlineKeyboardButton(text="\U0001F4B0 Narx (UZS)", callback_data=cb("edit_field", "price")),
-        ],
-        [
-            InlineKeyboardButton(text="\U0001F310 Nomi (til bo'yicha)", callback_data=cb("pick_lang_field", "name")),
-            InlineKeyboardButton(text="\U0001F310 Tavsif (til bo'yicha)", callback_data=cb("pick_lang_field", "description")),
-        ],
-        [
-            InlineKeyboardButton(text="\U0001FA99 Narx (USD/kripto)", callback_data=cb("edit_field", "price_usd")),
-            InlineKeyboardButton(text="⭐ Narx (Stars)", callback_data=cb("edit_field", "price_stars")),
-        ],
-        [
-            InlineKeyboardButton(text="\U0001F5BC️ Rasm", callback_data=cb("edit_field", "image")),
-            InlineKeyboardButton(text="\U0001F4B3 To'lov ma'lumoti", callback_data=cb("edit_field", "payment_instructions")),
-        ],
-        [
-            InlineKeyboardButton(text="\U0001F4E6 Yetkazish rejimi", callback_data=cb("set_mode")),
-            InlineKeyboardButton(text="\U0001F522 Tartib raqami", callback_data=cb("edit_field", "sort_order")),
-        ],
-        *(
+    for kind, key, label in spec["items"]:
+        if kind == "group":
+            rows.append([InlineKeyboardButton(text=label, callback_data=cb("group", key))])
+        elif kind == "field":
+            rows.append([InlineKeyboardButton(text=label, callback_data=cb("edit_field", key))])
+        elif kind == "api_only_field":
+            if product.delivery_mode == DeliveryMode.API:
+                rows.append([InlineKeyboardButton(text=label, callback_data=cb("edit_field", key))])
+        elif kind == "lang":
+            rows.append([InlineKeyboardButton(text=label, callback_data=cb("pick_lang_field", key))])
+        elif kind == "image":
+            rows.append([InlineKeyboardButton(text=label, callback_data=cb("edit_field", "image"))])
+        elif kind == "mode":
+            rows.append([InlineKeyboardButton(text=label, callback_data=cb("set_mode"))])
+        elif kind == "inventory":
+            rows.append(
+                [InlineKeyboardButton(text=label, callback_data=AdminInventoryCB(action="menu", product_id=pid).pack())]
+            )
+        elif kind == "toggle":
+            state = "✅" if getattr(product, key, False) else "❌"
+            rows.append([InlineKeyboardButton(text=f"{label}: {state}", callback_data=cb("toggle_field", key))])
+
+    if group == "root":
+        visibility_text = (
+            "\U0001F5C4️ Arxivga yashirish" if product.is_visible else "\U0001F441 Ro'yxatga qaytarish"
+        )
+        rows.append(
             [
-                [
-                    InlineKeyboardButton(text="\U0001F511 Provider", callback_data=cb("edit_field", "provider_key")),
-                    InlineKeyboardButton(text="\U0001F194 Tashqi ID", callback_data=cb("edit_field", "external_product_id")),
-                ]
+                InlineKeyboardButton(text=visibility_text, callback_data=cb("toggle_field", "is_visible")),
+                InlineKeyboardButton(text="\U0001F5D1️ O'chirish", callback_data=cb("delete")),
             ]
-            if product.delivery_mode == DeliveryMode.API
-            else []
-        ),
-        [
-            InlineKeyboardButton(
-                text="\U0001F310 Yetkazishdan keyingi xabar (til bo'yicha)",
-                callback_data=cb("pick_lang_field", "delivery_instructions"),
-            ),
-        ],
-        [
-            InlineKeyboardButton(text="\U0001F4E6 Inventar", callback_data=AdminInventoryCB(action="menu", product_id=pid).pack()),
-        ],
-        [
-            InlineKeyboardButton(
-                text=("\U0001F91D Referral: yoqilgan ✅" if product.referral_eligible else "\U0001F91D Referral: o'chirilgan"),
-                callback_data=cb("toggle_referral"),
-            ),
-        ],
-        [
-            InlineKeyboardButton(
-                text=("⚡️ Avto karta: yoqilgan ✅" if product.card_auto_enabled else "⚡️ Avto karta: o'chirilgan"),
-                callback_data=cb("toggle_card_auto"),
-            ),
-        ],
-        [
-            InlineKeyboardButton(
-                text=("\U0001F512 Qo'lda tasdiqlash ✅" if product.card_manual_confirm else "\U0001F513 Avtomatik yetkazish"),
-                callback_data=cb("toggle_card_manual"),
-            ),
-        ],
-        [
-            InlineKeyboardButton(text="\U0001F522 Min. buyurtma soni", callback_data=cb("edit_field", "min_order_qty")),
-            InlineKeyboardButton(text="\U0001F522 Max. buyurtma soni", callback_data=cb("edit_field", "max_order_qty")),
-        ],
-        [
-            InlineKeyboardButton(text=visibility_text, callback_data=cb("toggle_visibility")),
-            InlineKeyboardButton(text="\U0001F5D1️ O'chirish", callback_data=cb("delete")),
-        ],
-        [InlineKeyboardButton(text="\U0001F519 Ro'yxatga qaytish", callback_data=AdminProductCB(action="list").pack())],
-    ]
+        )
+        rows.append(
+            [InlineKeyboardButton(text="\U0001F519 Ro'yxatga qaytish", callback_data=AdminProductCB(action="list").pack())]
+        )
+    else:
+        rows.append(
+            [InlineKeyboardButton(text="\U0001F519 Orqaga", callback_data=cb("group", spec.get("parent", "root")))]
+        )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -745,7 +855,7 @@ def settings_language_pick_kb(base_key: str, group: str = "root") -> InlineKeybo
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def product_lang_pick_kb(product_id: int, field_base: str) -> InlineKeyboardMarkup:
+def product_lang_pick_kb(product_id: int, field_base: str, group: str = "root") -> InlineKeyboardMarkup:
     labels = {"uz": "\U0001F1FA\U0001F1FF UZ", "ru": "\U0001F1F7\U0001F1FA RU", "en": "\U0001F1EC\U0001F1E7 EN"}
     rows = [
         [
@@ -759,7 +869,8 @@ def product_lang_pick_kb(product_id: int, field_base: str) -> InlineKeyboardMark
         ],
         [
             InlineKeyboardButton(
-                text="\U0001F519 Orqaga", callback_data=AdminProductCB(action="open", product_id=product_id).pack()
+                text="\U0001F519 Orqaga",
+                callback_data=AdminProductCB(action="group", product_id=product_id, field=group).pack(),
             )
         ],
     ]

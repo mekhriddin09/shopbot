@@ -10,7 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models.enums import DeliveryMode
 from app.filters.is_admin import IsAdmin
 from app.keyboards.admin_kb import (
+    PRODUCT_GROUPS,
+    TOGGLEABLE_FIELDS,
     admin_product_detail_kb,
+    admin_products_archive_kb,
     admin_products_list_kb,
     confirm_delete_product_kb,
     delivery_mode_kb,
@@ -64,71 +67,138 @@ FIELD_PROMPTS = {
 }
 
 
-def _product_summary(product) -> str:
-    mode_label = {
-        DeliveryMode.INVENTORY: "Ichki inventar",
-        DeliveryMode.MANUAL: "Qo'lda yetkazish",
-        DeliveryMode.API: (
-            f"Tashqi API ({product.provider_key or '—'}"
-            + (f", ID: {product.external_product_id}" if product.external_product_id else "")
-            + ")"
-        ),
-    }[product.delivery_mode]
-    visibility = "\U0001F7E2 Ko'rinadi" if product.is_visible else "⚪ Yashirilgan"
-    price_usd_line = (
-        f"\U0001FA99 Kripto narx: ${float(product.price_usd):.2f}\n"
-        if product.price_usd is not None
-        else "\U0001FA99 Kripto narx: o'rnatilmagan\n"
-    )
-    price_stars_line = (
-        f"⭐ Stars narx: {product.price_stars} ⭐\n"
-        if product.price_stars is not None
-        else "⭐ Stars narx: o'rnatilmagan\n"
-    )
-    def _lang_coverage(field_base: str) -> str:
-        set_langs = [code for code in _LANG_LABELS if getattr(product, f"{field_base}_{code}", None)]
-        return ", ".join(set_langs) if set_langs else "faqat standart"
+_MODE_LABELS = {
+    DeliveryMode.INVENTORY: "\U0001F4E6 Ichki inventar",
+    DeliveryMode.MANUAL: "✍️ Qo'lda yetkazish",
+    DeliveryMode.API: "\U0001F310 Tashqi API",
+}
 
-    delivery_instructions_line = (
-        f"\U0001F4DD Yetkazishdan keyingi xabar (tillar: {_lang_coverage('delivery_instructions')})\n"
-        if getattr(product, "delivery_instructions", None) or _lang_coverage("delivery_instructions") != "faqat standart"
-        else "\U0001F4DD Yetkazishdan keyingi xabar: o'rnatilmagan\n"
-    )
-    referral_line = "\U0001F91D Referral: yoqilgan ✅\n" if product.referral_eligible else "\U0001F91D Referral: o'chirilgan\n"
-    qty_line = (
-        f"\U0001F522 Buyurtma miqdori: {product.min_order_qty}–{product.max_order_qty} dona\n"
-        if product.max_order_qty > 1
-        else ""
-    )
+
+def _lang_coverage(product, field_base: str) -> str:
+    """Which languages this per-language field is filled in for — the one
+    thing an admin actually needs to know at a glance about it."""
+    langs = [code.upper() for code in _LANG_LABELS if getattr(product, f"{field_base}_{code}", None)]
+    return ", ".join(langs) if langs else "—"
+
+
+def _short(value, limit: int = 40) -> str:
+    text = " ".join(str(value).split()) if value not in (None, "") else ""
+    if not text:
+        return "—"
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def _product_summary(product) -> str:
+    """Short header shown above every product screen: what this product is
+    and whether it's live."""
+    visibility = "\U0001F7E2 Faol" if product.is_visible else "\U0001F5C4️ Arxivda (mijozlar ko'rmaydi)"
     return (
-        f"{product.emoji} <b>{product.name}</b>\n\n"
-        f"{product.description or '-'}\n\n"
-        f"\U0001F310 Nomi tarjimalari: {_lang_coverage('name')}\n"
-        f"\U0001F310 Tavsif tarjimalari: {_lang_coverage('description')}\n"
-        f"\U0001F4B0 Narx: {fmt_price(float(product.price))} {product.currency}\n"
-        f"{price_usd_line}"
-        f"{price_stars_line}"
-        f"\U0001F4E6 Yetkazish rejimi: {mode_label}\n"
-        f"\U0001F522 Tartib: {product.sort_order}\n"
-        f"{qty_line}"
-        f"{referral_line}"
-        f"{delivery_instructions_line}"
+        f"{product.emoji} <b>{product.name}</b>\n"
+        f"\U0001F4B5 {fmt_price(float(product.price))} {product.currency} · {_MODE_LABELS[product.delivery_mode]}\n"
         f"{visibility}"
     )
 
 
+def render_product_group(product, group: str = "root") -> tuple[str, object]:
+    """Text + keyboard for one product group, listing current values
+    inline. Driven by PRODUCT_GROUPS so buttons and values can't drift."""
+    spec = PRODUCT_GROUPS.get(group) or PRODUCT_GROUPS["root"]
+    lines = [_product_summary(product), "", spec["title"]]
+    if spec.get("intro"):
+        lines.append("")
+        lines.append(spec["intro"])
+
+    values: list[str] = []
+    for kind, key, label in spec["items"]:
+        if kind == "field":
+            values.append(f"• {label}: <code>{_short(getattr(product, key, None))}</code>")
+        elif kind == "api_only_field":
+            if product.delivery_mode == DeliveryMode.API:
+                values.append(f"• {label}: <code>{_short(getattr(product, key, None))}</code>")
+        elif kind == "lang":
+            values.append(f"• {label}: {_lang_coverage(product, key)}")
+        elif kind == "image":
+            values.append(f"• {label}: {'✅ bor' if product.image_file_id else '—'}")
+        elif kind == "mode":
+            values.append(f"• {label}: <b>{_MODE_LABELS[product.delivery_mode]}</b>")
+        elif kind == "toggle":
+            values.append(f"• {label}: <b>{'✅ yoqilgan' if getattr(product, key, False) else '❌ o‘chirilgan'}</b>")
+
+    if values:
+        lines.append("")
+        lines.extend(values)
+
+    return "\n".join(lines), admin_product_detail_kb(product, group)
+
+
+def _group_of_lang_field(field_base: str) -> str:
+    """Which product group a per-language field belongs to, so the language
+    picker's Back button returns where the admin came from."""
+    for name, spec in PRODUCT_GROUPS.items():
+        if any(kind == "lang" and key == field_base for kind, key, _ in spec["items"]):
+            return name
+    return "root"
+
+
+async def _show_products_list(message, session: AsyncSession) -> None:
+    products = ProductRepository(session)
+    visible = [p for p in await products.list_all() if p.is_visible]
+    archived = [p for p in await products.list_all() if not p.is_visible]
+    text = (
+        f"\U0001F6CD️ <b>Mahsulotlar</b> — {len(visible)} ta faol"
+        + (f", {len(archived)} ta arxivda" if archived else "")
+    )
+    await message.answer(text, reply_markup=admin_products_list_kb(visible, len(archived)))
+
+
 @router.message(F.text == "\U0001F6CD️ Mahsulotlar")
 async def products_menu(message: Message, session: AsyncSession) -> None:
-    products = await ProductRepository(session).list_all()
-    await message.answer("\U0001F6CD️ Mahsulotlar ro'yxati:", reply_markup=admin_products_list_kb(products))
+    await _show_products_list(message, session)
 
 
 @router.callback_query(AdminProductCB.filter(F.action == "list"))
 async def products_list_cb(callback: CallbackQuery, session: AsyncSession) -> None:
-    products = await ProductRepository(session).list_all()
-    await callback.message.edit_text(
-        "\U0001F6CD️ Mahsulotlar ro'yxati:", reply_markup=admin_products_list_kb(products)
+    products = ProductRepository(session)
+    all_products = await products.list_all()
+    visible = [p for p in all_products if p.is_visible]
+    archived = [p for p in all_products if not p.is_visible]
+    text = (
+        f"\U0001F6CD️ <b>Mahsulotlar</b> — {len(visible)} ta faol"
+        + (f", {len(archived)} ta arxivda" if archived else "")
     )
+    await callback.message.edit_text(text, reply_markup=admin_products_list_kb(visible, len(archived)))
+    await callback.answer()
+
+
+@router.callback_query(AdminProductCB.filter(F.action == "archive"))
+async def products_archive(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Hidden products live here instead of mixed into the working list.
+
+    Note a product with order history can never be fully deleted (its
+    orders reference it), so "archived" is the real end state for anything
+    that has ever sold — this screen is where those go."""
+    archived = [p for p in await ProductRepository(session).list_all() if not p.is_visible]
+    if not archived:
+        await callback.answer("Arxiv bo'sh.", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "\U0001F5C4️ <b>Arxiv — yashirilgan mahsulotlar</b>\n\n"
+        "Bu mahsulotlar mijozlarga ko'rinmaydi. Buyurtma tarixi bor mahsulotni butunlay "
+        "o'chirib bo'lmaydi (eski buyurtmalar buzilib ketadi) — shuning uchun ular shu yerda saqlanadi.\n\n"
+        "Qaytarish uchun mahsulotni ochib «\U0001F441 Ro'yxatga qaytarish» ni bosing.",
+        reply_markup=admin_products_archive_kb(archived),
+    )
+    await callback.answer()
+
+
+@router.callback_query(AdminProductCB.filter(F.action == "group"))
+async def product_group(callback: CallbackQuery, callback_data: AdminProductCB, session: AsyncSession) -> None:
+    product = await ProductRepository(session).get_by_id(callback_data.product_id)
+    if product is None:
+        await callback.answer("Mahsulot topilmadi", show_alert=True)
+        return
+    text, kb = render_product_group(product, callback_data.field or "root")
+    await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()
 
 
@@ -138,7 +208,8 @@ async def product_open(callback: CallbackQuery, callback_data: AdminProductCB, s
     if product is None:
         await callback.answer("Mahsulot topilmadi", show_alert=True)
         return
-    await callback.message.edit_text(_product_summary(product), reply_markup=admin_product_detail_kb(product))
+    text, kb = render_product_group(product, "root")
+    await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()
 
 
@@ -170,7 +241,9 @@ async def product_edit_field(callback: CallbackQuery, callback_data: AdminProduc
 @router.callback_query(AdminProductCB.filter(F.action == "pick_lang_field"))
 async def product_pick_lang_field(callback: CallbackQuery, callback_data: AdminProductCB) -> None:
     await callback.message.edit_reply_markup(
-        reply_markup=product_lang_pick_kb(callback_data.product_id, callback_data.field)
+        reply_markup=product_lang_pick_kb(
+            callback_data.product_id, callback_data.field, _group_of_lang_field(callback_data.field)
+        )
     )
     await callback.answer()
 
@@ -197,61 +270,55 @@ async def product_apply_mode(
         await state.set_state(AdminInput.waiting_text)
         await state.update_data(action="edit_product_field", product_id=product.id, field="provider_key")
         await callback.message.answer(FIELD_PROMPTS["provider_key"])
-    await callback.message.edit_text(_product_summary(product), reply_markup=admin_product_detail_kb(product))
+    text, kb = render_product_group(product, "delivery")
+    await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer("Yetkazish rejimi yangilandi ✅")
 
 
-@router.callback_query(AdminProductCB.filter(F.action == "toggle_visibility"))
-async def product_toggle_visibility(callback: CallbackQuery, callback_data: AdminProductCB, session: AsyncSession) -> None:
+@router.callback_query(AdminProductCB.filter(F.action == "toggle_field"))
+async def product_toggle_field(
+    callback: CallbackQuery, callback_data: AdminProductCB, session: AsyncSession
+) -> None:
+    """One handler for every boolean on a product (visibility, referral
+    eligibility, auto-card, manual-confirm) instead of four near-identical
+    ones.
+
+    `field` comes straight off a callback, so it is checked against an
+    explicit whitelist — otherwise a hand-crafted callback could flip any
+    column on the row.
+    """
+    field = callback_data.field or ""
+    if field not in TOGGLEABLE_FIELDS:
+        await callback.answer("Noma'lum sozlama.", show_alert=True)
+        return
+
     products = ProductRepository(session)
     product = await products.get_by_id(callback_data.product_id)
     if product is None:
         await callback.answer("Mahsulot topilmadi", show_alert=True)
         return
-    await products.set_visibility(product, not product.is_visible)
-    await callback.message.edit_text(_product_summary(product), reply_markup=admin_product_detail_kb(product))
-    await callback.answer()
 
+    new_value = not getattr(product, field, False)
+    await products.update(product, **{field: new_value})
+    admin_actions_logger.info(
+        "product_toggled id=%s field=%s value=%s admin=%s",
+        product.id, field, new_value, callback.from_user.id,
+    )
 
-@router.callback_query(AdminProductCB.filter(F.action == "toggle_card_auto"))
-async def product_toggle_card_auto(callback: CallbackQuery, callback_data: AdminProductCB, session: AsyncSession) -> None:
-    """Offer (or stop offering) the automatic card payment option for this
-    product. Rolled out per product so the feature can be trialled on one
-    item before the whole catalogue depends on it."""
-    products = ProductRepository(session)
-    product = await products.get_by_id(callback_data.product_id)
-    if product is None:
-        await callback.answer("Mahsulot topilmadi", show_alert=True)
-        return
-    await products.update(product, card_auto_enabled=not product.card_auto_enabled)
-    await callback.message.edit_text(_product_summary(product), reply_markup=admin_product_detail_kb(product))
-    await callback.answer("Yoqildi ✅" if product.card_auto_enabled else "O'chirildi")
+    # Re-render whichever group the button lives in, so its value line
+    # updates too. Visibility lives on the root screen.
+    group = "root"
+    for name, spec in PRODUCT_GROUPS.items():
+        if any(k == "toggle" and key == field for k, key, _ in spec["items"]):
+            group = name
+            break
+    text, kb = render_product_group(product, group)
+    await callback.message.edit_text(text, reply_markup=kb)
 
-
-@router.callback_query(AdminProductCB.filter(F.action == "toggle_card_manual"))
-async def product_toggle_card_manual(callback: CallbackQuery, callback_data: AdminProductCB, session: AsyncSession) -> None:
-    """Force a human tap before delivering this product, even when global
-    auto-delivery is on — intended for higher-value items."""
-    products = ProductRepository(session)
-    product = await products.get_by_id(callback_data.product_id)
-    if product is None:
-        await callback.answer("Mahsulot topilmadi", show_alert=True)
-        return
-    await products.update(product, card_manual_confirm=not product.card_manual_confirm)
-    await callback.message.edit_text(_product_summary(product), reply_markup=admin_product_detail_kb(product))
-    await callback.answer("Qo'lda tasdiqlash ✅" if product.card_manual_confirm else "Avtomatik yetkazish")
-
-
-@router.callback_query(AdminProductCB.filter(F.action == "toggle_referral"))
-async def product_toggle_referral(callback: CallbackQuery, callback_data: AdminProductCB, session: AsyncSession) -> None:
-    products = ProductRepository(session)
-    product = await products.get_by_id(callback_data.product_id)
-    if product is None:
-        await callback.answer("Mahsulot topilmadi", show_alert=True)
-        return
-    await products.update(product, referral_eligible=not product.referral_eligible)
-    await callback.message.edit_text(_product_summary(product), reply_markup=admin_product_detail_kb(product))
-    await callback.answer()
+    if field == "is_visible":
+        await callback.answer("Ro'yxatga qaytarildi ✅" if new_value else "Arxivga yashirildi \U0001F5C4️")
+    else:
+        await callback.answer("Yoqildi ✅" if new_value else "O'chirildi")
 
 
 @router.callback_query(AdminProductCB.filter(F.action == "delete"))
@@ -273,7 +340,12 @@ async def product_delete(callback: CallbackQuery, callback_data: AdminProductCB,
             "product_deleted id=%s name=%s admin=%s", product.id, product.name, callback.from_user.id
         )
         all_products = await products.list_all()
-        await callback.message.edit_text("✅ Mahsulot o'chirildi.", reply_markup=admin_products_list_kb(all_products))
+        visible = [x for x in all_products if x.is_visible]
+        archived = [x for x in all_products if not x.is_visible]
+        await callback.message.edit_text(
+            "✅ Mahsulot butunlay o'chirildi.",
+            reply_markup=admin_products_list_kb(visible, len(archived)),
+        )
         await callback.answer()
         return
 
@@ -288,8 +360,12 @@ async def product_delete(callback: CallbackQuery, callback_data: AdminProductCB,
     await callback.message.edit_text(
         "⚠️ Bu mahsulot bo'yicha oldin buyurtmalar bo'lgani uchun butunlay o'chirib bo'lmadi "
         "(buyurtmalar tarixi buzilmasligi uchun himoyalangan).\n\n"
-        "\U0001F648 Shuning uchun uni <b>yashirdik</b> — endi do'konda mijozlarga ko'rinmaydi, "
-        "lekin eski buyurtmalar va statistikada saqlanib qoladi.",
-        reply_markup=admin_products_list_kb(await products.list_all()),
+        "\U0001F5C4️ Shuning uchun uni <b>arxivga yashirdik</b> — endi do'konda mijozlarga ko'rinmaydi, "
+        "lekin eski buyurtmalar va statistikada saqlanib qoladi.\n\n"
+        "Uni «\U0001F5C4️ Arxiv» bo'limida topasiz.",
+        reply_markup=admin_products_list_kb(
+            [x for x in await products.list_all() if x.is_visible],
+            len([x for x in await products.list_all() if not x.is_visible]),
+        ),
     )
     await callback.answer()

@@ -76,10 +76,14 @@ async def _reflect_delivery_on_admin_card(bot, data: dict, order) -> None:
 
 
 async def _product_summary_and_kb(session: AsyncSession, product_id: int):
-    from app.handlers.admin.products import _product_summary  # local import avoids cycle
+    """Returns (product, text, keyboard) for the product's root group —
+    after editing a field the admin lands back on the grouped screen with
+    the new value already visible."""
+    from app.handlers.admin.products import render_product_group  # local import avoids cycle
 
     product = await ProductRepository(session).get_by_id(product_id)
-    return product, _product_summary(product), admin_product_detail_kb(product)
+    text, kb = render_product_group(product, "root")
+    return product, text, kb
 
 
 @router.message(AdminInput.waiting_text, F.text)
