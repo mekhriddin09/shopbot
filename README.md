@@ -381,7 +381,7 @@ Admin panel → Sozlamalar → **⭐ Fragment (Stars/Premium)**:
 
 - **🔑 Hamyon seed iborasi** — 24 so'z. Seed **faqat serverda**, faqat tranzaksiyani imzolash uchun ishlatiladi: kutubxona kalitni lokal hisoblaydi va tarmoqqa faqat imzolangan tranzaksiya (BOC) ketadi. Seed hech qachon hech qanday so'rovda yuborilmaydi (kod auditdan o'tkazilgan).
 - **🌐 TON API kaliti** — toncenter/tonconsole kaliti.
-- **🍪 fragment.com cookie'lari** — brauzerdan olingan cookie'lar (JSON yoki `nom=qiymat; nom2=qiymat2` shaklida). **Uchalasi ham kerak: `stel_ssid`, `stel_token`, `stel_dt`** — bittasi yetishmasa kutubxona ishga tushmaydi. **Bular vaqti-vaqti bilan eskiradi** — eskirganda bot sizga "KIRISH: cookie'lar eskirgan" deb aytadi, siz shu yerdan yangilaysiz.
+- **🍪 fragment.com cookie'lari** — brauzerdan olingan cookie'lar (JSON yoki `nom=qiymat; nom2=qiymat2` shaklida). **To'rttasi ham kerak: `stel_ssid`, `stel_token`, `stel_dt`, `stel_ton_token`.** Oxirgisi faqat fragment.com'da TON hamyon ulangach paydo bo'ladi va xarid qilish uchun majburiy. **Bular vaqti-vaqti bilan eskiradi** — eskirganda bot sizga "KIRISH: cookie'lar eskirgan" deb aytadi, siz shu yerdan yangilaysiz.
 - **👛 Hamyon versiyasi** — odatda `V5R1` (yangi hamyonlar), eski hamyonlarda `V4R2`.
 
 ### Mahsulot qanday yaratiladi

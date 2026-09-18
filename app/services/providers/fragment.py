@@ -35,9 +35,14 @@ _MIN_STARS = 50
 _MAX_STARS = 1_000_000
 _PREMIUM_MONTHS = (3, 6, 12)
 
-# fragment-api-py refuses to start without all three of these, so we check
-# them up front and name the missing one.
-REQUIRED_COOKIES = ("stel_ssid", "stel_token", "stel_dt")
+# fragment-api-py refuses to start without the first three, and every
+# wallet-backed operation (which is all of ours — reading the balance and
+# paying with TON both go through the wallet) additionally needs
+# stel_ton_token. That last one only exists once a TON wallet has been
+# connected on fragment.com, which makes it the one cookie people miss:
+# they log in with Telegram, copy three cookies, and only discover the
+# fourth when a purchase fails. So it's required here, up front.
+REQUIRED_COOKIES = ("stel_ssid", "stel_token", "stel_dt", "stel_ton_token")
 
 # Column titles from the Chrome DevTools cookie table, which get copied
 # along with the rows more often than not.
@@ -201,10 +206,13 @@ class FragmentProvider(BaseProvider):
         # missing rather than a generic "cookies are invalid".
         missing = [name for name in REQUIRED_COOKIES if not cookies.get(name)]
         if missing:
-            return None, (
-                f"Fragment: cookie'lar to'liq emas — yetishmayapti: {', '.join(missing)}. "
-                "Brauzerda fragment.com → F12 → Application → Cookies dan uchalasini ko'chiring."
+            hint = (
+                "fragment.com'da TON hamyonni ulang (Connect TON), so'ng cookie'larni "
+                "qayta ko'chiring — stel_ton_token faqat hamyon ulangach paydo bo'ladi."
+                if "stel_ton_token" in missing
+                else "Brauzerda fragment.com → F12 → Application → Cookies dan ko'chiring."
             )
+            return None, f"Fragment: cookie'lar to'liq emas — yetishmayapti: {', '.join(missing)}. {hint}"
 
         try:
             from FragmentAPI import FragmentClient  # type: ignore

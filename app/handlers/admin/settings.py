@@ -184,6 +184,10 @@ async def settings_test_fragment(callback: CallbackQuery, session: AsyncSession)
         read = ", ".join(sorted(cookies)) if cookies else "hech narsa o'qilmadi"
         lines.append(f"❌ Cookie'lar — yetishmayapti: {', '.join(missing_cookies)}")
         lines.append(f"   O'qilgani: {read}")
+        if "stel_ton_token" in missing_cookies:
+            lines.append(
+                "   ℹ️ stel_ton_token faqat fragment.com'da TON hamyon ulangach paydo bo'ladi."
+            )
     else:
         lines.append(f"✅ Cookie'lar ({', '.join(sorted(cookies))})")
     version = cfg.get("wallet_version") or "-"
