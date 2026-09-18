@@ -39,6 +39,13 @@ _PREMIUM_MONTHS = (3, 6, 12)
 # them up front and name the missing one.
 REQUIRED_COOKIES = ("stel_ssid", "stel_token", "stel_dt")
 
+# Column titles from the Chrome DevTools cookie table, which get copied
+# along with the rows more often than not.
+_COOKIE_TABLE_HEADERS = frozenset(
+    {"name", "value", "domain", "path", "expires", "max-age", "size",
+     "httponly", "secure", "samesite", "partition", "priority"}
+)
+
 
 def parse_external_ref(ref: str | None) -> tuple[str, int] | None:
     """`"stars:100"` -> `("stars", 100)`, `"premium:3"` -> `("premium", 3)`.
@@ -114,24 +121,65 @@ class FragmentProvider(BaseProvider):
 
     @staticmethod
     def _parse_cookies(raw: str) -> dict[str, str]:
-        """Accepts either JSON (`{"stel_ssid": "..."}`) or the
-        `name=value; name2=value2` form copied from a browser."""
+        """Read cookies out of whatever the admin actually pasted.
+
+        This is deliberately forgiving, because the realistic input isn't a
+        tidy header string — it's whatever came out of Chrome DevTools.
+        Copying a row from the Cookies *table* gives tab- or space-separated
+        "name value" lines with no `=` and no `;` at all, which the strict
+        `name=value; ...` parser silently dropped. A cookie quietly going
+        missing here surfaces much later as an unexplained login failure, so
+        every plausible shape is accepted:
+
+            stel_dt=-300; stel_ssid=abc; stel_token=def
+            stel_dt=-300
+            stel_ssid=abc
+            stel_dt    -300
+            stel_ssid  abc
+            {"stel_dt": "-300", ...}
+
+        Values may legitimately start with "-" (stel_dt is a UTC offset), so
+        nothing is stripped beyond whitespace and surrounding quotes.
+        """
         raw = (raw or "").strip()
         if not raw:
             return {}
+
         if raw.startswith("{"):
             import json
 
             try:
                 data = json.loads(raw)
-                return {str(k): str(v) for k, v in data.items() if v}
+                return {str(k).strip(): str(v).strip() for k, v in data.items() if str(v).strip()}
             except Exception:  # noqa: BLE001
                 return {}
+
         cookies: dict[str, str] = {}
-        for part in raw.split(";"):
-            name, _, value = part.strip().partition("=")
-            if name and value:
-                cookies[name.strip()] = value.strip()
+        # Newlines are separators too — a pasted multi-line block is the
+        # single most common form and used to be read as one giant value.
+        for chunk in raw.replace("\r", "\n").replace(";", "\n").split("\n"):
+            part = chunk.strip()
+            if not part:
+                continue
+            if "=" in part:
+                name, _, value = part.partition("=")
+            else:
+                # "name<TAB>value" or "name value" from the DevTools table.
+                split = part.split(None, 1)
+                if len(split) != 2:
+                    continue
+                name, value = split
+            name = name.strip().strip('"').strip("'")
+            value = value.strip().strip('"').strip("'")
+            # Only keep things that look like cookie names, and drop the
+            # DevTools table's own header row ("Name  Value  Domain …"),
+            # which otherwise sails through as a cookie called "Name".
+            if not name or not value:
+                continue
+            if name.lower() in _COOKIE_TABLE_HEADERS:
+                continue
+            if all(ch.isalnum() or ch in "_-" for ch in name):
+                cookies[name] = value
         return cookies
 
     async def _client(self):

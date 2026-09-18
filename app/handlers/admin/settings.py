@@ -179,7 +179,11 @@ async def settings_test_fragment(callback: CallbackQuery, session: AsyncSession)
 
     missing_cookies = [name for name in REQUIRED_COOKIES if not cookies.get(name)]
     if missing_cookies:
+        # Show what WAS read, not only what's missing: when a paste is
+        # mangled the admin needs to see how the bot actually understood it.
+        read = ", ".join(sorted(cookies)) if cookies else "hech narsa o'qilmadi"
         lines.append(f"❌ Cookie'lar — yetishmayapti: {', '.join(missing_cookies)}")
+        lines.append(f"   O'qilgani: {read}")
     else:
         lines.append(f"✅ Cookie'lar ({', '.join(sorted(cookies))})")
     version = cfg.get("wallet_version") or "-"
