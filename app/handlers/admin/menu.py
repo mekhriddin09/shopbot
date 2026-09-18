@@ -32,6 +32,8 @@ async def open_admin_panel(message: Message, state: FSMContext) -> None:
 
 @router.message(F.text == ADMIN_BTN_ORDERS)
 async def goto_orders(message: Message) -> None:
+    # One screen per section: everything inside Orders now edits this very
+    # message, so the section never grows past a single card in the chat.
     await message.answer("\U0001F4E5 Buyurtmalar bo'limi:", reply_markup=admin_orders_menu_kb())
 
 

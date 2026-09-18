@@ -20,6 +20,7 @@ from app.repositories.setting_repo import SettingRepository
 from app.states.admin_states import AdminInput
 from app.utils.formatting import fmt_price
 from app.utils.i18n import t
+from app.utils.screen import show
 
 logger = logging.getLogger("admin")
 
@@ -88,7 +89,7 @@ async def settings_open_group(callback: CallbackQuery, callback_data: AdminSetti
     except TelegramBadRequest as exc:
         if "message is not modified" not in str(exc):
             # Can't edit (e.g. the message was a photo/too old) — send fresh.
-            await callback.message.answer(text, reply_markup=kb)
+            await show(callback, text, reply_markup=kb)
     await callback.answer()
 
 
@@ -108,9 +109,9 @@ async def settings_pick_lang(callback: CallbackQuery, callback_data: AdminSettin
 async def settings_edit_start(callback: CallbackQuery, callback_data: AdminSettingsCB, session: AsyncSession, state: FSMContext) -> None:
     current = await SettingRepository(session).get(callback_data.key)
     await state.set_state(AdminInput.waiting_text)
-    await state.update_data(action="settings_edit", key=callback_data.key, group=callback_data.group or "root")
+    await state.update_data(panel_chat_id=callback.message.chat.id, panel_message_id=callback.message.message_id, action="settings_edit", key=callback_data.key, group=callback_data.group or "root")
     shown = current if current else "(bo'sh)"
-    await callback.message.answer(
+    await show(callback, 
         f"Joriy qiymat:\n\n{shown}\n\n"
         f"👇 Yangi matnni yozing, YOKI matn juda uzun bo'lsa, .txt fayl qilib yuboring:"
     )
@@ -136,8 +137,8 @@ async def settings_edit_masked_start(
     the shared "settings_edit" action in generic_input.py)."""
     current = await SettingRepository(session).get(callback_data.key)
     await state.set_state(AdminInput.waiting_text)
-    await state.update_data(action="settings_edit", key=callback_data.key, group=callback_data.group or "root")
-    await callback.message.answer(
+    await state.update_data(panel_chat_id=callback.message.chat.id, panel_message_id=callback.message.message_id, action="settings_edit", key=callback_data.key, group=callback_data.group or "root")
+    await show(callback, 
         f"Joriy qiymat (oxirgi 4 belgi): {_mask_secret(current)}\n\n"
         f"👇 Yangi qiymatni yozing (bekor qilish uchun '-' yuboring — o'zgarishsiz qoladi):"
     )
@@ -167,7 +168,7 @@ async def settings_test_fragment(callback: CallbackQuery, session: AsyncSession)
         cfg = await provider._config()  # noqa: SLF001 - same module family
         cookies = provider._parse_cookies(cfg.get("cookies_raw", ""))  # noqa: SLF001
     except Exception as exc:  # noqa: BLE001
-        await callback.message.answer(
+        await show(callback, 
             f"❌ Sozlamalarni o'qib bo'lmadi:\n<code>{type(exc).__name__}: {exc}</code>"
         )
         return
@@ -199,11 +200,11 @@ async def settings_test_fragment(callback: CallbackQuery, session: AsyncSession)
     ready = bool(cfg.get("seed") and cfg.get("api_key") and not missing_cookies)
     if not ready:
         lines += ["", "Avval yuqoridagi ❌ bandlarni to'ldiring."]
-        await callback.message.answer("\n".join(lines))
+        await show(callback, "\n".join(lines))
         return
 
     lines += ["", "⏳ Endi Fragment bilan aloqa tekshirilmoqda (30 soniyagacha)…"]
-    await callback.message.answer("\n".join(lines))
+    await show(callback, "\n".join(lines))
 
     # ---- live checks, each isolated: a hang or a crash still reports ----
     out = ["\U0001F50C <b>2/2 — Fragment bilan aloqa</b>", ""]
@@ -296,7 +297,7 @@ async def settings_test_fragment(callback: CallbackQuery, session: AsyncSession)
             "bilan bir xil ekanini bir tekshiring, keyin <code>stars:50</code> mahsulotini "
             "yaratib o'zingizga sinov xaridi qiling.",
         ]
-    await callback.message.answer("\n".join(out))
+    await show(callback, "\n".join(out))
 
 
 @router.callback_query(AdminSettingsCB.filter(F.action == "test_reseller"))
@@ -311,11 +312,11 @@ async def settings_test_reseller(callback: CallbackQuery, session: AsyncSession)
     provider = ResellerApiProvider()
     ok, balance, error = await provider.get_balance()
     if ok:
-        await callback.message.answer(
+        await show(callback, 
             f"✅ Reseller API bilan ulanish muvaffaqiyatli!\n\n💰 Balans: {fmt_price(float(balance or 0))}"
         )
     else:
-        await callback.message.answer(
+        await show(callback, 
             f"❌ Reseller API bilan ulanishda xatolik:\n\n<code>{error}</code>\n\n"
             f"Kalitni va manzilni tekshirib qayta urinib ko'ring."
         )
@@ -363,7 +364,6 @@ async def referral_withdraw_paid(
         return
     await referrals.mark_paid(withdrawal, callback.from_user.id)
     await callback.message.edit_text(callback.message.text + "\n\n✅ TO'LANDI")
-    await callback.message.edit_reply_markup(reply_markup=None)
     try:
         await callback.bot.send_message(
             withdrawal.user.telegram_id,
@@ -385,7 +385,6 @@ async def referral_withdraw_reject(
         return
     await referrals.mark_rejected(withdrawal, callback.from_user.id)
     await callback.message.edit_text(callback.message.text + "\n\n❌ RAD ETILDI")
-    await callback.message.edit_reply_markup(reply_markup=None)
     try:
         await callback.bot.send_message(
             withdrawal.user.telegram_id,

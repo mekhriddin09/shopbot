@@ -156,6 +156,25 @@ class OrderRepository:
         order.delivered_at = datetime.now(timezone.utc)
         await self.session.commit()
 
+    async def page_by_status(
+        self, status: OrderStatus, offset: int = 0, limit: int = 8
+    ) -> list[Order]:
+        """One page of orders for the admin list screen.
+
+        Paged rather than "last 50 in one go" because the list now lives in
+        a single editable message: a page has to fit on a phone screen, and
+        the admin walks through pages instead of scrolling a wall of them.
+        """
+        result = await self.session.execute(
+            select(Order)
+            .options(selectinload(Order.product), selectinload(Order.user))
+            .where(Order.status == status)
+            .order_by(Order.id.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
     async def count_by_status(self, status: OrderStatus) -> int:
         result = await self.session.execute(
             select(func.count(Order.id)).where(Order.status == status)

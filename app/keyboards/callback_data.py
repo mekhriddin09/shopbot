@@ -19,6 +19,12 @@ class ShopCB(CallbackData, prefix="shop"):
 class OrderCB(CallbackData, prefix="order"):
     action: str  # approve | reject | ask_reject_reason | write_manual | retry_auto
     order_id: int
+    # Where the admin came from, so "back" returns to that exact list page
+    # instead of dumping them at the top. `str | None`, never plain `str`:
+    # aiogram unpacks an absent field as None and a non-Optional str would
+    # make the whole button silently match no handler.
+    src: str | None = None
+    page: int = 0
 
 
 class MyOrderCB(CallbackData, prefix="myorder"):
@@ -87,7 +93,10 @@ class AdminInventoryCB(CallbackData, prefix="ainv"):
 
 
 class AdminOrderListCB(CallbackData, prefix="aordl"):
-    action: str  # pending | approved | delivered | failed | rejected | search | retry_all
+    action: str  # menu | pending | approved | delivered | failed | rejected |
+    #              search | retry_all | open
+    page: int = 0
+    order_id: int = 0
 
 
 class AdminSettingsCB(CallbackData, prefix="aset"):

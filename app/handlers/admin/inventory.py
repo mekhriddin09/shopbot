@@ -21,6 +21,7 @@ from app.repositories.product_repo import ProductRepository
 from app.repositories.stock_waiter_repo import StockWaiterRepository
 from app.services.stock_notify_service import notify_all_waiters
 from app.states.admin_states import AdminInput
+from app.utils.screen import show
 
 router = Router(name="admin_inventory")
 router.message.filter(IsAdmin())
@@ -40,16 +41,16 @@ async def inventory_menu(callback: CallbackQuery, callback_data: AdminInventoryC
 @router.callback_query(AdminInventoryCB.filter(F.action == "add_one"))
 async def inventory_add_one(callback: CallbackQuery, callback_data: AdminInventoryCB, state: FSMContext) -> None:
     await state.set_state(AdminInput.waiting_text)
-    await state.update_data(action="inventory_add_one", product_id=callback_data.product_id)
-    await callback.message.answer("Yangi kodni yozing (bitta):")
+    await state.update_data(panel_chat_id=callback.message.chat.id, panel_message_id=callback.message.message_id, action="inventory_add_one", product_id=callback_data.product_id)
+    await show(callback, "Yangi kodni yozing (bitta):")
     await callback.answer()
 
 
 @router.callback_query(AdminInventoryCB.filter(F.action == "bulk"))
 async def inventory_bulk_start(callback: CallbackQuery, callback_data: AdminInventoryCB, state: FSMContext) -> None:
     await state.set_state(AdminInput.waiting_codes_file_or_text)
-    await state.update_data(action="inventory_bulk", product_id=callback_data.product_id)
-    await callback.message.answer(
+    await state.update_data(panel_chat_id=callback.message.chat.id, panel_message_id=callback.message.message_id, action="inventory_bulk", product_id=callback_data.product_id)
+    await show(callback, 
         "Kodlarni yuboring — har bir qatorda bitta kod (matn sifatida yozing yoki .txt fayl yuboring)."
     )
     await callback.answer()
@@ -99,7 +100,7 @@ async def inventory_view(callback: CallbackQuery, callback_data: AdminInventoryC
         return
     preview = "\n".join(c.code for c in codes[:30])
     more = f"\n... va yana {len(codes) - 30} ta" if len(codes) > 30 else ""
-    await callback.message.answer(f"\U0001F4CB Ishlatilmagan kodlar ({len(codes)}):\n\n<code>{preview}</code>{more}")
+    await show(callback, f"\U0001F4CB Ishlatilmagan kodlar ({len(codes)}):\n\n<code>{preview}</code>{more}")
     await callback.answer()
 
 

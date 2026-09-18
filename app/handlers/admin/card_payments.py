@@ -16,6 +16,7 @@ from app.keyboards.callback_data import CardAutoCB
 from app.repositories.order_repo import OrderRepository
 from app.states.admin_states import AdminInput
 from app.utils.formatting import fmt_price
+from app.utils.screen import show
 
 router = Router(name="admin_card_payments")
 router.callback_query.filter(IsAdmin())
@@ -24,15 +25,14 @@ admin_actions_logger = logging.getLogger("admin_actions")
 
 
 async def _strip_buttons(callback: CallbackQuery, suffix: str) -> None:
-    try:
-        body = callback.message.text or callback.message.caption or ""
-        await callback.message.edit_text(f"{body}\n\n{suffix}")
-    except TelegramBadRequest:
-        pass
-    try:
-        await callback.message.edit_reply_markup(reply_markup=None)
-    except TelegramBadRequest:
-        pass
+    """Append the outcome to the alert card and drop its buttons.
+
+    The card stays where it is (admins refer back to it) but stops being
+    actionable, so the same payment can't be confirmed twice from a card
+    that's still sitting in the chat.
+    """
+    body = callback.message.text or callback.message.caption or ""
+    await show(callback, f"{body}\n\n{suffix}", reply_markup=None)
 
 
 @router.callback_query(CardAutoCB.filter(F.action == "admin_confirm"))
@@ -70,9 +70,9 @@ async def card_admin_reject(
         return
 
     await state.set_state(AdminInput.waiting_text)
-    await state.update_data(action="reject_reason", order_id=order.id)
+    await state.update_data(panel_chat_id=callback.message.chat.id, panel_message_id=callback.message.message_id, action="reject_reason", order_id=order.id)
     await _strip_buttons(callback, "❌ Rad etilmoqda…")
-    await callback.message.answer("❌ Rad etish sababini yozing (yoki '-' yuboring):")
+    await show(callback, "❌ Rad etish sababini yozing (yoki '-' yuboring):")
     await callback.answer()
 
 

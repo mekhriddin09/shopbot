@@ -104,6 +104,7 @@ async def broadcast_ask_text(
     recipients = await _resolve_recipients(session, callback_data.action, callback_data.product_id)
     await state.set_state(AdminInput.waiting_text)
     await state.update_data(
+        panel_chat_id=callback.message.chat.id, panel_message_id=callback.message.message_id, 
         action="broadcast_send", audience=callback_data.action, product_id=callback_data.product_id
     )
     await callback.message.edit_text(

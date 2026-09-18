@@ -11,12 +11,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models.enums import DeliveryMode, OrderStatus
 from app.filters.is_admin import IsAdmin
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from app.keyboards.admin_kb import (
     admin_order_detail_kb,
+    admin_orders_list_kb,
     admin_orders_menu_kb,
     admin_retry_all_kb,
     admin_write_manual_kb,
 )
+from app.utils.screen import answer_and_show, show
 from app.keyboards.callback_data import AdminOrderListCB, OrderCB
 from app.repositories.order_repo import OrderRepository
 from app.services.delivery_service import DeliveryService
@@ -44,6 +47,23 @@ _STATUS_MAP = {
 # still need to push the product through by hand (e.g. API delivery failed,
 # or it's a manual-mode product waiting for its message).
 _NEEDS_MANUAL_BUTTON = {OrderStatus.APPROVED, OrderStatus.FAILED}
+
+_STATUS_TITLES = {
+    "pending": "⏳ <b>Kutilayotgan</b>",
+    "approved": "✅ <b>Tasdiqlangan</b>",
+    "delivered": "\U0001F4E6 <b>Yetkazilgan</b>",
+    "failed": "⚠️ <b>Yetkazilmagan</b>",
+    "rejected": "❌ <b>Rad etilgan</b>",
+}
+
+
+def _status_key(status: OrderStatus) -> str | None:
+    """Reverse of _STATUS_MAP, so a detail screen knows which list to go
+    back to."""
+    for key, value in _STATUS_MAP.items():
+        if value == status:
+            return key
+    return None
 
 
 def _order_line(order) -> str:
@@ -155,50 +175,106 @@ async def render_order_detail(session: AsyncSession, order) -> str:
     )
 
 
-async def show_order_detail(message, session: AsyncSession, order) -> None:
-    await message.answer(
-        await render_order_detail(session, order), reply_markup=admin_order_detail_kb(order)
+async def show_order_detail(
+    event, session: AsyncSession, order, src: str | None = None, page: int = 0
+) -> None:
+    """Render the order screen in place (or as a new screen when the admin
+    arrived by typing an ID, where there is no panel message to reuse)."""
+    await show(
+        event,
+        await render_order_detail(session, order),
+        reply_markup=admin_order_detail_kb(order, src=src, page=page),
     )
+
+
+@router.callback_query(AdminOrderListCB.filter(F.action == "menu"))
+async def orders_menu(callback: CallbackQuery) -> None:
+    await answer_and_show(callback, "\U0001F4E5 Buyurtmalar bo'limi:", admin_orders_menu_kb())
+
+
+@router.callback_query(AdminOrderListCB.filter(F.action == "noop"))
+async def orders_noop(callback: CallbackQuery) -> None:
+    """The page counter in the middle of the pager is a label, not a
+    button — but Telegram still needs the callback answered or the client
+    spins on it."""
+    await callback.answer()
 
 
 @router.callback_query(AdminOrderListCB.filter(F.action == "search"))
 async def order_search_prompt(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminInput.waiting_text)
-    await state.update_data(action="order_search")
-    await callback.message.answer(
+    await state.update_data(
+        action="order_search",
+        panel_chat_id=callback.message.chat.id,
+        panel_message_id=callback.message.message_id,
+    )
+    await answer_and_show(
+        callback,
         "\U0001F50D Buyurtma ID'sini yuboring.\n\n"
         "Masalan: <code>46C94A7FC616</code>\n"
-        "(mijozga ko'rsatiladigan ID yoki ichki raqam ham bo'ladi)"
+        "(mijozga ko'rsatiladigan ID yoki ichki raqam ham bo'ladi)",
+        InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="‹ Orqaga", callback_data=AdminOrderListCB(action="menu").pack()
+                    )
+                ]
+            ]
+        ),
     )
+
+
+@router.callback_query(AdminOrderListCB.filter(F.action == "open"))
+async def open_order_from_list(
+    callback: CallbackQuery, callback_data: AdminOrderListCB, session: AsyncSession
+) -> None:
+    order = await OrderRepository(session).get_by_id(callback_data.order_id)
+    if order is None:
+        await callback.answer("Buyurtma topilmadi.", show_alert=True)
+        return
+    src = _status_key(order.status)
     await callback.answer()
+    await show_order_detail(callback, session, order, src=src, page=callback_data.page)
+
+
+ORDERS_PER_PAGE = 8
+
+
+async def render_orders_list(session: AsyncSession, status_key: str, page: int):
+    """(text, keyboard) for one page of a status list."""
+    status = _STATUS_MAP[status_key]
+    repo = OrderRepository(session)
+    total = await repo.count_by_status(status)
+    page = max(0, page)
+    orders = await repo.page_by_status(status, offset=page * ORDERS_PER_PAGE, limit=ORDERS_PER_PAGE)
+
+    title = _STATUS_TITLES.get(status_key, status_key)
+    if not orders:
+        text = f"{title}\n\nBu bo'limda buyurtma yo'q."
+    else:
+        lines = [f"{title} — jami {total} ta", ""]
+        for order in orders:
+            lines.append(_order_line(order))
+            lines.append("")
+        text = "\n".join(lines).strip()
+        if status_key == "failed":
+            text += (
+                "\n\n\U0001F4A1 Sababini (masalan hamyon balansi) bartaraf etgan bo'lsangiz, "
+                "hammasini bitta tugma bilan qayta urinib ko'ring."
+            )
+    return text, admin_orders_list_kb(orders, status_key, page, total, ORDERS_PER_PAGE)
 
 
 @router.callback_query(AdminOrderListCB.filter())
-async def list_orders(callback: CallbackQuery, callback_data: AdminOrderListCB, session: AsyncSession) -> None:
-    status = _STATUS_MAP.get(callback_data.action)
-    if status is None:
+async def list_orders(
+    callback: CallbackQuery, callback_data: AdminOrderListCB, session: AsyncSession
+) -> None:
+    if callback_data.action not in _STATUS_MAP:
         await callback.answer()
         return
-    orders = await OrderRepository(session).list_by_status(status)
-    if not orders:
-        await callback.message.answer("Bu bo'limda buyurtmalar yo'q.")
-        await callback.answer()
-        return
-    if len(orders) == 50:
-        await callback.message.answer("ℹ️ Faqat so'nggi 50 ta buyurtma ko'rsatilmoqda.")
-    if status == OrderStatus.FAILED:
-        await callback.message.answer(
-            f"❌ {len(orders)} ta buyurtma avtomatik yetkazilmagan.\n"
-            f"Sababini (masalan hamyon balansi) bartaraf etgan bo'lsangiz, "
-            f"hammasini bir tugma bilan qayta urinib ko'rish mumkin:",
-            reply_markup=admin_retry_all_kb(),
-        )
-    for order in orders:
-        if status in _NEEDS_MANUAL_BUTTON:
-            await callback.message.answer(_order_line(order), reply_markup=admin_write_manual_kb(order.id))
-        else:
-            await callback.message.answer(_order_line(order))
-    await callback.answer()
+    text, kb = await render_orders_list(session, callback_data.action, callback_data.page)
+    await answer_and_show(callback, text, kb)
 
 
 async def _retry_one(bot, session: AsyncSession, order_id: int) -> tuple[bool, str]:
@@ -243,14 +319,24 @@ async def retry_order_delivery(
     admin_actions_logger.info(
         "order_retry order=%s admin=%s ok=%s", callback_data.order_id, callback.from_user.id, ok
     )
-    if ok:
-        await callback.message.answer(f"✅ Buyurtma <code>{callback_data.order_id}</code> yetkazildi.")
-    else:
-        await callback.message.answer(
-            f"❌ Hali ham bo'lmadi.\n{line}\n\n"
-            f"Sababni bartaraf etib yana urinib ko'ring yoki qo'lda yuboring:",
-            reply_markup=admin_write_manual_kb(callback_data.order_id),
-        )
+
+    # Redraw THIS screen with the new outcome. Sending the result as a new
+    # message was the actual complaint: the old card still said "DELIVERY
+    # FAILED" while the reply somewhere below said it had succeeded, and
+    # the admin had to scroll to find out which was current.
+    order = await OrderRepository(session).get_by_id(callback_data.order_id)
+    if order is None:
+        return
+    header = (
+        "✅ <b>YETKAZILDI</b> (qayta urinishdan keyin)\n\n"
+        if ok
+        else f"❌ <b>Hali ham bo'lmadi</b>\n{line}\n\n"
+    )
+    await show(
+        callback,
+        header + await render_order_detail(session, order),
+        reply_markup=admin_order_detail_kb(order, src=callback_data.src, page=callback_data.page),
+    )
 
 
 @router.callback_query(AdminOrderListCB.filter(F.action == "retry_all"))
@@ -273,10 +359,16 @@ async def retry_all_failed(callback: CallbackQuery, session: AsyncSession) -> No
     admin_actions_logger.info(
         "orders_retry_all admin=%s total=%s ok=%s", callback.from_user.id, len(failed), done
     )
-    await callback.message.answer(
+    # Back to the (now shorter) failed list, with the summary on top of it.
+    text, kb = await render_orders_list(session, "failed", 0)
+    await show(
+        callback,
         f"\U0001F501 <b>Qayta urinish natijasi</b>\n\n"
         f"Jami: {len(failed)} ta · Yetkazildi: {done} ta · Qoldi: {len(failed) - done} ta\n\n"
-        + "\n".join(lines[:30])
+        + "\n".join(lines[:15])
+        + "\n\n"
+        + text,
+        reply_markup=kb,
     )
 
 
@@ -297,10 +389,6 @@ async def approve_order(callback: CallbackQuery, callback_data: OrderCB, session
         # of leaving the order paid-for-but-undelivered with no recovery
         # path in the UI.
         await callback.answer(str(exc), show_alert=True)
-        try:
-            await callback.message.edit_reply_markup(reply_markup=None)
-        except Exception:  # noqa: BLE001 - best-effort, message may not support it
-            pass
         # Keep the customer in the loop too: they've paid and been told
         # "approved", so silence here reads as a scam.
         failed_order = await OrderRepository(session).get_by_id(callback_data.order_id)
@@ -316,11 +404,18 @@ async def approve_order(callback: CallbackQuery, callback_data: OrderCB, session
                 )
             except Exception:  # noqa: BLE001 - customer may have blocked the bot
                 pass
-        await callback.message.answer(
-            f"⚠️ Buyurtma <code>{callback_data.order_id}</code> tasdiqlandi, lekin avtomatik yetkazib "
-            f"bo'lmadi:\n{exc}\n\nQo'lda yetkazib berishingiz mumkin:",
-            reply_markup=admin_write_manual_kb(callback_data.order_id),
-        )
+        # Redraw this same screen: approved, delivery failed, here are the
+        # ways out (retry / send by hand) — rather than leaving the old
+        # "pending" card above a separate error message.
+        if failed_order is not None:
+            await show(
+                callback,
+                f"⚠️ <b>Tasdiqlandi, lekin avtomatik yetkazilmadi</b>\n{exc}\n\n"
+                + await render_order_detail(session, failed_order),
+                reply_markup=admin_order_detail_kb(
+                    failed_order, src=callback_data.src, page=callback_data.page
+                ),
+            )
         return
 
     admin_actions_logger.info("order_approved order=%s admin=%s", callback_data.order_id, admin_id)
@@ -340,6 +435,10 @@ async def approve_order(callback: CallbackQuery, callback_data: OrderCB, session
         await state.update_data(
             action="manual_deliver",
             order_id=order.id,
+            panel_chat_id=callback.message.chat.id,
+            panel_message_id=callback.message.message_id,
+            src=callback_data.src,
+            page=callback_data.page,
             # Threaded through so generic_input.py's manual_deliver handler
             # can edit *this* original notification (screenshot or text)
             # once the admin actually types the delivery message, instead
@@ -353,10 +452,11 @@ async def approve_order(callback: CallbackQuery, callback_data: OrderCB, session
             admin_original_body=callback.message.caption if callback.message.text is None else callback.message.text,
         )
         preorder_note = "\n⏳ Bu — oldindan buyurtma edi. Mahsulot stokga kelgach yuboring." if order.is_preorder else ""
-        await callback.message.answer(
-            f"✏️ Buyurtma <code>{order.order_uuid}</code> uchun mijozga yuboriladigan xabarni yozing:{preorder_note}"
+        await show(
+            callback,
+            f"✏️ Buyurtma <code>{order.order_uuid}</code> uchun mijozga yuboriladigan "
+            f"xabarni yozing:{preorder_note}",
         )
-        await callback.message.edit_reply_markup(reply_markup=None)
 
     await callback.answer("Tasdiqlandi ✅")
 
@@ -364,10 +464,20 @@ async def approve_order(callback: CallbackQuery, callback_data: OrderCB, session
 @router.callback_query(OrderCB.filter(F.action == "reject"))
 async def reject_order_start(callback: CallbackQuery, callback_data: OrderCB, state: FSMContext) -> None:
     await state.set_state(AdminInput.waiting_text)
-    await state.update_data(action="reject_reason", order_id=callback_data.order_id)
-    await callback.message.answer("❌ Rad etish sababini yozing (yoki '-' yuboring):")
-    await callback.message.edit_reply_markup(reply_markup=None)
-    await callback.answer()
+    await state.update_data(
+        action="reject_reason",
+        order_id=callback_data.order_id,
+        # Remembered so the typed-reason handler can put this same screen
+        # back where it was instead of trailing another message.
+        panel_chat_id=callback.message.chat.id,
+        panel_message_id=callback.message.message_id,
+        src=callback_data.src,
+        page=callback_data.page,
+    )
+    await answer_and_show(
+        callback,
+        "❌ <b>Rad etish</b>\n\nSababini yozib yuboring (yoki '-' yuboring — sababsiz rad etiladi).",
+    )
 
 
 @router.callback_query(OrderCB.filter(F.action == "write_manual"))
@@ -379,11 +489,16 @@ async def write_manual_start(callback: CallbackQuery, callback_data: OrderCB, st
     await state.update_data(
         action="manual_deliver",
         order_id=callback_data.order_id,
+        panel_chat_id=callback.message.chat.id,
+        panel_message_id=callback.message.message_id,
+        src=callback_data.src,
+        page=callback_data.page,
         admin_chat_id=callback.message.chat.id,
         admin_message_id=callback.message.message_id,
         admin_msg_is_photo=callback.message.text is None,
         admin_original_body=callback.message.caption if callback.message.text is None else callback.message.text,
     )
-    await callback.message.answer("✍️ Mijozga yuboriladigan xabarni yozing:")
-    await callback.message.edit_reply_markup(reply_markup=None)
-    await callback.answer()
+    await answer_and_show(
+        callback,
+        "✍️ <b>Qo'lda yetkazish</b>\n\nMijozga yuboriladigan xabarni (yoki faylni) yuboring.",
+    )

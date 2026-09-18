@@ -23,6 +23,7 @@ from app.keyboards.callback_data import AdminProductCB
 from app.repositories.product_repo import ProductRepository
 from app.states.admin_states import AdminInput
 from app.utils.formatting import fmt_price
+from app.utils.screen import show
 
 router = Router(name="admin_products")
 router.message.filter(IsAdmin())
@@ -216,8 +217,8 @@ async def product_open(callback: CallbackQuery, callback_data: AdminProductCB, s
 @router.callback_query(AdminProductCB.filter(F.action == "add"))
 async def product_add_start(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminInput.waiting_text)
-    await state.update_data(action="new_product_name")
-    await callback.message.answer("Yangi mahsulot nomini yozing:")
+    await state.update_data(panel_chat_id=callback.message.chat.id, panel_message_id=callback.message.message_id, action="new_product_name")
+    await show(callback, "Yangi mahsulot nomini yozing:")
     await callback.answer()
 
 
@@ -226,15 +227,15 @@ async def product_edit_field(callback: CallbackQuery, callback_data: AdminProduc
     field = callback_data.field
     if field == "image":
         await state.set_state(AdminInput.waiting_image)
-        await state.update_data(action="edit_product_field", product_id=callback_data.product_id, field=field)
-        await callback.message.answer("Yangi rasmni yuboring:")
+        await state.update_data(panel_chat_id=callback.message.chat.id, panel_message_id=callback.message.message_id, action="edit_product_field", product_id=callback_data.product_id, field=field)
+        await show(callback, "Yangi rasmni yuboring:")
         await callback.answer()
         return
 
     prompt = FIELD_PROMPTS.get(field, "Yangi qiymatni yozing:")
     await state.set_state(AdminInput.waiting_text)
-    await state.update_data(action="edit_product_field", product_id=callback_data.product_id, field=field)
-    await callback.message.answer(prompt)
+    await state.update_data(panel_chat_id=callback.message.chat.id, panel_message_id=callback.message.message_id, action="edit_product_field", product_id=callback_data.product_id, field=field)
+    await show(callback, prompt)
     await callback.answer()
 
 
@@ -268,8 +269,8 @@ async def product_apply_mode(
 
     if new_mode == DeliveryMode.API:
         await state.set_state(AdminInput.waiting_text)
-        await state.update_data(action="edit_product_field", product_id=product.id, field="provider_key")
-        await callback.message.answer(FIELD_PROMPTS["provider_key"])
+        await state.update_data(panel_chat_id=callback.message.chat.id, panel_message_id=callback.message.message_id, action="edit_product_field", product_id=product.id, field="provider_key")
+        await show(callback, FIELD_PROMPTS["provider_key"])
     text, kb = render_product_group(product, "delivery")
     await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer("Yetkazish rejimi yangilandi ✅")

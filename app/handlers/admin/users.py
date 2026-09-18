@@ -36,6 +36,7 @@ from app.repositories.setting_repo import SettingRepository
 from app.repositories.user_repo import UserRepository
 from app.states.admin_states import AdminInput
 from app.utils.formatting import fmt_datetime, fmt_price
+from app.utils.screen import show
 
 router = Router(name="admin_users")
 router.message.filter(IsAdmin())
@@ -109,8 +110,8 @@ async def goto_users(message: Message, state: FSMContext) -> None:
 @router.callback_query(AdminUserCB.filter(F.action == "search_prompt"))
 async def search_prompt(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminInput.waiting_text)
-    await state.update_data(action="user_search")
-    await callback.message.answer("🔎 Foydalanuvchini qidirish uchun Telegram ID yoki @username yuboring:")
+    await state.update_data(panel_chat_id=callback.message.chat.id, panel_message_id=callback.message.message_id, action="user_search")
+    await show(callback, "🔎 Foydalanuvchini qidirish uchun Telegram ID yoki @username yuboring:")
     await callback.answer()
 
 
@@ -137,7 +138,7 @@ async def show_user_orders(callback: CallbackQuery, callback_data: AdminUserCB, 
         return
     for order in orders:
         status_label = _STATUS_LABELS.get(order.status, order.status.value)
-        await callback.message.answer(
+        await show(callback, 
             f"🔹 <b>{order.product.name if order.product else '-'}</b>\n"
             f"🆔 <code>{order.order_uuid}</code>\n"
             f"Holat: {status_label}\n"
@@ -165,9 +166,9 @@ async def balance_adjust_start(callback: CallbackQuery, callback_data: AdminUser
     )
 
     await state.set_state(AdminInput.waiting_text)
-    await state.update_data(action="user_balance_adjust", user_id=user.id, sign=sign, use_points=use_points)
+    await state.update_data(panel_chat_id=callback.message.chat.id, panel_message_id=callback.message.message_id, action="user_balance_adjust", user_id=user.id, sign=sign, use_points=use_points)
     verb = "qo'shmoqchi" if sign > 0 else "ayirmoqchi"
-    await callback.message.answer(f"✏️ Necha <b>{unit}</b> {verb}bo'lsangiz, raqamda yozing:")
+    await show(callback, f"✏️ Necha <b>{unit}</b> {verb}bo'lsangiz, raqamda yozing:")
     await callback.answer()
 
 
@@ -178,8 +179,8 @@ async def message_start(callback: CallbackQuery, callback_data: AdminUserCB, sta
         await callback.answer("Foydalanuvchi topilmadi.", show_alert=True)
         return
     await state.set_state(AdminInput.waiting_text)
-    await state.update_data(action="user_send_message", user_id=user.id)
-    await callback.message.answer("✍️ Ushbu foydalanuvchiga yuboriladigan xabarni yozing:")
+    await state.update_data(panel_chat_id=callback.message.chat.id, panel_message_id=callback.message.message_id, action="user_send_message", user_id=user.id)
+    await show(callback, "✍️ Ushbu foydalanuvchiga yuboriladigan xabarni yozing:")
     await callback.answer()
 
 

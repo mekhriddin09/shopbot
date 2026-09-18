@@ -380,6 +380,68 @@ def inventory_delete_confirm_kb(product_id: int, action: str) -> InlineKeyboardM
     )
 
 
+def admin_orders_list_kb(
+    orders, status_key: str, page: int, total: int, per_page: int
+) -> InlineKeyboardMarkup:
+    """One row per order + pager, all inside a single screen.
+
+    The old list sent one message per order — fifty taps of scrolling for a
+    busy day, and every one of those messages kept live buttons long after
+    the order moved on. Here the list is one message: paging replaces it,
+    opening an order replaces it, and coming back replaces it again.
+    """
+    rows: list[list[InlineKeyboardButton]] = []
+    for order in orders:
+        who = order.user.username or order.user.telegram_id if order.user else "-"
+        name = (order.product.name if order.product else "-")[:22]
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"#{order.id} · {name} · @{who}",
+                    callback_data=AdminOrderListCB(
+                        action="open", order_id=order.id, page=page
+                    ).pack(),
+                )
+            ]
+        )
+
+    pages = max(1, (total + per_page - 1) // per_page)
+    if pages > 1:
+        nav: list[InlineKeyboardButton] = []
+        if page > 0:
+            nav.append(
+                InlineKeyboardButton(
+                    text="◀️", callback_data=AdminOrderListCB(action=status_key, page=page - 1).pack()
+                )
+            )
+        nav.append(
+            InlineKeyboardButton(
+                text=f"{page + 1}/{pages}", callback_data=AdminOrderListCB(action="noop").pack()
+            )
+        )
+        if page < pages - 1:
+            nav.append(
+                InlineKeyboardButton(
+                    text="▶️", callback_data=AdminOrderListCB(action=status_key, page=page + 1).pack()
+                )
+            )
+        rows.append(nav)
+
+    if status_key == "failed" and orders:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="\U0001F501 Hammasini qayta urinish",
+                    callback_data=AdminOrderListCB(action="retry_all", page=page).pack(),
+                )
+            ]
+        )
+    rows.append(
+        [InlineKeyboardButton(text="‹ Orqaga", callback_data=AdminOrderListCB(action="menu").pack())]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def admin_orders_menu_kb() -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton(text="⏳ Kutilayotgan", callback_data=AdminOrderListCB(action="pending").pack())],
@@ -392,7 +454,7 @@ def admin_orders_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def admin_order_detail_kb(order) -> InlineKeyboardMarkup:
+def admin_order_detail_kb(order, src: str | None = None, page: int = 0) -> InlineKeyboardMarkup:
     """Actions available on a single looked-up order. Which ones appear
     depends on where the order currently is, so the admin can't e.g. try to
     approve something already delivered."""
@@ -411,8 +473,8 @@ def admin_order_detail_kb(order) -> InlineKeyboardMarkup:
     if order.status in undecided:
         rows.append(
             [
-                InlineKeyboardButton(text="✅ Tasdiqlash va yetkazish", callback_data=OrderCB(action="approve", order_id=oid).pack()),
-                InlineKeyboardButton(text="❌ Rad etish", callback_data=OrderCB(action="reject", order_id=oid).pack()),
+                InlineKeyboardButton(text="✅ Tasdiqlash va yetkazish", callback_data=OrderCB(action="approve", order_id=oid, src=src, page=page).pack()),
+                InlineKeyboardButton(text="❌ Rad etish", callback_data=OrderCB(action="reject", order_id=oid, src=src, page=page).pack()),
             ]
         )
     if order.status in (OrderStatus.APPROVED, OrderStatus.FAILED):
@@ -422,13 +484,18 @@ def admin_order_detail_kb(order) -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(
                     text="\U0001F501 Avtomatik qayta urinish",
-                    callback_data=OrderCB(action="retry_auto", order_id=oid).pack(),
+                    callback_data=OrderCB(action="retry_auto", order_id=oid, src=src, page=page).pack(),
                 )
             ]
         )
         rows.append(
-            [InlineKeyboardButton(text="✍️ Qo'lda yuborish", callback_data=OrderCB(action="write_manual", order_id=oid).pack())]
+            [InlineKeyboardButton(text="✍️ Qo'lda yuborish", callback_data=OrderCB(action="write_manual", order_id=oid, src=src, page=page).pack())]
         )
+    back_cb = (
+        AdminOrderListCB(action=src, page=page).pack()
+        if src
+        else AdminOrderListCB(action="menu").pack()
+    )
     if order.user is not None:
         rows.append(
             [
@@ -449,6 +516,7 @@ def admin_order_detail_kb(order) -> InlineKeyboardMarkup:
     rows.append(
         [InlineKeyboardButton(text="\U0001F50D Boshqa buyurtma qidirish", callback_data=AdminOrderListCB(action="search").pack())]
     )
+    rows.append([InlineKeyboardButton(text="‹ Orqaga", callback_data=back_cb)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

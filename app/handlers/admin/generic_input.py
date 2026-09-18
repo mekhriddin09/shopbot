@@ -86,6 +86,28 @@ async def _product_summary_and_kb(session: AsyncSession, product_id: int):
     return product, text, kb
 
 
+async def _back_to_panel(message: Message, data: dict, text: str, reply_markup=None) -> None:
+    """Finish a typed-input step by redrawing the panel screen it started from.
+
+    Typed input unavoidably adds the admin's own message to the chat; what it
+    must NOT also add is a bot message that leaves the panel stale. So the
+    result goes back onto the original screen, and a fresh message is sent
+    only when that screen can no longer be edited.
+    """
+    from app.utils.screen import edit_panel
+
+    ok = await edit_panel(
+        message.bot,
+        data.get("panel_chat_id"),
+        data.get("panel_message_id"),
+        text,
+        reply_markup,
+    )
+    if not ok:
+        await message.answer(text, reply_markup=reply_markup)
+
+
+
 @router.message(AdminInput.waiting_text, F.text)
 async def handle_text_input(message: Message, session: AsyncSession, state: FSMContext, user: User) -> None:
     data = await state.get_data()
@@ -108,7 +130,7 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
         admin_actions_logger.info("product_created id=%s name=%s admin=%s", product.id, name, message.from_user.id)
         await state.clear()
         _, summary, kb = await _product_summary_and_kb(session, product.id)
-        await message.answer(f"✅ Mahsulot yaratildi!\n\n{summary}", reply_markup=kb)
+        await _back_to_panel(message, data, f"✅ Mahsulot yaratildi!\n\n{summary}", kb)
         return
 
     if action == "edit_product_field":
@@ -189,7 +211,7 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
 
         await state.clear()
         _, summary, kb = await _product_summary_and_kb(session, product.id)
-        await message.answer(f"✅ Yangilandi!\n\n{summary}", reply_markup=kb)
+        await _back_to_panel(message, data, f"✅ Yangilandi!\n\n{summary}", kb)
         return
 
     if action == "new_reward_name":
@@ -209,9 +231,9 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
         await state.clear()
         from app.handlers.admin.referral_rewards import _reward_summary  # local import avoids cycle
 
-        await message.answer(
-            f"✅ Sovg'a yaratildi!\n\n{_reward_summary(reward)}",
-            reply_markup=admin_referral_reward_detail_kb(reward),
+        await _back_to_panel(
+            message, data, f"✅ Sovg'a yaratildi!\n\n{_reward_summary(reward)}",
+            admin_referral_reward_detail_kb(reward),
         )
         return
 
@@ -243,9 +265,9 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
         await state.clear()
         from app.handlers.admin.referral_rewards import _reward_summary  # local import avoids cycle
 
-        await message.answer(
-            f"✅ Yangilandi!\n\n{_reward_summary(reward)}",
-            reply_markup=admin_referral_reward_detail_kb(reward),
+        await _back_to_panel(
+            message, data, f"✅ Yangilandi!\n\n{_reward_summary(reward)}",
+            admin_referral_reward_detail_kb(reward),
         )
         return
 
@@ -257,7 +279,11 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
         notified = await notify_waiters_if_in_stock(session, message.bot, product) if product else 0
         await state.clear()
         extra = f"\n🔔 {notified} ta kutayotgan foydalanuvchiga xabar berildi." if notified else ""
-        await message.answer(f"✅ Kod qo'shildi.{extra}")
+        if product is not None:
+            _, summary, kb = await _product_summary_and_kb(session, product.id)
+            await _back_to_panel(message, data, f"✅ Kod qo'shildi.{extra}\n\n{summary}", kb)
+        else:
+            await message.answer(f"✅ Kod qo'shildi.{extra}")
         return
 
     if action == "settings_edit":
@@ -267,7 +293,12 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
             # Convention for the masked-secret edit flow (API keys/tokens):
             # "-" means "leave it as it is", never a literal value to save.
             await state.clear()
-            await message.answer("↩️ Bekor qilindi, qiymat o'zgartirilmadi.")
+            from app.handlers.admin.settings import render_settings_group  # local import avoids a cycle
+
+            group_text, group_kb = await render_settings_group(session, group)
+            await _back_to_panel(
+                message, data, "↩️ Bekor qilindi, qiymat o'zgartirilmadi.\n\n" + group_text, group_kb
+            )
             return
         await SettingRepository(session).set(key, text)
         admin_actions_logger.info("setting_changed key=%s admin=%s", key, message.from_user.id)
@@ -279,8 +310,7 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
         from app.handlers.admin.settings import render_settings_group  # local import avoids a cycle
 
         group_text, group_kb = await render_settings_group(session, group)
-        await message.answer("✅ Sozlama yangilandi.")
-        await message.answer(group_text, reply_markup=group_kb)
+        await _back_to_panel(message, data, "✅ Sozlama yangilandi.\n\n" + group_text, group_kb)
         return
 
     if action == "reject_reason":
@@ -299,8 +329,23 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
             order.user.telegram_id,
             t(lang, "msg_order_rejected_notify", order_uuid=order.order_uuid, reason=reason or "-"),
         )
+        panel = (data.get("panel_chat_id"), data.get("panel_message_id"))
+        src, page = data.get("src"), data.get("page", 0)
         await state.clear()
-        await message.answer("❌ Buyurtma rad etildi va foydalanuvchiga xabar berildi.")
+
+        from app.handlers.admin.orders import render_order_detail  # local import avoids a cycle
+        from app.keyboards.admin_kb import admin_order_detail_kb
+        from app.utils.screen import edit_panel
+
+        fresh = await OrderRepository(session).get_by_id(order_id)
+        body = "❌ <b>RAD ETILDI</b> — mijozga xabar berildi.\n\n" + (
+            await render_order_detail(session, fresh) if fresh else ""
+        )
+        if not await edit_panel(
+            message.bot, *panel, body,
+            admin_order_detail_kb(fresh, src=src, page=page) if fresh else None,
+        ):
+            await message.answer(body)
         return
 
     if action == "broadcast_send":
@@ -342,8 +387,23 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
         await ReferralService(session).credit_for_delivered_order(order, message.bot)
         await _reflect_delivery_on_admin_card(message.bot, data, order)
 
+        panel = (data.get("panel_chat_id"), data.get("panel_message_id"))
+        src, page = data.get("src"), data.get("page", 0)
         await state.clear()
-        await message.answer("✅ Xabar mijozga yuborildi va buyurtma yakunlandi.")
+
+        from app.handlers.admin.orders import render_order_detail  # local import avoids a cycle
+        from app.keyboards.admin_kb import admin_order_detail_kb
+        from app.utils.screen import edit_panel
+
+        fresh = await OrderRepository(session).get_by_id(order_id)
+        body = "✅ <b>YETKAZILDI</b> — xabar mijozga yuborildi.\n\n" + (
+            await render_order_detail(session, fresh) if fresh else ""
+        )
+        if not await edit_panel(
+            message.bot, *panel, body,
+            admin_order_detail_kb(fresh, src=src, page=page) if fresh else None,
+        ):
+            await message.answer(body)
         return
 
     if action == "order_search":
@@ -354,15 +414,22 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
             # Also accept the internal numeric id — it shows up in logs and
             # in some admin messages, and typing it should just work.
             order = await orders_repo.get_by_id(int(query))
+        panel = (data.get("panel_chat_id"), data.get("panel_message_id"))
         await state.clear()
-        if order is None:
-            await message.answer(
-                "❌ Bunday buyurtma topilmadi.\n\nID'ni tekshirib, qaytadan urinib ko'ring."
-            )
-            return
-        from app.handlers.admin.orders import show_order_detail  # local import avoids a cycle
 
-        await show_order_detail(message, session, order)
+        from app.handlers.admin.orders import render_order_detail  # local import avoids a cycle
+        from app.keyboards.admin_kb import admin_order_detail_kb, admin_orders_menu_kb
+        from app.utils.screen import edit_panel
+
+        if order is None:
+            body = "❌ Bunday buyurtma topilmadi.\n\nID'ni tekshirib, qaytadan urinib ko'ring."
+            if not await edit_panel(message.bot, *panel, body, admin_orders_menu_kb()):
+                await message.answer(body)
+            return
+
+        body = await render_order_detail(session, order)
+        if not await edit_panel(message.bot, *panel, body, admin_order_detail_kb(order)):
+            await message.answer(body, reply_markup=admin_order_detail_kb(order))
         return
 
     if action == "user_search":
@@ -439,7 +506,10 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
         from app.handlers.admin.users import _build_user_profile_text  # local import avoids cycle
 
         profile_text = await _build_user_profile_text(session, target)
-        await message.answer(f"✅ Balans yangilandi.\n\n{profile_text}", reply_markup=admin_user_profile_kb(target.id))
+        await _back_to_panel(
+            message, data, f"✅ Balans yangilandi.\n\n{profile_text}",
+            admin_user_profile_kb(target.id),
+        )
         return
 
     if action == "add_allowed_phone":

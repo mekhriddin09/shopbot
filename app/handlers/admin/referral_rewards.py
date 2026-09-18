@@ -24,6 +24,7 @@ from app.repositories.referral_repo import ReferralRepository
 from app.states.admin_states import AdminInput
 from app.utils.formatting import fmt_price
 from app.utils.i18n import t
+from app.utils.screen import show
 
 router = Router(name="admin_referral_rewards")
 router.message.filter(IsAdmin())
@@ -86,8 +87,8 @@ async def referral_reward_open(callback: CallbackQuery, callback_data: AdminRefe
 @router.callback_query(AdminReferralRewardCB.filter(F.action == "add"))
 async def referral_reward_add_start(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminInput.waiting_text)
-    await state.update_data(action="new_reward_name")
-    await callback.message.answer(FIELD_PROMPTS["name"])
+    await state.update_data(panel_chat_id=callback.message.chat.id, panel_message_id=callback.message.message_id, action="new_reward_name")
+    await show(callback, FIELD_PROMPTS["name"])
     await callback.answer()
 
 
@@ -96,8 +97,8 @@ async def referral_reward_edit_field(callback: CallbackQuery, callback_data: Adm
     field = callback_data.field
     prompt = FIELD_PROMPTS.get(field, "Yangi qiymatni yozing:")
     await state.set_state(AdminInput.waiting_text)
-    await state.update_data(action="edit_reward_field", reward_id=callback_data.reward_id, field=field)
-    await callback.message.answer(prompt)
+    await state.update_data(panel_chat_id=callback.message.chat.id, panel_message_id=callback.message.message_id, action="edit_reward_field", reward_id=callback_data.reward_id, field=field)
+    await show(callback, prompt)
     await callback.answer()
 
 
@@ -188,7 +189,6 @@ async def referral_redemption_fulfilled(
         return
     await referrals.mark_redemption_fulfilled(redemption, callback.from_user.id)
     await callback.message.edit_text(callback.message.text + "\n\n✅ YETKAZILDI")
-    await callback.message.edit_reply_markup(reply_markup=None)
     try:
         await callback.bot.send_message(
             redemption.user.telegram_id,
@@ -210,7 +210,6 @@ async def referral_redemption_reject(
         return
     await referrals.mark_redemption_rejected(redemption, callback.from_user.id)
     await callback.message.edit_text(callback.message.text + "\n\n❌ RAD ETILDI (balans qaytarildi)")
-    await callback.message.edit_reply_markup(reply_markup=None)
     try:
         await callback.bot.send_message(
             redemption.user.telegram_id,
