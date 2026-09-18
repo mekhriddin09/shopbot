@@ -151,5 +151,14 @@
   "msg_recipient_not_found": "❌ @{username} tekshirishdan o'tmadi.\n\nSabab: {reason}\n\nBoshqa username yuboring.",
   "msg_recipient_no_username": "❌ Sizning akkauntingizda username yo'q. Bu mahsulot faqat username orqali yetkaziladi.\n\nTelegram sozlamalari → Username bo'limida username qo'yib, keyin qayta urinib ko'ring. Yoki \"Boshqa odamga\" tugmasini bosing.",
   "msg_recipient_selected": "👤 Qabul qiluvchi: @{username}",
-  "msg_delivery_manual_fallback": "⏳ To'lovingiz qabul qilindi, lekin buyurtma avtomatik yetkazilmadi.\n\n🆖 Buyurtma: {order_uuid}\n\nXavotir olmang — pulingiz o'z joyida, administrator buyurtmani qo'lda yetkazib beradi. Tez orada shu chatga keladi."
+  "msg_delivery_manual_fallback": "⏳ To'lovingiz qabul qilindi, lekin buyurtma avtomatik yetkazilmadi.\n\n🆖 Buyurtma: {order_uuid}\n\nXavotir olmang — pulingiz o'z joyida, administrator buyurtmani qo'lda yetkazib beradi. Tez orada shu chatga keladi.",
+  "btn_recipient_confirm": "✅ Ha, to'g'ri",
+  "btn_custom_stars_enter": "⭐ Miqdorni kiritish",
+  "msg_recipient_confirm": "🎁 Qabul qiluvchi:\n\n👤 <b>{name}</b>\n🔗 @{username}\n\n⚠️ Stars shu akkauntga yuboriladi va qaytarib olib bo'lmaydi. To'g'rimi?",
+  "msg_custom_stars_unit": "⭐ 1 Stars = {price} {currency}",
+  "msg_custom_stars_prompt": "Nechta Stars kerakligini o'zingiz kiritasiz.",
+  "msg_custom_stars_ask": "Nechta Stars kerak?\n\nRaqam yuboring ({minimum} dan {maximum} gacha). Masalan: 137",
+  "msg_custom_stars_invalid": "❌ Faqat raqam yuboring. Masalan: 137",
+  "msg_custom_stars_range": "❌ Miqdor {minimum} dan {maximum} gacha bo'lishi kerak.",
+  "msg_custom_stars_total": "🧮 {amount} ⭐ = <b>{total} {currency}</b>"
 }

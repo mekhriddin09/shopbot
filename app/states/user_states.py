@@ -21,6 +21,7 @@ class ReferralRewardStates(StatesGroup):
 
 
 class RecipientStates(StatesGroup):
+    waiting_stars_amount = State()
     """Collecting the @username that Stars/Premium should be delivered to,
     before any payment is taken (see app/handlers/user/recipient.py)."""
 

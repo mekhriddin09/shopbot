@@ -79,6 +79,48 @@ def recipient_choice_kb(lang: str, product_id: int) -> InlineKeyboardMarkup:
     )
 
 
+def recipient_confirm_kb(lang: str, product_id: int) -> InlineKeyboardMarkup:
+    """Last chance to catch a typo. Stars sent to the wrong @handle cannot
+    be recalled, so the recipient is confirmed by name before any money
+    moves — the customer sees who Fragment actually resolved, not just the
+    string they typed."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=t(lang, "btn_recipient_confirm"),
+                    callback_data=RecipientCB(action="confirm", product_id=product_id).pack(),
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=t(lang, "btn_recipient_change"),
+                    callback_data=RecipientCB(action="change", product_id=product_id).pack(),
+                )
+            ],
+        ]
+    )
+
+
+def custom_stars_kb(lang: str, product_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=t(lang, "btn_custom_stars_enter"),
+                    callback_data=RecipientCB(action="amount", product_id=product_id).pack(),
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=t(lang, "btn_back"),
+                    callback_data=ShopCB(action="back_to_list").pack(),
+                )
+            ],
+        ]
+    )
+
+
 def recipient_change_kb(lang: str, product_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -203,7 +245,12 @@ def product_detail_kb(
     show_notify_button: bool = False,
     show_preorder_button: bool = False,
     show_card_auto: bool = False,
+    fixed_qty: int | None = None,
 ) -> InlineKeyboardMarkup:
+    """`fixed_qty` skips the quantity picker and bakes the amount into every
+    payment button — used by custom-amount products (e.g. "I want 137
+    Stars"), where the quantity was already chosen in its own step and the
+    +/- picker would only let the customer contradict it."""
     rows = []
     if in_stock:
         if show_card_auto:
@@ -215,7 +262,9 @@ def product_detail_kb(
                     InlineKeyboardButton(
                         text=t(lang, "btn_pay_card_auto"),
                         callback_data=(
-                            QtyCB(action="show", product_id=product_id, flow="cardauto").pack()
+                            CardAutoCB(action="buy", product_id=product_id, qty=fixed_qty).pack()
+                            if fixed_qty
+                            else QtyCB(action="show", product_id=product_id, flow="cardauto").pack()
                             if max_order_qty > 1
                             else CardAutoCB(action="buy", product_id=product_id).pack()
                         ),
@@ -223,7 +272,16 @@ def product_detail_kb(
                 ]
             )
         buy_label = t(lang, "btn_pay_card") if (show_crypto or show_stars) else t(lang, "btn_buy")
-        if max_order_qty > 1:
+        if fixed_qty:
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=buy_label,
+                        callback_data=ShopCB(action="buy", product_id=product_id, qty=fixed_qty).pack(),
+                    )
+                ]
+            )
+        elif max_order_qty > 1:
             rows.append(
                 [
                     InlineKeyboardButton(

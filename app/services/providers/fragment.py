@@ -52,6 +52,20 @@ _COOKIE_TABLE_HEADERS = frozenset(
 )
 
 
+CUSTOM_REF = "stars:custom"
+
+
+def is_custom_stars(ref: str | None) -> bool:
+    """A product whose Stars amount the customer types in themselves.
+
+    Fixed packages (50/100/1000) can't cover everyone — someone always wants
+    137 Stars, and big buyers deserve a keener per-star price than a small
+    package. For these products the UZS price field means "price of ONE
+    star" and the order quantity carries the number of stars.
+    """
+    return (ref or "").strip().lower() in (CUSTOM_REF, "stars:*", "stars:any")
+
+
 def parse_external_ref(ref: str | None) -> tuple[str, int] | None:
     """`"stars:100"` -> `("stars", 100)`, `"premium:3"` -> `("premium", 3)`.
 

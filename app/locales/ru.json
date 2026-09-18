@@ -151,5 +151,14 @@
   "msg_recipient_not_found": "❌ @{username} не прошёл проверку.\n\nПричина: {reason}\n\nОтправьте другой username.",
   "msg_recipient_no_username": "❌ У вашего аккаунта нет username. Этот товар доставляется только по username.\n\nЗадайте его в настройках Telegram → Username и попробуйте снова. Либо нажмите «Другому человеку».",
   "msg_recipient_selected": "👤 Получатель: @{username}",
-  "msg_delivery_manual_fallback": "⏳ Оплата получена, но заказ не удалось выдать автоматически.\n\n🆖 Заказ: {order_uuid}\n\nНе волнуйтесь — деньги на месте, администратор выдаст заказ вручную. Он придёт в этот чат в ближайшее время."
+  "msg_delivery_manual_fallback": "⏳ Оплата получена, но заказ не удалось выдать автоматически.\n\n🆖 Заказ: {order_uuid}\n\nНе волнуйтесь — деньги на месте, администратор выдаст заказ вручную. Он придёт в этот чат в ближайшее время.",
+  "btn_recipient_confirm": "✅ Да, верно",
+  "btn_custom_stars_enter": "⭐ Указать количество",
+  "msg_recipient_confirm": "🎁 Получатель:\n\n👤 <b>{name}</b>\n🔗 @{username}\n\n⚠️ Stars уйдут на этот аккаунт, вернуть их нельзя. Всё верно?",
+  "msg_custom_stars_unit": "⭐ 1 Stars = {price} {currency}",
+  "msg_custom_stars_prompt": "Количество Stars вы указываете сами.",
+  "msg_custom_stars_ask": "Сколько Stars нужно?\n\nОтправьте число (от {minimum} до {maximum}). Например: 137",
+  "msg_custom_stars_invalid": "❌ Отправьте только число. Например: 137",
+  "msg_custom_stars_range": "❌ Количество должно быть от {minimum} до {maximum}.",
+  "msg_custom_stars_total": "🧮 {amount} ⭐ = <b>{total} {currency}</b>"
 }

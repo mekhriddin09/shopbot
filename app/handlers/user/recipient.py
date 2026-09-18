@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
 from app.keyboards.callback_data import RecipientCB
-from app.keyboards.user_kb import recipient_choice_kb
+from app.keyboards.user_kb import recipient_choice_kb, recipient_confirm_kb
 from app.repositories.product_repo import ProductRepository
 from app.services.providers.fragment import normalize_username
 from app.services.providers.registry import get_provider
@@ -32,6 +32,12 @@ router = Router(name="user_recipient")
 logger = logging.getLogger("orders")
 
 _FSM_KEY = "recipient_username"
+_PENDING_KEY = "recipient_pending"
+_AMOUNT_KEY = "stars_amount"
+_AMOUNT_PRODUCT_KEY = "stars_amount_product_id"
+
+# Telegram's own floor; Fragment rejects anything smaller.
+MIN_STARS = 50
 
 
 async def product_requires_recipient(product) -> bool:
@@ -49,6 +55,18 @@ async def get_chosen_recipient(state: FSMContext) -> str | None:
     return data.get(_FSM_KEY)
 
 
+async def get_chosen_stars_amount(state: FSMContext, product_id: int | None = None) -> int | None:
+    """The custom Stars amount, but only for the product it was entered for
+    — otherwise browsing to another product would inherit a stale number."""
+    data = await state.get_data()
+    amount = data.get(_AMOUNT_KEY)
+    if not amount:
+        return None
+    if product_id is not None and data.get(_AMOUNT_PRODUCT_KEY) != product_id:
+        return None
+    return int(amount)
+
+
 async def attach_recipient(session: AsyncSession, order, state: FSMContext) -> None:
     """Copy the verified recipient from FSM onto the order. Called by every
     payment flow right after the order row is created."""
@@ -58,34 +76,59 @@ async def attach_recipient(session: AsyncSession, order, state: FSMContext) -> N
         await session.commit()
 
 
-async def _verify_and_store(
+async def _verify_and_ask_confirm(
     target, session: AsyncSession, state: FSMContext, lang: str, product, raw_username: str
 ) -> bool:
-    """Normalise, ask the supplier whether it can deliver there, and store
-    it. Returns True when the flow may continue to payment."""
+    """Normalise, ask the supplier who that handle actually is, then show it
+    back for confirmation.
+
+    The confirmation step exists because this is the one mistake money can't
+    undo: Stars delivered to the wrong username are gone. Showing Fragment's
+    resolved display name turns "did I type it right?" into something the
+    customer can actually check.
+    """
     handle = normalize_username(raw_username)
     if not handle:
         await target.answer(t(lang, "msg_recipient_invalid"))
         return False
 
+    display = None
     provider = get_provider(product.provider_key)
     if provider is not None:
         ok, note = await provider.search_recipient(handle)
         if not ok:
             await target.answer(t(lang, "msg_recipient_not_found", username=handle, reason=note or "-"))
             return False
+        display = note
 
-    await state.update_data(**{_FSM_KEY: handle})
-    logger.info("recipient_chosen product=%s handle=%s", product.id, handle)
+    await state.update_data(**{_PENDING_KEY: handle})
+    await target.answer(
+        t(lang, "msg_recipient_confirm", username=handle, name=display or "—"),
+        reply_markup=recipient_confirm_kb(lang, product.id),
+    )
     return True
 
 
-async def _show_payment_options(target, session: AsyncSession, product_id: int, lang: str) -> None:
-    """Re-render the product card; now that a recipient is set, the normal
-    payment buttons appear."""
+async def _show_payment_options(
+    target, session: AsyncSession, product_id: int, lang: str, state: FSMContext
+) -> None:
+    """Re-render the product card now that the recipient (and, for
+    custom-amount products, the quantity) is known.
+
+    Passing them through is what makes the card move on: `build_product_card`
+    re-applies the same gate it used to show the "who is it for?" buttons, so
+    omitting the recipient here just redraws that question forever.
+    """
     from app.handlers.user.shop import render_product_card
 
-    await render_product_card(target, session, product_id, lang)
+    await render_product_card(
+        target,
+        session,
+        product_id,
+        lang,
+        await get_chosen_recipient(state),
+        await get_chosen_stars_amount(state, product_id),
+    )
 
 
 @router.callback_query(RecipientCB.filter(F.action == "myself"))
@@ -110,8 +153,7 @@ async def recipient_myself(
         await callback.answer()
         return
 
-    if await _verify_and_store(callback.message, session, state, lang, product, user.username):
-        await _show_payment_options(callback.message, session, product.id, lang)
+    await _verify_and_ask_confirm(callback.message, session, state, lang, product, user.username)
     await callback.answer()
 
 
@@ -125,11 +167,83 @@ async def recipient_other(
     await callback.answer()
 
 
+@router.callback_query(RecipientCB.filter(F.action == "confirm"))
+async def recipient_confirm(
+    callback: CallbackQuery,
+    callback_data: RecipientCB,
+    session: AsyncSession,
+    lang: str,
+    state: FSMContext,
+) -> None:
+    data = await state.get_data()
+    handle = data.get(_PENDING_KEY)
+    product = await ProductRepository(session).get_by_id(callback_data.product_id)
+    if product is None or not handle:
+        await callback.answer(t(lang, "msg_product_not_found"), show_alert=True)
+        return
+
+    await state.update_data(**{_FSM_KEY: handle})
+    await state.set_state(None)
+    logger.info("recipient_confirmed product=%s handle=%s", product.id, handle)
+    await _show_payment_options(callback.message, session, product.id, lang, state)
+    await callback.answer()
+
+
+@router.callback_query(RecipientCB.filter(F.action == "amount"))
+async def custom_stars_amount_prompt(
+    callback: CallbackQuery,
+    callback_data: RecipientCB,
+    session: AsyncSession,
+    lang: str,
+    state: FSMContext,
+) -> None:
+    product = await ProductRepository(session).get_by_id(callback_data.product_id)
+    if product is None:
+        await callback.answer(t(lang, "msg_product_not_found"), show_alert=True)
+        return
+    minimum = max(MIN_STARS, product.min_order_qty or 0)
+    maximum = product.max_order_qty if (product.max_order_qty or 0) > minimum else 1_000_000
+    await state.set_state(RecipientStates.waiting_stars_amount)
+    await state.update_data(**{_AMOUNT_PRODUCT_KEY: product.id})
+    await callback.message.answer(
+        t(lang, "msg_custom_stars_ask", minimum=minimum, maximum=maximum)
+    )
+    await callback.answer()
+
+
+@router.message(RecipientStates.waiting_stars_amount, F.text)
+async def custom_stars_amount_received(
+    message: Message, session: AsyncSession, lang: str, state: FSMContext
+) -> None:
+    data = await state.get_data()
+    product = await ProductRepository(session).get_by_id(data.get(_AMOUNT_PRODUCT_KEY) or 0)
+    if product is None:
+        await state.set_state(None)
+        await message.answer(t(lang, "msg_product_not_found"))
+        return
+
+    raw = (message.text or "").strip().replace(" ", "").replace(",", "")
+    if not raw.isdigit():
+        await message.answer(t(lang, "msg_custom_stars_invalid"))
+        return
+    amount = int(raw)
+    minimum = max(MIN_STARS, product.min_order_qty or 0)
+    maximum = product.max_order_qty if (product.max_order_qty or 0) > minimum else 1_000_000
+    if not (minimum <= amount <= maximum):
+        await message.answer(t(lang, "msg_custom_stars_range", minimum=minimum, maximum=maximum))
+        return
+
+    await state.update_data(**{_AMOUNT_KEY: amount, _AMOUNT_PRODUCT_KEY: product.id})
+    await state.set_state(None)
+    logger.info("custom_stars_amount product=%s amount=%s", product.id, amount)
+    await _show_payment_options(message, session, product.id, lang, state)
+
+
 @router.callback_query(RecipientCB.filter(F.action == "change"))
 async def recipient_change(
     callback: CallbackQuery, callback_data: RecipientCB, session: AsyncSession, lang: str, state: FSMContext
 ) -> None:
-    await state.update_data(**{_FSM_KEY: None})
+    await state.update_data(**{_FSM_KEY: None, _PENDING_KEY: None})
     product = await ProductRepository(session).get_by_id(callback_data.product_id)
     if product is None:
         await callback.answer(t(lang, "msg_product_not_found"), show_alert=True)
@@ -154,14 +268,14 @@ async def recipient_username_received(
         await message.answer(t(lang, "msg_product_not_found"))
         return
 
-    if await _verify_and_store(message, session, state, lang, product, message.text):
+    if await _verify_and_ask_confirm(message, session, state, lang, product, message.text):
         await state.set_state(None)
-        await _show_payment_options(message, session, product.id, lang)
 
 
 __all__ = [
     "router",
     "attach_recipient",
     "get_chosen_recipient",
+    "get_chosen_stars_amount",
     "product_requires_recipient",
 ]

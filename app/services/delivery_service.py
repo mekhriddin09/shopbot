@@ -155,10 +155,21 @@ class DeliveryService:
                 await self.orders.set_status(order, OrderStatus.FAILED)
                 raise DeliveryFailedError("msg_provider_not_configured")
 
+            # Custom-amount products (e.g. "stars:custom") keep the number
+            # of stars in `quantity`, so they are ONE supplier call for N
+            # stars — not N calls. Looping here would buy N×N.
+            external_ref = order.product.external_product_id or order.product.provider_key
+            units = order.quantity or 1
+            from app.services.providers.fragment import is_custom_stars
+
+            if is_custom_stars(external_ref):
+                external_ref = f"stars:{units}"
+                units = 1
+
             payloads: list[str] = []
-            for _ in range(order.quantity or 1):
+            for _ in range(units):
                 result = await provider.fetch(
-                    product_external_ref=order.product.external_product_id or order.product.provider_key,
+                    product_external_ref=external_ref,
                     order_uuid=order.order_uuid,
                     recipient=order.recipient_username,
                 )

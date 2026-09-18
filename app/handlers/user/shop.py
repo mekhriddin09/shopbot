@@ -117,6 +117,7 @@ async def build_product_card(
     product_id: int,
     lang: str,
     recipient: str | None = None,
+    stars_amount: int | None = None,
 ) -> tuple[str, object, str | None] | None:
     """Text + keyboard + photo for a product card.
 
@@ -162,6 +163,28 @@ async def build_product_card(
         text += "\n\n" + t(lang, "msg_recipient_choose")
         return text, recipient_choice_kb(lang, view.product.id), view.product.image_file_id
 
+    # Custom-amount Stars: the UZS price is per single star, so the card
+    # can't show a total until the customer has said how many they want.
+    from app.services.providers.fragment import is_custom_stars
+
+    custom = is_custom_stars(view.product.external_product_id)
+    if custom:
+        unit = float(view.product.price)
+        text += "\n" + t(lang, "msg_custom_stars_unit", price=fmt_price(unit), currency=view.product.currency)
+        if not stars_amount:
+            from app.keyboards.user_kb import custom_stars_kb
+
+            text += "\n\n" + t(lang, "msg_custom_stars_prompt")
+            return text, custom_stars_kb(lang, view.product.id), view.product.image_file_id
+        total = unit * stars_amount
+        text += "\n" + t(
+            lang,
+            "msg_custom_stars_total",
+            amount=stars_amount,
+            total=fmt_price(total),
+            currency=view.product.currency,
+        )
+
     kb = product_detail_kb(
         lang,
         view.product.id,
@@ -173,6 +196,7 @@ async def build_product_card(
         show_notify_button=show_notify,
         show_preorder_button=preorder_enabled,
         show_card_auto=card_auto_enabled,
+        fixed_qty=stars_amount if custom else None,
     )
     if recipient:
         # Shown above the payment buttons, with a way back: a typo in the
@@ -199,10 +223,11 @@ async def render_product_card(
     product_id: int,
     lang: str,
     recipient: str | None = None,
+    stars_amount: int | None = None,
 ) -> None:
     """Send the product card as a new message (used after the recipient
     question, where the previous message is a plain text prompt)."""
-    built = await build_product_card(session, product_id, lang, recipient)
+    built = await build_product_card(session, product_id, lang, recipient, stars_amount)
     if built is None:
         await target.answer(t(lang, "msg_product_not_found"))
         return
@@ -221,10 +246,14 @@ async def open_product(
     lang: str,
     state: FSMContext,
 ) -> None:
-    from app.handlers.user.recipient import get_chosen_recipient
+    from app.handlers.user.recipient import get_chosen_recipient, get_chosen_stars_amount
 
     built = await build_product_card(
-        session, callback_data.product_id, lang, await get_chosen_recipient(state)
+        session,
+        callback_data.product_id,
+        lang,
+        await get_chosen_recipient(state),
+        await get_chosen_stars_amount(state, callback_data.product_id),
     )
     if built is None:
         await callback.answer(t(lang, "msg_product_not_found"), show_alert=True)

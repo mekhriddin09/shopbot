@@ -148,8 +148,16 @@ async def card_auto_buy(
     lang: str,
     state: FSMContext,
 ) -> None:
+    # qty comes from the button for custom-amount products (the customer
+    # already typed "137 Stars"); everything else still buys one unit.
     await start_card_auto_purchase(
-        callback, session, user, lang, callback_data.product_id, quantity=1, state=state
+        callback,
+        session,
+        user,
+        lang,
+        callback_data.product_id,
+        quantity=max(1, callback_data.qty or 1),
+        state=state,
     )
 
 
