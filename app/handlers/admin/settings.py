@@ -63,7 +63,8 @@ async def render_settings_group(session: AsyncSession, group: str) -> tuple[str,
             value_lines.append(
                 f"• {label}: {('✅ ' + ', '.join(filled)) if filled else '❌ hech biri kiritilmagan'}"
             )
-        # "group" / "phones" / "test_reseller" hold no value of their own.
+        # "group" / "phones" / "test_reseller" / "test_fragment" hold no
+        # value of their own.
 
     if value_lines:
         lines.append("")
@@ -137,6 +138,65 @@ async def settings_edit_masked_start(
         f"👇 Yangi qiymatni yozing (bekor qilish uchun '-' yuboring — o'zgarishsiz qoladi):"
     )
     await callback.answer()
+
+
+@router.callback_query(AdminSettingsCB.filter(F.action == "test_fragment"))
+async def settings_test_fragment(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Dry-run the whole Fragment setup without spending a coin.
+
+    Deliberately checks the three things that fail independently, and
+    reports each one separately, because "it doesn't work" is useless to an
+    admin: the wallet/API key can be fine while the cookies are stale, and
+    the reverse. Nothing here buys anything — it only reads a price and
+    looks a username up.
+    """
+    from app.services.providers.fragment import FragmentProvider
+
+    await callback.answer("Tekshirilmoqda…")
+    provider = FragmentProvider()
+    cfg = await provider._config()  # noqa: SLF001 - same module family
+
+    lines = ["\U0001F50C <b>Fragment ulanish tekshiruvi</b>", ""]
+    lines.append(("✅" if cfg.get("seed") else "❌") + " Hamyon seed iborasi")
+    lines.append(("✅" if cfg.get("api_key") else "❌") + " TON API kaliti")
+    cookies = provider._parse_cookies(cfg.get("cookies_raw", ""))  # noqa: SLF001
+    if cookies.get("stel_ssid"):
+        lines.append(f"✅ Cookie'lar ({', '.join(sorted(cookies))})")
+    else:
+        lines.append("❌ Cookie'lar (stel_ssid topilmadi)")
+    lines.append(f"\U0001F45B Hamyon versiyasi: <code>{cfg.get('wallet_version') or '-'}</code>")
+
+    if not (cfg.get("seed") and cfg.get("api_key") and cookies.get("stel_ssid")):
+        lines += ["", "Avval yuqoridagi ❌ bandlarni to'ldiring."]
+        await callback.message.answer("\n".join(lines))
+        return
+
+    # Live check 1: read a price. Exercises wallet auth + cookies + parsing,
+    # which is everything a purchase needs except actually paying.
+    ok, price, error = await provider.get_price("stars:50")
+    lines.append("")
+    if ok:
+        lines.append(f"✅ Fragment bilan aloqa bor. 50 Stars narxi: <b>{price if price is not None else '?'} TON</b>")
+    else:
+        lines.append(f"❌ Fragment javob bermadi:\n<code>{error}</code>")
+
+    # Live check 2: username lookup, using the admin's own handle.
+    handle = callback.from_user.username
+    if handle:
+        found, note = await provider.search_recipient(handle)
+        lines.append(
+            f"✅ Username tekshiruvi ishlayapti (@{handle}{' — ' + note if note else ''})"
+            if found
+            else f"❌ Username tekshiruvi: @{handle} — {note}"
+        )
+
+    if ok:
+        lines += [
+            "",
+            "Endi <code>stars:50</code> mahsulotini yaratib, o'zingizga bitta sinov "
+            "xaridi qiling — to'liq zanjir faqat haqiqiy to'lovda tekshiriladi.",
+        ]
+    await callback.message.answer("\n".join(lines))
 
 
 @router.callback_query(AdminSettingsCB.filter(F.action == "test_reseller"))

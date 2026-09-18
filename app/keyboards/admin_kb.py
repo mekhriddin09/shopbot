@@ -501,6 +501,7 @@ def admin_write_manual_kb(order_id: int) -> InlineKeyboardMarkup:
 #   ("group",  name, label) -> opens another group below
 #   ("phones", None, label) -> the allowed-foreign-numbers list screen
 #   ("test_reseller", None, label) -> live connection check, not a value
+#   ("test_fragment", None, label) -> same, for the Fragment wallet/session
 # ----------------------------------------------------------------------
 
 SETTINGS_GROUPS: dict[str, dict] = {
@@ -649,6 +650,7 @@ SETTINGS_GROUPS: dict[str, dict] = {
             ("masked", "fragment_ton_api_key", "\U0001F310 TON API kaliti (Toncenter)"),
             ("masked", "fragment_cookies", "\U0001F36A fragment.com cookie'lari"),
             ("edit", "fragment_wallet_version", "\U0001F45B Hamyon versiyasi (V5R1/V4R2)"),
+            ("test_fragment", None, "\U0001F50C Ulanishni tekshirish (pul sarflamaydi)"),
         ],
     },
     "reseller": {
@@ -684,6 +686,8 @@ def admin_settings_menu_kb(group: str = "root") -> InlineKeyboardMarkup:
             cb = AdminSettingsCB(action="pick_lang", key=key, group=group).pack()
         elif kind == "phones":
             cb = AdminPhoneCB(action="list").pack()
+        elif kind == "test_fragment":
+            cb = AdminSettingsCB(action="test_fragment", group=group).pack()
         elif kind == "test_reseller":
             cb = AdminSettingsCB(action="test_reseller", group=group).pack()
         else:  # pragma: no cover - guards against a typo'd spec entry

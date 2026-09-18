@@ -91,7 +91,7 @@ class AdminOrderListCB(CallbackData, prefix="aordl"):
 
 
 class AdminSettingsCB(CallbackData, prefix="aset"):
-    action: str  # edit | edit_masked | toggle | pick_lang | test_reseller | group
+    action: str  # edit | edit_masked | toggle | pick_lang | test_reseller | test_fragment | group
     key: str | None = None
     # Which settings group the button lives in, so after a toggle (or a
     # "back" from the language picker) we can re-render that same submenu
