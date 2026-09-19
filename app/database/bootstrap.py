@@ -64,6 +64,7 @@ _NEW_COLUMNS: list[tuple[str, str, str]] = [
     ("orders", "payment_expires_at", "DATETIME"),
     ("orders", "recipient_username", "VARCHAR(64)"),
     ("products", "card_auto_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("products", "card_manual_enabled", "BOOLEAN NOT NULL DEFAULT 1"),
     ("products", "card_manual_confirm", "BOOLEAN NOT NULL DEFAULT 0"),
 ]
 

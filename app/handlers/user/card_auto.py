@@ -132,10 +132,18 @@ async def start_card_auto_purchase(
     await session.commit()
 
     full_order = await OrderRepository(session).get_by_id(order.id)
-    await callback.message.answer(
-        await _payment_text(session, full_order, lang),
-        reply_markup=card_auto_waiting_kb(lang, order.id),
-    )
+    payment_text = await _payment_text(session, full_order, lang)
+    payment_kb = card_auto_waiting_kb(lang, order.id)
+    if state is not None:
+        # Replaces the product card rather than stacking under it: the
+        # customer sees one screen that has become the payment screen.
+        from app.utils import shopscreen
+
+        await shopscreen.render(
+            callback.bot, state, callback.message.chat.id, payment_text, payment_kb
+        )
+    else:
+        await callback.message.answer(payment_text, reply_markup=payment_kb)
     await callback.answer()
 
 

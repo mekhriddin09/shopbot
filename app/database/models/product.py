@@ -83,6 +83,19 @@ class Product(TimestampMixin, Base):
         ),
     )
 
+    card_manual_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        server_default="1",
+        doc=(
+            "Offer the receipt-screenshot payment option for this product. Turn it "
+            "off for goods that are only worth selling fully automatically — "
+            "Stars/Premium, where a human confirming screenshots all day costs more "
+            "than the margin. On by default, since that is how every existing "
+            "product already behaves."
+        ),
+    )
+
     card_manual_confirm: Mapped[bool] = mapped_column(
         Boolean,
         default=False,

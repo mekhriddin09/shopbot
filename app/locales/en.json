@@ -152,13 +152,12 @@
   "msg_recipient_no_username": "❌ Your account has no username. This product can only be delivered to a username.\n\nSet one in Telegram Settings → Username and try again, or tap \"For someone else\".",
   "msg_recipient_selected": "👤 Recipient: @{username}",
   "msg_delivery_manual_fallback": "⏳ Your payment went through, but the order couldn't be delivered automatically.\n\n🆖 Order: {order_uuid}\n\nDon't worry — your money is safe and an admin will deliver it by hand. It will arrive in this chat shortly.",
-  "btn_recipient_confirm": "✅ Yes, that's right",
   "btn_custom_stars_enter": "⭐ Enter amount",
-  "msg_recipient_confirm": "🎁 Recipient:\n\n👤 <b>{name}</b>\n🔗 @{username}\n\n⚠️ The Stars go to this account and cannot be taken back. Is this correct?",
   "msg_custom_stars_unit": "⭐ 1 Star = {price} {currency}",
   "msg_custom_stars_prompt": "You choose how many Stars you want.",
   "msg_custom_stars_ask": "How many Stars do you need?\n\nSend a number (from {minimum} to {maximum}). For example: 137",
   "msg_custom_stars_invalid": "❌ Please send a number only. For example: 137",
   "msg_custom_stars_range": "❌ The amount must be between {minimum} and {maximum}.",
-  "msg_custom_stars_total": "🧮 {amount} ⭐ = <b>{total} {currency}</b>"
+  "msg_custom_stars_total": "🧮 {amount} ⭐ = <b>{total} {currency}</b>",
+  "msg_recipient_warning": "⚠️ This cannot be changed after payment."
 }

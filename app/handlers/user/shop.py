@@ -38,6 +38,7 @@ from app.services.notify import notify_admins_new_order
 from app.services.order_service import OrderService
 from app.services.product_service import ProductService
 from app.states.user_states import PurchaseStates
+from app.utils import shopscreen
 from app.utils.formatting import build_delivered_message, fmt_price, product_description, product_name
 from app.utils.i18n import t
 
@@ -64,15 +65,19 @@ def _product_card_text(lang: str, product, stock: int) -> str:
 
 
 @router.message(F.text.in_({t(l, "btn_shop") for l in ("uz", "ru", "en")}))
-async def open_shop(message: Message, session: AsyncSession, lang: str) -> None:
+async def open_shop(
+    message: Message, session: AsyncSession, lang: str, state: FSMContext
+) -> None:
     service = ProductService(session)
     views = await service.list_shop()
     if not views:
         await message.answer(t(lang, "msg_shop_empty"))
         return
-    await message.answer(
+    # Opening the shop starts a fresh screen; everything after this edits it.
+    sent = await message.answer(
         t(lang, "main_menu_hint"), reply_markup=shop_list_kb([v.product for v in views], lang)
     )
+    await shopscreen.remember(state, sent)
 
 
 @router.callback_query(StockNotifyCB.filter(F.action == "subscribe"))
@@ -102,13 +107,10 @@ async def back_to_list(callback: CallbackQuery, session: AsyncSession, lang: str
     text = empty_text or t(lang, "main_menu_hint")
     kb = None if empty_text else shop_list_kb([v.product for v in views], lang)
 
-    if callback.message.photo:
-        # We got here from a product card, which is a photo message — those
-        # can't be edited into a text message, so replace it instead.
-        await callback.message.delete()
-        await callback.message.answer(text, reply_markup=kb)
-    else:
-        await callback.message.edit_text(text, reply_markup=kb)
+    # `state.clear()` above wiped the screen coordinates, so re-anchor on
+    # the message this tap came from before redrawing it.
+    await shopscreen.remember(state, callback.message, is_photo=callback.message.text is None)
+    await shopscreen.render(callback.bot, state, callback.message.chat.id, text, kb)
     await callback.answer()
 
 
@@ -118,6 +120,7 @@ async def build_product_card(
     lang: str,
     recipient: str | None = None,
     stars_amount: int | None = None,
+    recipient_name: str | None = None,
 ) -> tuple[str, object, str | None] | None:
     """Text + keyboard + photo for a product card.
 
@@ -197,11 +200,16 @@ async def build_product_card(
         show_preorder_button=preorder_enabled,
         show_card_auto=card_auto_enabled,
         fixed_qty=stars_amount if custom else None,
+        show_card_manual=bool(getattr(view.product, "card_manual_enabled", True)),
     )
     if recipient:
-        # Shown above the payment buttons, with a way back: a typo in the
-        # username is the one mistake here that money can't undo.
+        # The whole confirmation, inline: who Fragment resolved, not merely
+        # the text that was typed. This is why the flow no longer needs a
+        # separate "is this right?" screen.
         text += "\n\n" + t(lang, "msg_recipient_selected", username=recipient)
+        if recipient_name:
+            text += f" — <b>{recipient_name}</b>"
+        text += "\n" + t(lang, "msg_recipient_warning")
         rows = list(kb.inline_keyboard)
         rows.insert(
             0,
@@ -224,14 +232,22 @@ async def render_product_card(
     lang: str,
     recipient: str | None = None,
     stars_amount: int | None = None,
+    recipient_name: str | None = None,
+    state: FSMContext | None = None,
 ) -> None:
-    """Send the product card as a new message (used after the recipient
-    question, where the previous message is a plain text prompt)."""
-    built = await build_product_card(session, product_id, lang, recipient, stars_amount)
+    """Draw the product card on the customer's single shop screen."""
+    built = await build_product_card(
+        session, product_id, lang, recipient, stars_amount, recipient_name
+    )
     if built is None:
         await target.answer(t(lang, "msg_product_not_found"))
         return
     text, kb, image_file_id = built
+    if state is not None:
+        await shopscreen.render(
+            target.bot, state, target.chat.id, text, kb, photo_id=image_file_id
+        )
+        return
     if image_file_id:
         await target.answer_photo(image_file_id, caption=text, reply_markup=kb)
     else:
@@ -246,7 +262,11 @@ async def open_product(
     lang: str,
     state: FSMContext,
 ) -> None:
-    from app.handlers.user.recipient import get_chosen_recipient, get_chosen_stars_amount
+    from app.handlers.user.recipient import (
+        get_chosen_recipient,
+        get_chosen_stars_amount,
+        get_recipient_name,
+    )
 
     built = await build_product_card(
         session,
@@ -254,21 +274,30 @@ async def open_product(
         lang,
         await get_chosen_recipient(state),
         await get_chosen_stars_amount(state, callback_data.product_id),
+        await get_recipient_name(state),
     )
     if built is None:
         await callback.answer(t(lang, "msg_product_not_found"), show_alert=True)
         return
     text, kb, image_file_id = built
-    if image_file_id:
-        await callback.message.delete()
-        await callback.message.answer_photo(image_file_id, caption=text, reply_markup=kb)
-    else:
-        await callback.message.edit_text(text, reply_markup=kb)
+    # The message the tap came from IS the screen — remember it, then let
+    # the renderer decide between editing and replacing (a photo card and a
+    # text card cannot be edited into one another).
+    await shopscreen.remember(state, callback.message, is_photo=callback.message.text is None)
+    await shopscreen.render(
+        callback.bot, state, callback.message.chat.id, text, kb, photo_id=image_file_id
+    )
     await callback.answer()
 
 
 async def _show_card_payment_instructions(
-    callback: CallbackQuery, session: AsyncSession, product: Product, lang: str, qty: int, preorder: bool = False
+    callback: CallbackQuery,
+    session: AsyncSession,
+    product: Product,
+    lang: str,
+    qty: int,
+    preorder: bool = False,
+    state: FSMContext | None = None,
 ) -> None:
     settings_repo = SettingRepository(session)
     instructions = product.payment_instructions or await settings_repo.get(
@@ -286,12 +315,22 @@ async def _show_card_payment_instructions(
         price=fmt_price(total_price),
         currency=product.currency,
     )
-    await callback.message.answer(text, reply_markup=payment_kb(lang, product.id, qty=qty, preorder=preorder))
+    kb = payment_kb(lang, product.id, qty=qty, preorder=preorder)
+    if state is not None:
+        await shopscreen.render(callback.bot, state, callback.message.chat.id, text, kb)
+    else:
+        await callback.message.answer(text, reply_markup=kb)
     await callback.answer()
 
 
 @router.callback_query(ShopCB.filter(F.action == "buy"))
-async def buy_product(callback: CallbackQuery, callback_data: ShopCB, session: AsyncSession, lang: str) -> None:
+async def buy_product(
+    callback: CallbackQuery,
+    callback_data: ShopCB,
+    session: AsyncSession,
+    lang: str,
+    state: FSMContext,
+) -> None:
     products = ProductRepository(session)
     product = await products.get_by_id(callback_data.product_id)
     if product is None or not product.is_visible:
@@ -300,7 +339,9 @@ async def buy_product(callback: CallbackQuery, callback_data: ShopCB, session: A
     if not callback_data.preorder and await ProductService(session).stock_shortfall(product):
         await callback.answer(t(lang, "msg_out_of_stock"), show_alert=True)
         return
-    await _show_card_payment_instructions(callback, session, product, lang, qty=1, preorder=callback_data.preorder)
+    await _show_card_payment_instructions(
+        callback, session, product, lang, qty=1, preorder=callback_data.preorder, state=state
+    )
 
 
 @router.callback_query(QtyCB.filter(F.action == "show"))
@@ -375,7 +416,7 @@ async def qty_confirm(
 
         await start_card_auto_purchase(callback, session, user, lang, product.id, qty, state=state)
     else:
-        await _show_card_payment_instructions(callback, session, product, lang, qty)
+        await _show_card_payment_instructions(callback, session, product, lang, qty, state=state)
 
 
 @router.callback_query(ShopCB.filter(F.action == "paid"))
@@ -403,7 +444,9 @@ async def mark_paid(
 
     await state.set_state(PurchaseStates.waiting_screenshot)
     await state.update_data(order_id=order.id)
-    await callback.message.answer(t(lang, "msg_send_screenshot"), reply_markup=cancel_kb(lang))
+    await shopscreen.render(
+        callback.bot, state, callback.message.chat.id, t(lang, "msg_send_screenshot"), cancel_kb(lang)
+    )
     await callback.answer()
 
 

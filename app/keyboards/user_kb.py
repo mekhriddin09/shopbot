@@ -79,29 +79,6 @@ def recipient_choice_kb(lang: str, product_id: int) -> InlineKeyboardMarkup:
     )
 
 
-def recipient_confirm_kb(lang: str, product_id: int) -> InlineKeyboardMarkup:
-    """Last chance to catch a typo. Stars sent to the wrong @handle cannot
-    be recalled, so the recipient is confirmed by name before any money
-    moves — the customer sees who Fragment actually resolved, not just the
-    string they typed."""
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=t(lang, "btn_recipient_confirm"),
-                    callback_data=RecipientCB(action="confirm", product_id=product_id).pack(),
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text=t(lang, "btn_recipient_change"),
-                    callback_data=RecipientCB(action="change", product_id=product_id).pack(),
-                )
-            ],
-        ]
-    )
-
-
 def custom_stars_kb(lang: str, product_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -246,6 +223,7 @@ def product_detail_kb(
     show_preorder_button: bool = False,
     show_card_auto: bool = False,
     fixed_qty: int | None = None,
+    show_card_manual: bool = True,
 ) -> InlineKeyboardMarkup:
     """`fixed_qty` skips the quantity picker and bakes the amount into every
     payment button — used by custom-amount products (e.g. "I want 137
@@ -272,7 +250,11 @@ def product_detail_kb(
                 ]
             )
         buy_label = t(lang, "btn_pay_card") if (show_crypto or show_stars) else t(lang, "btn_buy")
-        if fixed_qty:
+        if not show_card_manual:
+            # Receipt-based payment switched off for this product: the whole
+            # point of such a product is that nobody looks at screenshots.
+            pass
+        elif fixed_qty:
             rows.append(
                 [
                     InlineKeyboardButton(

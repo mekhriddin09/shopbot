@@ -75,6 +75,7 @@ TOGGLEABLE_FIELDS = {
     "is_visible",
     "referral_eligible",
     "card_auto_enabled",
+    "card_manual_enabled",
     "card_manual_confirm",
 }
 
@@ -145,6 +146,7 @@ PRODUCT_GROUPS: dict[str, dict] = {
         "items": [
             ("field", "payment_instructions", "\U0001F4B3 To'lov ma'lumoti (shu mahsulot uchun)"),
             ("toggle", "card_auto_enabled", "⚡️ Avto karta to'lovi"),
+            ("toggle", "card_manual_enabled", "\U0001F9FE Chek yuborib to'lash"),
             ("toggle", "card_manual_confirm", "\U0001F512 Qo'lda tasdiqlash"),
         ],
     },
