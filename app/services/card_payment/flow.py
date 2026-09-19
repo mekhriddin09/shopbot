@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import Order
 from app.database.models.enums import CardTransactionStatus, OrderStatus
 from app.keyboards.admin_kb import admin_card_confirm_kb
+from app.keyboards.user_kb import buy_again_kb
 from app.repositories.card_transaction_repo import CardTransactionRepository
 from app.repositories.order_repo import OrderRepository
 from app.repositories.setting_repo import SettingRepository
@@ -117,7 +118,9 @@ async def deliver_paid_order(bot: Bot, session: AsyncSession, order: Order, amou
     if result.delivered_now and result.payload:
         try:
             await bot.send_message(
-                fresh.user.telegram_id, build_delivered_message(lang, fresh, result.payload)
+                fresh.user.telegram_id,
+                build_delivered_message(lang, fresh, result.payload),
+                reply_markup=buy_again_kb(lang, fresh.product_id),
             )
         except Exception:  # noqa: BLE001 - customer may have blocked the bot
             logger.warning("card_delivery_notify_failed order=%s", fresh.order_uuid)

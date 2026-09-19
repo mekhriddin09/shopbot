@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import Product, User
 from app.database.models.enums import OrderStatus, PaymentMethod
 from app.keyboards.callback_data import StarsCB
-from app.keyboards.user_kb import stars_invoice_kb
+from app.keyboards.user_kb import buy_again_kb, stars_invoice_kb
 from app.repositories.inventory_repo import InventoryRepository
 from app.repositories.order_repo import OrderRepository
 from app.repositories.product_repo import ProductRepository
@@ -218,7 +218,10 @@ async def successful_payment(message: Message, session: AsyncSession, lang: str)
         return
 
     if result.delivered_now and result.payload:
-        await message.answer(build_delivered_message(lang, order, result.payload))
+        await message.answer(
+            build_delivered_message(lang, order, result.payload),
+            reply_markup=buy_again_kb(lang, order.product_id),
+        )
         await ReferralService(session).credit_for_delivered_order(order, message.bot)
     elif result.needs_manual_message:
         await message.answer(t(lang, "msg_crypto_confirmed_manual_pending"))

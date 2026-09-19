@@ -16,6 +16,7 @@ from aiogram import Bot
 from app.config.settings import settings
 from app.database.engine import async_session_maker
 from app.keyboards.admin_kb import admin_write_manual_kb
+from app.keyboards.user_kb import buy_again_kb
 from app.repositories.order_repo import OrderRepository
 from app.services.crypto.registry import get_crypto_provider
 from app.services.delivery_service import DeliveryService
@@ -104,6 +105,7 @@ async def _poll_once(bot: Bot) -> None:
                 await bot.send_message(
                     order.user.telegram_id,
                     build_delivered_message(lang, order, result.payload),
+                    reply_markup=buy_again_kb(lang, order.product_id),
                 )
                 await ReferralService(session).credit_for_delivered_order(order, bot)
             elif result.needs_manual_message:

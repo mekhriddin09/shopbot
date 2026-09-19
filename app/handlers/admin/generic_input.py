@@ -28,6 +28,7 @@ from app.keyboards.admin_kb import (
     admin_user_profile_kb,
     admin_user_search_results_kb,
 )
+from app.keyboards.user_kb import buy_again_kb
 from app.repositories.inventory_repo import InventoryRepository
 from app.repositories.order_repo import OrderRepository
 from app.repositories.product_repo import ProductRepository
@@ -381,6 +382,7 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
         await message.bot.send_message(
             order.user.telegram_id,
             build_delivered_message(lang, order, text),
+            reply_markup=buy_again_kb(lang, order.product_id),
         )
         from app.services.referral_service import ReferralService  # local import avoids a cycle
 
@@ -587,14 +589,17 @@ async def handle_document_as_text_value(message: Message, session: AsyncSession,
 
         lang = order.user.language
         caption = build_delivered_message(lang, order, descriptive)
+        kb = buy_again_kb(lang, order.product_id)
         try:
             if len(caption) <= 1024:
-                await message.bot.send_document(order.user.telegram_id, document.file_id, caption=caption)
+                await message.bot.send_document(
+                    order.user.telegram_id, document.file_id, caption=caption, reply_markup=kb
+                )
             else:
                 # Telegram caption cap (1024 chars) — send the file plain,
                 # then the (longer) confirmation/instructions as a follow-up.
                 await message.bot.send_document(order.user.telegram_id, document.file_id)
-                await message.bot.send_message(order.user.telegram_id, caption)
+                await message.bot.send_message(order.user.telegram_id, caption, reply_markup=kb)
         except TelegramAPIError:
             await message.answer("⚠️ Fayl mijozga yuborib bo'lmadi — foydalanuvchi botni bloklagan bo'lishi mumkin.")
             await state.clear()

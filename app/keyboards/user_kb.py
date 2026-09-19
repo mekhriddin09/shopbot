@@ -557,6 +557,27 @@ def cancel_kb(lang: str) -> InlineKeyboardMarkup:
     )
 
 
+def buy_again_kb(lang: str, product_id: int) -> InlineKeyboardMarkup:
+    """Rides on every "your order is delivered" message.
+
+    Reuses the plain ShopCB(action="open") that the product list already
+    uses, so tapping it needs no new handler: `open_product` will edit this
+    very delivery message into the product card (or the recipient/custom-
+    amount prompt, if the product needs one) — a repeat purchase in one tap
+    instead of Shop -> find the product again.
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=t(lang, "btn_buy_again"),
+                    callback_data=ShopCB(action="open", product_id=product_id).pack(),
+                )
+            ]
+        ]
+    )
+
+
 def language_kb() -> InlineKeyboardMarkup:
     labels = {"uz": "🇺🇿 O'zbekcha", "ru": "🇷🇺 Русский", "en": "🇬🇧 English"}
     rows = [

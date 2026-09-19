@@ -15,6 +15,7 @@ from app.database.models import Product, User
 from app.database.models.enums import OrderStatus, PaymentMethod
 from app.keyboards.callback_data import CryptoCB, QtyCB, RecipientCB, ShopCB, StockNotifyCB
 from app.keyboards.user_kb import (
+    buy_again_kb,
     cancel_kb,
     crypto_invoice_kb,
     main_menu_kb,
@@ -652,7 +653,10 @@ async def crypto_check(callback: CallbackQuery, callback_data: CryptoCB, session
         return
 
     if result.delivered_now and result.payload:
-        await callback.message.answer(build_delivered_message(lang, order, result.payload))
+        await callback.message.answer(
+            build_delivered_message(lang, order, result.payload),
+            reply_markup=buy_again_kb(lang, order.product_id),
+        )
         from app.services.referral_service import ReferralService
 
         await ReferralService(session).credit_for_delivered_order(order, callback.bot)

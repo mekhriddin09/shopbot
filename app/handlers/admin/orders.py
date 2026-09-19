@@ -20,6 +20,7 @@ from app.keyboards.admin_kb import (
     admin_write_manual_kb,
 )
 from app.utils.screen import answer_and_show, show
+from app.keyboards.user_kb import buy_again_kb
 from app.keyboards.callback_data import AdminOrderListCB, OrderCB
 from app.repositories.order_repo import OrderRepository
 from app.services.delivery_service import DeliveryService
@@ -301,7 +302,9 @@ async def _retry_one(bot, session: AsyncSession, order_id: int) -> tuple[bool, s
     if result.delivered_now and result.payload:
         try:
             await bot.send_message(
-                order.user.telegram_id, build_delivered_message(lang, order, result.payload)
+                order.user.telegram_id,
+                build_delivered_message(lang, order, result.payload),
+                reply_markup=buy_again_kb(lang, order.product_id),
             )
         except Exception:  # noqa: BLE001 - customer may have blocked the bot
             pass
@@ -427,6 +430,7 @@ async def approve_order(callback: CallbackQuery, callback_data: OrderCB, session
         await callback.bot.send_message(
             order.user.telegram_id,
             build_delivered_message(lang, order, result.payload),
+            reply_markup=buy_again_kb(lang, order.product_id),
         )
         await ReferralService(session).credit_for_delivered_order(order, callback.bot)
         await _edit_order_message_with_confirmation(callback, _delivered_confirmation_block(order))
