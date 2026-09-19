@@ -203,7 +203,7 @@ def shop_list_kb(products: list[Product], lang: str) -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text=f"{p.emoji} {product_name(p, lang)}",
-                callback_data=ShopCB(action="open", product_id=p.id).pack(),
+                callback_data=ShopCB(action="open", product_id=p.id, fresh=True).pack(),
             )
         ]
         for p in products
@@ -571,7 +571,7 @@ def buy_again_kb(lang: str, product_id: int) -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(
                     text=t(lang, "btn_buy_again"),
-                    callback_data=ShopCB(action="open", product_id=product_id).pack(),
+                    callback_data=ShopCB(action="open", product_id=product_id, fresh=True).pack(),
                 )
             ]
         ]

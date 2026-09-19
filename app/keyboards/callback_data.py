@@ -14,6 +14,12 @@ class ShopCB(CallbackData, prefix="shop"):
     product_id: int = 0
     qty: int = 1
     preorder: bool = False
+    # True only from the shop list / "buy again" — a genuinely fresh look at
+    # the product, as opposed to the in-flow "back" buttons on the qty
+    # picker and payment screen (which reopen the SAME product mid-purchase
+    # and must not wipe the recipient/amount just entered). See
+    # open_product() in handlers/user/shop.py.
+    fresh: bool = False
 
 
 class OrderCB(CallbackData, prefix="order"):

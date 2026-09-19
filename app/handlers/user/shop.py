@@ -150,11 +150,46 @@ async def build_product_card(
     preorder_enabled = not view.in_stock and await settings_repo.get_bool("preorder_enabled", False)
     show_notify = not view.in_stock and not preorder_enabled
 
-    text = _product_card_text(lang, view.product, view.stock)
-    if show_crypto:
-        text += "\n" + t(lang, "msg_crypto_price_label", price=f"{float(view.product.price_usd):.2f}")
-    if show_stars:
-        text += "\n" + t(lang, "msg_stars_price_label", price=view.product.price_stars)
+    # Custom-amount Stars: ask "how many" *before* "for whom" — verifying a
+    # recipient is pointless while the order size isn't even decided yet,
+    # and it puts one question on screen at a time instead of two. Once the
+    # amount is known, the long description is just noise for the rest of
+    # this purchase (recipient prompt, payment screen), so it's replaced by
+    # a compact "size + total" line that stays through to checkout.
+    from app.services.providers.fragment import is_custom_stars
+
+    custom = is_custom_stars(view.product.external_product_id)
+
+    if custom and not stars_amount:
+        from app.keyboards.user_kb import custom_stars_kb
+
+        unit = float(view.product.price)
+        text = _product_card_text(lang, view.product, view.stock)
+        if show_crypto:
+            text += "\n" + t(lang, "msg_crypto_price_label", price=f"{float(view.product.price_usd):.2f}")
+        if show_stars:
+            text += "\n" + t(lang, "msg_stars_price_label", price=view.product.price_stars)
+        text += "\n" + t(lang, "msg_custom_stars_unit", price=fmt_price(unit), currency=view.product.currency)
+        text += "\n\n" + t(lang, "msg_custom_stars_prompt")
+        return text, custom_stars_kb(lang, view.product.id), view.product.image_file_id
+
+    if custom:
+        total = float(view.product.price) * stars_amount
+        text = t(
+            lang,
+            "msg_custom_stars_compact",
+            emoji=view.product.emoji,
+            name=product_name(view.product, lang),
+            amount=stars_amount,
+            total=fmt_price(total),
+            currency=view.product.currency,
+        )
+    else:
+        text = _product_card_text(lang, view.product, view.stock)
+        if show_crypto:
+            text += "\n" + t(lang, "msg_crypto_price_label", price=f"{float(view.product.price_usd):.2f}")
+        if show_stars:
+            text += "\n" + t(lang, "msg_stars_price_label", price=view.product.price_stars)
 
     # Goods that are delivered to a Telegram username (Stars, Premium) must
     # not reach the payment buttons until we know the recipient — see
@@ -166,28 +201,6 @@ async def build_product_card(
 
         text += "\n\n" + t(lang, "msg_recipient_choose")
         return text, recipient_choice_kb(lang, view.product.id), view.product.image_file_id
-
-    # Custom-amount Stars: the UZS price is per single star, so the card
-    # can't show a total until the customer has said how many they want.
-    from app.services.providers.fragment import is_custom_stars
-
-    custom = is_custom_stars(view.product.external_product_id)
-    if custom:
-        unit = float(view.product.price)
-        text += "\n" + t(lang, "msg_custom_stars_unit", price=fmt_price(unit), currency=view.product.currency)
-        if not stars_amount:
-            from app.keyboards.user_kb import custom_stars_kb
-
-            text += "\n\n" + t(lang, "msg_custom_stars_prompt")
-            return text, custom_stars_kb(lang, view.product.id), view.product.image_file_id
-        total = unit * stars_amount
-        text += "\n" + t(
-            lang,
-            "msg_custom_stars_total",
-            amount=stars_amount,
-            total=fmt_price(total),
-            currency=view.product.currency,
-        )
 
     kb = product_detail_kb(
         lang,
@@ -264,10 +277,18 @@ async def open_product(
     state: FSMContext,
 ) -> None:
     from app.handlers.user.recipient import (
+        forget_recipient_choice,
         get_chosen_recipient,
         get_chosen_stars_amount,
         get_recipient_name,
     )
+
+    if callback_data.fresh:
+        # A genuinely fresh look at the product (shop list, "buy again") —
+        # not the qty-picker/payment "back" buttons, which reopen the same
+        # product mid-purchase via this same handler with fresh=False and
+        # must keep whatever was just entered.
+        await forget_recipient_choice(state)
 
     built = await build_product_card(
         session,

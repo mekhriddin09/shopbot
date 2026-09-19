@@ -75,6 +75,28 @@ async def get_chosen_stars_amount(state: FSMContext, product_id: int | None = No
     return int(amount)
 
 
+async def forget_recipient_choice(state: FSMContext) -> None:
+    """Wipe whatever recipient/amount was picked for a previous purchase.
+
+    Recipient and amount used to live in FSM data with no product tag, so
+    buying Stars for @friend once meant every product card ever opened
+    afterwards silently pre-filled @friend as the recipient — a real risk
+    of paying for the wrong person by mistake if the customer is in a
+    hurry. Called from a genuinely fresh product open (shop list tap, "buy
+    again") so each visit starts clean; the qty-picker/payment "back"
+    buttons deliberately don't call this, since those reopen the same
+    product mid-purchase and must keep what was just entered.
+    """
+    await state.update_data(
+        **{
+            _FSM_KEY: None,
+            _NAME_KEY: None,
+            _AMOUNT_KEY: None,
+            _AMOUNT_PRODUCT_KEY: None,
+        }
+    )
+
+
 async def attach_recipient(session: AsyncSession, order, state: FSMContext) -> None:
     """Copy the verified recipient from FSM onto the order. Called by every
     payment flow right after the order row is created."""
@@ -278,6 +300,7 @@ async def recipient_username_received(
 __all__ = [
     "router",
     "attach_recipient",
+    "forget_recipient_choice",
     "get_chosen_recipient",
     "get_chosen_stars_amount",
     "get_recipient_name",

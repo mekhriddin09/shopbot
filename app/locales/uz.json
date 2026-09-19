@@ -160,5 +160,6 @@
   "msg_custom_stars_invalid": "❌ Faqat raqam yuboring. Masalan: 137",
   "msg_custom_stars_range": "❌ Miqdor {minimum} dan {maximum} gacha bo'lishi kerak.",
   "msg_custom_stars_total": "🧮 {amount} ⭐ = <b>{total} {currency}</b>",
+  "msg_custom_stars_compact": "{emoji} <b>{name}</b>\n\n🔢 Soni: {amount} ⭐\n💰 Narxi: <b>{total} {currency}</b>",
   "msg_recipient_warning": "⚠️ To'lovdan keyin o'zgartirib bo'lmaydi."
 }
