@@ -68,3 +68,42 @@ def build_delivered_message(lang: str, order, payload: str) -> str:
     if instructions:
         text += f"\n\n{instructions}"
     return text
+
+
+# Telegram rejects any message body over 4096 characters outright, and an
+# oferta or a product description written in the admin panel can easily run
+# past that. 3900 leaves room for the HTML the caller may add around it.
+TELEGRAM_TEXT_LIMIT = 3900
+
+
+def split_text(text: str, limit: int = TELEGRAM_TEXT_LIMIT) -> list[str]:
+    """Cut a long body into sendable chunks, preferring paragraph breaks.
+
+    Written after a live incident: an oferta longer than 4096 characters made
+    `onboarding_gate` raise `message is too long` on every /start, which left
+    new users stuck at the gate with no message at all — the worst possible
+    failure for the one screen everybody must pass.
+
+    Splitting is attempted on a blank line, then a newline, then a space, so
+    a chunk boundary doesn't land mid-word. Only if none of those exist in
+    range is the text cut bluntly.
+    """
+    body = (text or "").strip()
+    if len(body) <= limit:
+        return [body] if body else []
+
+    chunks: list[str] = []
+    while len(body) > limit:
+        window = body[:limit]
+        cut = window.rfind("\n\n")
+        if cut < limit // 2:
+            cut = window.rfind("\n")
+        if cut < limit // 2:
+            cut = window.rfind(" ")
+        if cut < limit // 2:
+            cut = limit
+        chunks.append(body[:cut].strip())
+        body = body[cut:].strip()
+    if body:
+        chunks.append(body)
+    return chunks

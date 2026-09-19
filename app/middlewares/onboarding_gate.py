@@ -91,7 +91,16 @@ class OnboardingGateMiddleware(BaseMiddleware):
                     # with an empty message and no way through.
                     logger.warning("onboarding_gate_enabled but oferta_text is empty — failing open")
                 else:
-                    await target.answer(offer_text, reply_markup=oferta_accept_kb(lang))
+                    # Long oferta texts used to crash here with "message is
+                    # too long", walling every new user out of the bot. The
+                    # accept button rides on the final chunk so it is always
+                    # the last thing on screen.
+                    from app.utils.formatting import split_text
+
+                    chunks = split_text(offer_text)
+                    for chunk in chunks[:-1]:
+                        await target.answer(chunk)
+                    await target.answer(chunks[-1], reply_markup=oferta_accept_kb(lang))
                     if cq:
                         await cq.answer()
                     return None
