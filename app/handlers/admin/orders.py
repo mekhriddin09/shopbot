@@ -11,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models.enums import DeliveryMode, OrderStatus
 from app.filters.is_admin import IsAdmin
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup
+from app.keyboards.base_buttons import InlineKeyboardButton
 from app.keyboards.admin_kb import (
     admin_order_detail_kb,
     admin_orders_list_kb,

@@ -229,7 +229,7 @@ class ReferralService:
         display-ready lines (possibly empty, if nothing is configured
         anywhere yet); the caller decides whether/how to show them."""
         from app.repositories.product_repo import ProductRepository
-        from app.utils.formatting import fmt_price, product_name
+        from app.utils.formatting import fmt_price, product_emoji_html, product_name
 
         lines: list[str] = []
         currency = await self.settings.get("referral_currency", "UZS")
@@ -255,7 +255,7 @@ class ReferralService:
                     t(
                         lang,
                         "msg_referral_info_product",
-                        emoji=product.emoji,
+                        emoji=product_emoji_html(product),
                         name=product_name(product, lang),
                         reward=reward_text,
                     )

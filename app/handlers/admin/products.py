@@ -4,11 +4,12 @@ import logging
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models.enums import DeliveryMode
 from app.filters.is_admin import IsAdmin
+from app.keyboards.base_buttons import InlineKeyboardButton
 from app.keyboards.admin_kb import (
     PRODUCT_GROUPS,
     TOGGLEABLE_FIELDS,
@@ -22,7 +23,7 @@ from app.keyboards.admin_kb import (
 from app.keyboards.callback_data import AdminProductCB
 from app.repositories.product_repo import ProductRepository
 from app.states.admin_states import AdminInput
-from app.utils.formatting import fmt_price
+from app.utils.formatting import fmt_price, product_emoji_html
 from app.utils.screen import show
 
 router = Router(name="admin_products")
@@ -39,7 +40,7 @@ FIELD_PROMPTS = {
     "price": "Yangi narxni raqamda yozing (masalan: 25000):",
     "price_usd": "Kripto (USD) narxini yozing (masalan: 4.00). Kripto to'lovni o'chirish uchun '-' yuboring:",
     "price_stars": "Telegram Stars narxini butun sonda yozing (masalan: 100). Stars to'lovni o'chirish uchun '-' yuboring:",
-    "emoji": "Yangi emoji yuboring:",
+    "emoji": "Yangi emoji yuboring (oddiy yoki animatsiyali/Premium emoji ham bo'lishi mumkin):",
     "sort_order": "Tartib raqamini yozing (butun son, kichigi tepada turadi):",
     "payment_instructions": "Ushbu mahsulot uchun maxsus to'lov ma'lumotini yozing (bo'sh qoldirish uchun '-' yuboring):",
     "external_product_id": (
@@ -100,7 +101,7 @@ def _product_summary(product) -> str:
     and whether it's live."""
     visibility = "\U0001F7E2 Faol" if product.is_visible else "\U0001F5C4️ Arxivda (mijozlar ko'rmaydi)"
     return (
-        f"{product.emoji} <b>{product.name}</b>\n"
+        f"{product_emoji_html(product)} <b>{product.name}</b>\n"
         f"\U0001F4B5 {fmt_price(float(product.price))} {product.currency} · {_MODE_LABELS[product.delivery_mode]}\n"
         f"{visibility}"
     )

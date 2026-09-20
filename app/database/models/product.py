@@ -14,7 +14,13 @@ class Product(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(
         String(128), nullable=False, doc="Fallback name, used if a language-specific one isn't set."
     )
-    emoji: Mapped[str] = mapped_column(String(16), default="\U0001F4E6")  # 📦
+    emoji: Mapped[str] = mapped_column(String(16), default="\U0001F4E6")  # 📦 — plain unicode fallback, always set
+    custom_emoji_id: Mapped[str | None] = mapped_column(
+        String(64), nullable=True,
+        doc="A Telegram custom/animated (Premium) emoji's file_unique_id, if the "
+        "admin picked one instead of a plain unicode emoji — see "
+        "app.utils.formatting.product_emoji_html for how it's rendered.",
+    )
     description: Mapped[str] = mapped_column(
         Text, default="", doc="Fallback description, used if a language-specific one isn't set."
     )

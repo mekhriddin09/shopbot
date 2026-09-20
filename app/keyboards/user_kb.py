@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from aiogram.types import (
-    InlineKeyboardButton,
     InlineKeyboardMarkup,
-    KeyboardButton,
     ReplyKeyboardMarkup,
 )
 
 from app.database.models import Product
+from app.keyboards.base_buttons import InlineKeyboardButton, KeyboardButton
 from app.keyboards.callback_data import (
     CaptchaCB,
     CardAutoCB,
@@ -212,12 +211,13 @@ def shop_list_kb(views: list, lang: str) -> InlineKeyboardMarkup:
     out-of-stock coloring already applied inside a product's own card (see
     button_registry.py: "buy" is POSITIVE/green, "preorder"/"notify_stock"
     are NEGATIVE/red)."""
-    from app.utils.formatting import product_name  # local import avoids a cycle
+    from app.utils.formatting import product_button_emoji_prefix, product_name  # local import avoids a cycle
 
     rows = [
         [
             InlineKeyboardButton(
-                text=f"{view.product.emoji} {product_name(view.product, lang)}",
+                text=f"{product_button_emoji_prefix(view.product)}{product_name(view.product, lang)}",
+                icon_custom_emoji_id=getattr(view.product, "custom_emoji_id", None),
                 style="success" if view.in_stock else "danger",
                 callback_data=ShopCB(action="open", product_id=view.product.id, fresh=True).pack(),
             )

@@ -265,10 +265,25 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
             value = None if text == "-" else _rich_text_or_plain(message, text, rich=field in _RICH_PRODUCT_FIELDS)
         elif field == "description":
             value = _rich_text_or_plain(message, text, rich=True)
+        elif field == "emoji":
+            # A message carrying a custom (Telegram Premium/animated) emoji
+            # has a MessageEntity of type "custom_emoji" — that's the ONLY
+            # way to capture its id, there's no way to type it manually.
+            # Mirrors button_edit_emoji below. `value` stays a plain
+            # unicode fallback character either way (used wherever a
+            # custom emoji can't render — button labels, and as the
+            # visible glyph inside the <tg-emoji> HTML tag elsewhere).
+            custom_entity = next(
+                (e for e in (message.entities or []) if e.type == "custom_emoji"), None
+            )
+            emoji_custom_id = custom_entity.custom_emoji_id if custom_entity else None
+            value = text
         else:
             value = text
 
         update_kwargs = {field: value}
+        if field == "emoji":
+            update_kwargs["custom_emoji_id"] = emoji_custom_id
         if field in _BASE_FIELDS_WITH_LANG_VARIANTS:
             # BUG FIX: `_localized_field` (app/utils/formatting.py) always
             # prefers a per-language override over this "standard" value —

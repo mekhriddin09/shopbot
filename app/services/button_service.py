@@ -28,12 +28,32 @@ use them (Telegram's KeyboardButton has no such fields at all).
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 
 from app.services.button_registry import STYLE_BY_TYPE, BUTTON_REGISTRY, ButtonDef, get_button_def
 from app.utils.i18n import t
 
 logger = logging.getLogger("buttons")
+
+# Matches a leading run of emoji/variation-selector/ZWJ characters plus the
+# whitespace after them — used to strip whatever emoji app/locales/*.json
+# already baked into its text (e.g. "🛒 Do'kon") before prefixing an
+# admin-set emoji override, so the two don't stack and language files that
+# each chose a different default emoji don't leave old ones peeking through.
+_LEADING_EMOJI_RE = re.compile(
+    "^(?:["
+    "\U0001F1E6-\U0001FAFF"  # flags + most emoji blocks (transport, symbols, supplemental, extended-A)
+    "☀-➿"  # misc symbols & dingbats (☀️✅❌⭐ range overlap, arrows, etc.)
+    "⬀-⯿"  # misc symbols and arrows (⭐➡️ etc.)
+    "️"  # variation selector-16
+    "‍"  # zero-width joiner
+    "])+\\s*"
+)
+
+
+def _strip_leading_emoji(text: str) -> str:
+    return _LEADING_EMOJI_RE.sub("", text, count=1)
 
 
 @dataclass(frozen=True)
@@ -111,20 +131,31 @@ def resolve_button(key: str, lang: str, default_language: str = "uz") -> Resolve
             enabled=True,
         )
 
-    text = (
-        cached.translations.get(lang)
-        or cached.translations.get(default_language)
-        or t(lang, button_def.i18n_key)
-    )
-    # Only compose a separate emoji prefix once the admin actually typed a
-    # plain-text translation override — otherwise `text` already came
-    # straight from i18n with its emoji baked in, and prefixing again would
-    # double it up.
-    has_translation_override = bool(cached.translations.get(lang) or cached.translations.get(default_language))
-    if has_translation_override:
-        emoji = cached.unicode_emoji or button_def.default_emoji
-        if emoji and not cached.custom_emoji_id:
-            text = f"{emoji} {text}"
+    translation = cached.translations.get(lang) or cached.translations.get(default_language)
+    text = translation if translation is not None else t(lang, button_def.i18n_key)
+
+    # Applying an admin-set emoji override used to require a typed text
+    # override to *also* exist for the same language — so an admin who only
+    # ever changed the emoji (the common case: pick a nicer/animated emoji,
+    # leave the wording alone) saw nothing happen for whichever languages
+    # they hadn't separately retyped text for. Those languages kept
+    # rendering straight from i18n, which bakes in its OWN emoji per
+    # locale file — so what looked like "the old language's emoji is
+    # stuck" was really: the new emoji was never being applied there at
+    # all. Fixed: the emoji override now applies independently of whether
+    # a translation override exists, for every language at once.
+    has_emoji_override = bool(cached.unicode_emoji or cached.custom_emoji_id)
+    if has_emoji_override:
+        if translation is None:
+            # No typed override -> `text` still carries the locale file's
+            # own baked-in emoji; strip it so the admin's emoji doesn't
+            # stack on top of (or sit oddly next to) a different one.
+            text = _strip_leading_emoji(text)
+        if cached.unicode_emoji and not cached.custom_emoji_id:
+            text = f"{cached.unicode_emoji} {text}".strip()
+        # else: a custom_emoji_id is shown via the button's own icon field
+        # (icon_custom_emoji_id, see button_helpers.py), not prefixed into
+        # the text at all.
 
     style = cached.style if cached.style is not None else STYLE_BY_TYPE.get(button_def.type)
     return ResolvedButton(
@@ -161,9 +192,20 @@ def resolved_texts_for_key(key: str) -> set[str]:
     texts = {t(lang, button_def.i18n_key) for lang in available_languages()}
     cached = _CACHE.get(key)
     if cached:
-        for lang, override_text in cached.translations.items():
-            texts.add(override_text)
-            emoji = cached.unicode_emoji or button_def.default_emoji
-            if emoji and not cached.custom_emoji_id:
-                texts.add(f"{emoji} {override_text}")
+        has_emoji_override = bool(cached.unicode_emoji or cached.custom_emoji_id)
+        for lang in available_languages():
+            base = cached.translations.get(lang)
+            if base is not None:
+                texts.add(base)
+            if not has_emoji_override:
+                continue
+            # Mirror resolve_button()'s actual composed text for this
+            # language exactly, translated or not, so a rename/emoji change
+            # never desyncs this set from what a reply-keyboard tap will
+            # really say (see the fix note in resolve_button above for why
+            # this used to only cover languages with a typed override).
+            text = base if base is not None else _strip_leading_emoji(t(lang, button_def.i18n_key))
+            if cached.unicode_emoji and not cached.custom_emoji_id:
+                text = f"{cached.unicode_emoji} {text}".strip()
+            texts.add(text)
     return texts

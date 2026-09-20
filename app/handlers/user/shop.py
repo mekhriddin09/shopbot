@@ -5,7 +5,6 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     CallbackQuery,
-    InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
 )
@@ -13,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Product, User
 from app.database.models.enums import OrderStatus, PaymentMethod
+from app.keyboards.base_buttons import InlineKeyboardButton
 from app.keyboards.callback_data import CryptoCB, QtyCB, RecipientCB, ShopCB, StockNotifyCB
 from app.keyboards.user_kb import (
     buy_again_kb,
@@ -41,7 +41,13 @@ from app.services.product_service import ProductService
 from app.states.user_states import PurchaseStates
 from app.utils import shopscreen
 from app.utils.button_filters import menu_button_filter
-from app.utils.formatting import build_delivered_message, fmt_price, product_description, product_name
+from app.utils.formatting import (
+    build_delivered_message,
+    fmt_price,
+    product_description,
+    product_emoji_html,
+    product_name,
+)
 from app.utils.i18n import t
 
 router = Router(name="user_shop")
@@ -57,7 +63,7 @@ def _product_card_text(lang: str, product, stock: int) -> str:
     return t(
         lang,
         "msg_product_card",
-        emoji=product.emoji,
+        emoji=product_emoji_html(product),
         name=product_name(product, lang),
         description=product_description(product, lang),
         price=fmt_price(float(product.price)),
@@ -179,7 +185,7 @@ async def build_product_card(
         text = t(
             lang,
             "msg_custom_stars_compact",
-            emoji=view.product.emoji,
+            emoji=product_emoji_html(view.product),
             name=product_name(view.product, lang),
             amount=stars_amount,
             total=fmt_price(total),

@@ -35,6 +35,33 @@ def product_description(product, lang: str) -> str:
     return _localized_field(product, "description", lang, product.description) or ""
 
 
+def product_emoji_html(product) -> str:
+    """The product's emoji, ready to drop into an HTML-parsed message or
+    caption (every place this is used sends with `parse_mode=HTML`). When
+    the admin picked a custom/animated (Telegram Premium) emoji instead of
+    a plain unicode one, that's the only way to make it render as picked —
+    a plain-text message can't embed a custom emoji any other way, unlike
+    a button's dedicated `icon_custom_emoji_id` field (see
+    `app.keyboards.button_helpers` / the `shop_list_kb` button-label case,
+    which use that field directly instead of this HTML tag)."""
+    custom_id = getattr(product, "custom_emoji_id", None)
+    if custom_id:
+        return f'<tg-emoji emoji-id="{custom_id}">{product.emoji}</tg-emoji>'
+    return product.emoji
+
+
+def product_button_emoji_prefix(product) -> str:
+    """Text prefix for a button LABEL (plain text — Telegram button text
+    can't carry HTML/entities). Empty when the admin set a custom/animated
+    emoji, since that can only be shown via the button's own
+    `icon_custom_emoji_id` field, not embedded in the label itself —
+    callers should pass `icon_custom_emoji_id=getattr(product,
+    "custom_emoji_id", None)` alongside this on the same button."""
+    if getattr(product, "custom_emoji_id", None):
+        return ""
+    return f"{product.emoji} "
+
+
 def fmt_price(value: float) -> str:
     return f"{value:,.0f}".replace(",", " ")
 

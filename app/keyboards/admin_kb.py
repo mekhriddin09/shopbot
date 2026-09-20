@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 from aiogram.types import (
-    InlineKeyboardButton,
     InlineKeyboardMarkup,
-    KeyboardButton,
     ReplyKeyboardMarkup,
 )
 
 from app.database.models import Product
 from app.database.models.enums import DeliveryMode
+from app.keyboards.base_buttons import InlineKeyboardButton, KeyboardButton
 from app.keyboards.callback_data import (
     AdminBroadcastCB,
     AdminButtonCB,
@@ -25,7 +24,7 @@ from app.keyboards.callback_data import (
     ConfirmCB,
     OrderCB,
 )
-from app.utils.formatting import fmt_price
+from app.utils.formatting import fmt_price, product_button_emoji_prefix
 
 ADMIN_BTN_PRODUCTS = "\U0001F6CD️ Mahsulotlar"
 ADMIN_BTN_ORDERS = "\U0001F4E5 Buyurtmalar"
@@ -192,7 +191,8 @@ def admin_products_list_kb(products: list[Product], archived_count: int = 0) -> 
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"{p.emoji} {p.name} — {fmt_price(float(p.price))}",
+                    text=f"{product_button_emoji_prefix(p)}{p.name} — {fmt_price(float(p.price))}",
+                    icon_custom_emoji_id=getattr(p, "custom_emoji_id", None),
                     callback_data=AdminProductCB(action="open", product_id=p.id).pack(),
                 )
             ]
@@ -216,7 +216,8 @@ def admin_products_archive_kb(products: list[Product]) -> InlineKeyboardMarkup:
     rows = [
         [
             InlineKeyboardButton(
-                text=f"⚪ {p.emoji} {p.name}",
+                text=f"⚪ {product_button_emoji_prefix(p)}{p.name}",
+                icon_custom_emoji_id=getattr(p, "custom_emoji_id", None),
                 callback_data=AdminProductCB(action="open", product_id=p.id).pack(),
             )
         ]
@@ -1081,7 +1082,8 @@ def admin_broadcast_product_pick_kb(products: list[Product]) -> InlineKeyboardMa
     rows = [
         [
             InlineKeyboardButton(
-                text=f"{p.emoji} {p.name}",
+                text=f"{product_button_emoji_prefix(p)}{p.name}",
+                icon_custom_emoji_id=getattr(p, "custom_emoji_id", None),
                 callback_data=AdminBroadcastCB(action="product_pick", product_id=p.id).pack(),
             )
         ]
