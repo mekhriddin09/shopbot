@@ -56,6 +56,13 @@ async def _build_referral_profile(session: AsyncSession, user: User, lang: str, 
         points=fmt_price(points),
         points_name=points_name,
     )
+    # Auto-generated "what do I actually get" block — built live from the
+    # admin's real settings/per-product configuration (see
+    # ReferralService.describe_referral_rewards) so a user always sees
+    # accurate numbers without the admin having to type them out by hand.
+    reward_lines = await ReferralService(session).describe_referral_rewards(lang)
+    if reward_lines:
+        text += "\n\n" + t(lang, "msg_referral_info_title") + "\n" + "\n".join(reward_lines)
     if needs_confirmation:
         # Tell them plainly that they themselves aren't counted yet — this
         # is the one place the confirmation state is visible/actionable

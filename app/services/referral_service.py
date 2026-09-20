@@ -220,6 +220,79 @@ class ReferralService:
         except Exception:  # noqa: BLE001 - referrer may have blocked the bot
             pass
 
+    async def describe_referral_rewards(self, lang: str) -> list[str]:
+        """Auto-generated, always-current "what do I actually get" lines for
+        the referral profile screen — built live from the real settings/
+        product configuration instead of the admin having to type it out by
+        hand in the free-text rules field (which drifts the moment a
+        product's reward changes, since nothing keeps it in sync). Returns
+        display-ready lines (possibly empty, if nothing is configured
+        anywhere yet); the caller decides whether/how to show them."""
+        from app.repositories.product_repo import ProductRepository
+        from app.utils.formatting import fmt_price, product_name
+
+        lines: list[str] = []
+        currency = await self.settings.get("referral_currency", "UZS")
+        points_name = await self.settings.get("referral_points_name", "Ball")
+
+        if await self.settings.get_bool("referral_confirm_reward_enabled", False):
+            _, points_value = parse_reward_value(await self.settings.get("referral_confirm_reward_value", "0"))
+            if points_value > 0:
+                lines.append(
+                    t(lang, "msg_referral_info_invite", amount=fmt_price(points_value), points_name=points_name)
+                )
+
+        first_enabled = await self.settings.get_bool("referral_first_order_enabled", False)
+        first_raw = await self.settings.get("referral_first_order_value", "0")
+
+        products = await ProductRepository(self.session).list_visible()
+        for product in products:
+            if not product.referral_eligible:
+                continue
+            reward_text = self._describe_product_reward(product, first_enabled, first_raw, currency)
+            if reward_text:
+                lines.append(
+                    t(
+                        lang,
+                        "msg_referral_info_product",
+                        emoji=product.emoji,
+                        name=product_name(product, lang),
+                        reward=reward_text,
+                    )
+                )
+        return lines
+
+    def _describe_product_reward(
+        self, product, first_order_enabled: bool, first_order_raw: str, currency: str
+    ) -> str | None:
+        """One reward, in whichever form the admin actually configured it —
+        an explicit per-product override always wins (see
+        `credit_for_delivered_order` above, same precedence); with no
+        override, falls back to describing the global first-order reward,
+        since a brand-new referred customer's *first* purchase is the
+        scenario a referral link exists for. Returns None when there's
+        genuinely nothing to advertise for this product (nothing enabled,
+        or the configured amount is zero)."""
+        override = (getattr(product, "referral_reward_value", "") or "").strip()
+        if override:
+            mode, value = parse_reward_value(override)
+            if value <= 0:
+                return None
+            if mode == "percent":
+                by_qty = bool(getattr(product, "referral_reward_by_qty", False))
+                basis = "sotilgan sondan" if by_qty else "narxdan"
+                return f"{value:g}% ({basis})"
+            return f"{fmt_price(value)} {currency}"
+
+        if not first_order_enabled:
+            return None
+        mode, value = parse_reward_value(first_order_raw)
+        if value <= 0:
+            return None
+        if mode == "percent":
+            return f"{value:g}% (narxdan)"
+        return f"{fmt_price(value)} {currency}"
+
     async def redeem_reward(self, user: User, reward_id: int, note: str | None) -> ReferralRedemption:
         """Spend the customer's referral balance on a catalog reward — the
         "referral shop" checkout. Each reward is priced in exactly one of
