@@ -53,6 +53,12 @@ admin_actions_logger = logging.getLogger("admin_actions")
 # link/custom-emoji formatting the admin applied using Telegram's own
 # formatting toolbar, instead of collapsing it down to plain text. See
 # `_rich_text_or_plain()` below for how that's captured.
+# Product columns that exist in two forms: a plain "standard" value (used
+# for every language unless overridden) and per-language _uz/_ru/_en
+# columns (app/database/models/product.py). See the note where this is used
+# below for why editing the standard one also clears the per-language ones.
+_BASE_FIELDS_WITH_LANG_VARIANTS = {"name", "description", "delivery_instructions"}
+
 _RICH_PRODUCT_FIELDS = {
     "description",
     "description_uz", "description_ru", "description_en",
@@ -136,6 +142,23 @@ async def _product_summary_and_kb(session: AsyncSession, product_id: int):
     return product, text, kb
 
 
+async def _delete_input(message: Message) -> None:
+    """Remove what the admin just typed/sent, mirroring
+    `app.utils.shopscreen.delete_input` on the customer side. Without this,
+    every product-field edit, setting change, rejection reason, etc. leaves
+    the admin's own message sitting in the chat permanently — after a dozen
+    edits the whole screen is just a pile of the admin's own typed values
+    with the actual panel (and any "✅ updated" confirmation) buried above
+    it, and no way to tell at a glance which edit is the current one.
+    Purely cosmetic clean-up: best-effort, and must never block saving the
+    actual change (a delete can fail — message too old, already gone,
+    chat restrictions — none of that should matter here)."""
+    try:
+        await message.delete()
+    except Exception:  # noqa: BLE001
+        pass
+
+
 async def _back_to_panel(message: Message, data: dict, text: str, reply_markup=None) -> None:
     """Finish a typed-input step by redrawing the panel screen it started from.
 
@@ -163,6 +186,7 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
     data = await state.get_data()
     action = data.get("action")
     text = message.text.strip()
+    await _delete_input(message)
 
     if action == "new_product_name":
         await state.update_data(action="new_product_price", name=text)
@@ -244,7 +268,23 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
         else:
             value = text
 
-        await products.update(product, **{field: value})
+        update_kwargs = {field: value}
+        if field in _BASE_FIELDS_WITH_LANG_VARIANTS:
+            # BUG FIX: `_localized_field` (app/utils/formatting.py) always
+            # prefers a per-language override over this "standard" value —
+            # by design, so a specific language can differ. But that meant
+            # editing the standard field silently had NO visible effect the
+            # moment ANY per-language override already existed (even a
+            # stale one from months ago), with nothing in the UI to explain
+            # why. Per the admin's explicit intent — editing "standard"
+            # should apply to every language at once, and per-language
+            # customization is an opt-in extra step done separately — this
+            # now also clears the _uz/_ru/_en columns for the same base
+            # field, so the new standard value actually becomes visible
+            # everywhere immediately.
+            for lang_code in ("uz", "ru", "en"):
+                update_kwargs[f"{field}_{lang_code}"] = None
+        await products.update(product, **update_kwargs)
         admin_actions_logger.info(
             "product_field_edited id=%s field=%s admin=%s", product.id, field, message.from_user.id
         )
@@ -725,6 +765,7 @@ async def handle_document_as_text_value(message: Message, session: AsyncSession,
     data = await state.get_data()
     action = data.get("action")
     document = message.document
+    await _delete_input(message)
 
     if action == "manual_deliver":
         order_id = data["order_id"]
@@ -804,6 +845,7 @@ async def handle_image_input(message: Message, session: AsyncSession, state: FSM
     data = await state.get_data()
     action = data.get("action")
     file_id = message.photo[-1].file_id
+    await _delete_input(message)
 
     if action == "edit_product_field" and data.get("field") == "image":
         product_id = data["product_id"]
@@ -835,6 +877,7 @@ async def handle_bulk_document(message: Message, session: AsyncSession, state: F
         await state.clear()
         return
     product_id = data["product_id"]
+    await _delete_input(message)
     file = await message.bot.get_file(message.document.file_id)
     buffer = await message.bot.download_file(file.file_path)
     text = buffer.read().decode("utf-8", errors="ignore")
@@ -856,6 +899,7 @@ async def handle_bulk_text(message: Message, session: AsyncSession, state: FSMCo
         return
     product_id = data["product_id"]
     codes = [line for line in message.text.splitlines() if line.strip()]
+    await _delete_input(message)
     count = await InventoryRepository(session).bulk_import(product_id, codes)
     admin_actions_logger.info("inventory_bulk_imported product=%s count=%s admin=%s", product_id, count, message.from_user.id)
     product = await ProductRepository(session).get_by_id(product_id)
