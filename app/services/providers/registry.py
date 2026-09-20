@@ -12,10 +12,12 @@ from app.services.providers.base import BaseProvider
 from app.services.providers.fragment import FragmentProvider
 from app.services.providers.mock_provider import MockProvider
 from app.services.providers.reseller_api import ResellerApiProvider
+from app.services.providers.shamekh_api import ShamekhApiProvider
 
 _PROVIDERS: dict[str, BaseProvider] = {
     MockProvider.key: MockProvider(),
     ResellerApiProvider.key: ResellerApiProvider(),
+    ShamekhApiProvider.key: ShamekhApiProvider(),
     FragmentProvider.key: FragmentProvider(),
 }
 

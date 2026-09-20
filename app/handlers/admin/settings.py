@@ -322,6 +322,27 @@ async def settings_test_reseller(callback: CallbackQuery, session: AsyncSession)
         )
 
 
+@router.callback_query(AdminSettingsCB.filter(F.action == "test_shamekh"))
+async def settings_test_shamekh(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Same idea as `settings_test_reseller`, for the second supplier —
+    calls GET /api/me right now with whatever key/URL is currently active
+    (DB override if set, else .env) and shows the live result."""
+    from app.services.providers.shamekh_api import ShamekhApiProvider
+
+    await callback.answer("Tekshirilmoqda…")
+    provider = ShamekhApiProvider()
+    ok, balance, error = await provider.get_balance()
+    if ok:
+        await show(callback,
+            f"✅ Shamekh API bilan ulanish muvaffaqiyatli!\n\n💰 Balans: {fmt_price(float(balance or 0))}"
+        )
+    else:
+        await show(callback,
+            f"❌ Shamekh API bilan ulanishda xatolik:\n\n<code>{error}</code>\n\n"
+            f"Kalitni va manzilni tekshirib qayta urinib ko'ring."
+        )
+
+
 def _label_for(key: str) -> str:
     """Human label for a settings key, taken from whichever group lists it
     (see SETTINGS_GROUPS) — no separate label dict to keep in sync."""

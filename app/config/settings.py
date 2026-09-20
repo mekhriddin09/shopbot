@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     RESELLER_API_BASE_URL: str = "http://2.26.230.116:8080"
     RESELLER_API_KEY: str = ""
 
+    # --- Second external reseller: "Shamekh" API (Mode 3 delivery) ---
+    SHAMEKH_API_BASE_URL: str = "https://worker-production-53ca.up.railway.app"
+    SHAMEKH_API_KEY: str = "sb_95b764957ef1d30db00316a13798a30af5fab4c0a4d59359"
+
     @property
     def admin_ids(self) -> set[int]:
         ids: set[int] = set()

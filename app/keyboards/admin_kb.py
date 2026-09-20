@@ -622,6 +622,7 @@ SETTINGS_GROUPS: dict[str, dict] = {
             ("group", "referral", "\U0001F91D Referal dasturi"),
             ("group", "access", "\U0001F512 Kirish nazorati"),
             ("group", "reseller", "\U0001F310 Reseller API"),
+            ("group", "shamekh", "\U0001F310 Shamekh API"),
             ("group", "fragment", "⭐ Fragment (Stars/Premium)"),
         ],
     },
@@ -774,6 +775,21 @@ SETTINGS_GROUPS: dict[str, dict] = {
             ("test_reseller", None, "\U0001F50C Ulanishni tekshirish"),
         ],
     },
+    "shamekh": {
+        "title": "\U0001F310 <b>Shamekh API</b>",
+        "intro": (
+            "Ikkinchi, mustaqil ta'minotchi (Reseller API'dan alohida — o'zining manzili va "
+            "kaliti bilan). Mahsulotda Provider = <code>shamekh_api</code>, Tashqi ID = "
+            "ta'minotchining mahsulot ID'si (masalan <code>1</code>) qilib qo'yiladi.\n"
+            "Bo'sh qoldirilsa, .env fayldagi qiymat ishlatiladi."
+        ),
+        "parent": "root",
+        "items": [
+            ("masked", "shamekh_api_key", "\U0001F511 API kaliti"),
+            ("edit", "shamekh_api_base_url", "\U0001F517 API manzili (URL)"),
+            ("test_shamekh", None, "\U0001F50C Ulanishni tekshirish"),
+        ],
+    },
 }
 
 
@@ -798,6 +814,8 @@ def admin_settings_menu_kb(group: str = "root") -> InlineKeyboardMarkup:
             cb = AdminSettingsCB(action="test_fragment", group=group).pack()
         elif kind == "test_reseller":
             cb = AdminSettingsCB(action="test_reseller", group=group).pack()
+        elif kind == "test_shamekh":
+            cb = AdminSettingsCB(action="test_shamekh", group=group).pack()
         else:  # pragma: no cover - guards against a typo'd spec entry
             continue
         rows.append([InlineKeyboardButton(text=label, callback_data=cb)])

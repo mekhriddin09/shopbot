@@ -167,6 +167,12 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "reseller_api_key": "",
     "reseller_api_base_url": "",
 
+    # Second reseller ("Shamekh" API) — same idea, independent from the
+    # above. Empty = fall back to SHAMEKH_API_KEY / SHAMEKH_API_BASE_URL
+    # from .env.
+    "shamekh_api_key": "",
+    "shamekh_api_base_url": "",
+
     # Onboarding gate: mandatory oferta (terms) acceptance + mandatory
     # channel subscription, checked before *any* other handler runs (see
     # OnboardingGateMiddleware). Off by default — an upgrade must never
