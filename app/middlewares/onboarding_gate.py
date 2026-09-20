@@ -70,6 +70,21 @@ class OnboardingGateMiddleware(BaseMiddleware):
         if event.message is not None and event.message.contact is not None:
             return await handler(event, data)
 
+        # A `successful_payment` message is Telegram informing us that
+        # money has *already* been taken (Stars charge is irreversible at
+        # this point) — this must never be blocked by any gate step. It
+        # used to be: a customer who hadn't shared their phone yet (or
+        # hadn't accepted the oferta/joined the channel) could pay with
+        # Stars, get charged, and then this middleware would swallow the
+        # `successful_payment` update and show them a "share your phone"
+        # prompt instead of ever reaching stars.py's handler — no
+        # delivery, no admin notification, nothing, while Telegram had
+        # already taken their Stars. Same class of bug that the contact
+        # exemption above protects against, just for a payment instead of
+        # a gate-completing action.
+        if event.message is not None and event.message.successful_payment is not None:
+            return await handler(event, data)
+
         target = cq.message if cq else event.message
         if target is None:
             return await handler(event, data)

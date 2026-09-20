@@ -32,6 +32,25 @@ from app.utils.locks import lock_for
 order_logger = logging.getLogger("orders")
 providers_logger = logging.getLogger("providers")
 
+# Every status the admin's generic "find order" detail screen shows the
+# manual approve/reject buttons for (see admin_order_detail_kb's
+# `undecided` set) — kept in sync with that so the buttons it renders
+# actually work. Beyond PENDING_APPROVAL (the normal manual-review case),
+# this lets an admin manually rescue an order that's stuck in one of the
+# "awaiting X payment" states because its own automatic confirmation path
+# never ran (e.g. a Stars/crypto payment that Telegram/the provider
+# already confirmed, but whose delivery got interrupted before it could
+# transition the order itself) — without this, tapping the button an
+# admin is shown for exactly that situation just raised "already
+# reviewed" and did nothing.
+_MANUALLY_APPROVABLE_STATUSES = {
+    OrderStatus.PENDING_APPROVAL,
+    OrderStatus.AWAITING_PROOF,
+    OrderStatus.AWAITING_CRYPTO_PAYMENT,
+    OrderStatus.AWAITING_STARS_PAYMENT,
+    OrderStatus.AWAITING_CARD_PAYMENT,
+}
+
 
 @dataclass(slots=True)
 class ApprovalResult:
@@ -55,14 +74,16 @@ class DeliveryService:
             order = await self.orders.get_by_id(order_id)
             if order is None:
                 raise InvalidOrderStateError("msg_order_not_found")
-            if order.status != OrderStatus.PENDING_APPROVAL:
+            if order.status not in _MANUALLY_APPROVABLE_STATUSES:
                 raise InvalidOrderStateError(
                     "msg_order_already_reviewed", status=order.status.value
                 )
+            status_before = order.status.value
 
             await self.orders.set_status(order, OrderStatus.APPROVED, admin_id=admin_id)
             order_logger.info(
-                "order_approved id=%s admin=%s product=%s", order.order_uuid, admin_id, order.product_id
+                "order_approved id=%s admin=%s product=%s status_before=%s",
+                order.order_uuid, admin_id, order.product_id, status_before,
             )
             return await self._run_delivery(order)
 
@@ -273,7 +294,7 @@ class DeliveryService:
             order = await self.orders.get_by_id(order_id)
             if order is None:
                 raise InvalidOrderStateError("msg_order_not_found")
-            if order.status != OrderStatus.PENDING_APPROVAL:
+            if order.status not in _MANUALLY_APPROVABLE_STATUSES:
                 raise InvalidOrderStateError(
                     "msg_order_already_reviewed", status=order.status.value
                 )
