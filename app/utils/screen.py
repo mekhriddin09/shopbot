@@ -87,7 +87,35 @@ async def show(
             # report to the admin.
             return message
         logger.info("screen_edit_failed, sending new message: %s", detail)
-        return await message.answer(text, reply_markup=reply_markup, **kwargs)
+        try:
+            return await message.answer(text, reply_markup=reply_markup, **kwargs)
+        except TelegramBadRequest as exc2:
+            # The text itself is what Telegram is rejecting (most commonly
+            # "can't parse entities" — some stored value has become invalid
+            # HTML, e.g. mismatched tags from a manual DB edit or an old
+            # save path). Retrying identically would just fail the same way
+            # again, and leaving this exception uncaught means the admin's
+            # tap never gets a `callback.answer()` — which is exactly what
+            # makes flows like "type the oferta text" look like they
+            # silently swallow the admin's input: Telegram's own client
+            # shows a timeout/error toast on the stuck button, with no clue
+            # what actually went wrong. Show it as escaped plain text
+            # instead — worse formatting, but the admin sees their data and
+            # a real explanation rather than nothing at all.
+            logger.warning("screen_send_failed, falling back to plain text: %s", exc2)
+            from html import escape as html_escape
+
+            plain_kwargs = dict(kwargs)
+            plain_kwargs["parse_mode"] = None
+            fallback_text = (
+                "⚠️ Formatlab ko'rsatib bo'lmadi (matnda noto'g'ri HTML belgilari bo'lishi mumkin), "
+                "lekin quyidagi qiymat saqlangan/joriy holatda:\n\n" + html_escape(text)
+            )
+            try:
+                return await message.answer(fallback_text, reply_markup=reply_markup, **plain_kwargs)
+            except TelegramBadRequest:
+                logger.error("screen_send_failed_completely: %s", exc2)
+                return None
 
 
 async def answer_and_show(

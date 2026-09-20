@@ -167,6 +167,8 @@ async def _back_to_panel(message: Message, data: dict, text: str, reply_markup=N
     result goes back onto the original screen, and a fresh message is sent
     only when that screen can no longer be edited.
     """
+    from aiogram.exceptions import TelegramBadRequest
+
     from app.utils.screen import edit_panel
 
     ok = await edit_panel(
@@ -176,8 +178,28 @@ async def _back_to_panel(message: Message, data: dict, text: str, reply_markup=N
         text,
         reply_markup,
     )
-    if not ok:
+    if ok:
+        return
+    try:
         await message.answer(text, reply_markup=reply_markup)
+    except TelegramBadRequest as exc:
+        # The panel couldn't be edited in place AND a fresh copy of the same
+        # text also failed to parse as HTML. Whatever the caller was
+        # confirming (a setting was already saved to the DB by this point in
+        # every caller) must not appear to have silently vanished just
+        # because the confirmation screen's formatting choked — show it as
+        # plain escaped text instead of leaving the admin with nothing.
+        admin_actions_logger.warning("back_to_panel_send_failed, falling back to plain text: %s", exc)
+        from html import escape as html_escape
+
+        try:
+            await message.answer(
+                "⚠️ Formatlab ko'rsatib bo'lmadi, lekin amal bajarildi:\n\n" + html_escape(text),
+                reply_markup=reply_markup,
+                parse_mode=None,
+            )
+        except TelegramBadRequest:
+            admin_actions_logger.error("back_to_panel_send_failed_completely: %s", exc)
 
 
 
