@@ -770,8 +770,14 @@ SETTINGS_GROUPS: dict[str, dict] = {
             "⚠️ Oferta matni bo'sh bo'lsa, tizim xavfsizlik uchun hech kimni bloklamaydi.\n"
             "⚠️ Bot majburiy kanalda administrator bo'lishi shart.\n\n"
             "📞 Telefon raqami — yoqilsa, HAR BIR foydalanuvchi (nafaqat referal orqali kelganlar) "
-            "botdan foydalanishdan oldin raqamini yuborishi shart. Chet el raqami ruxsat etilganlar "
-            "ro'yxatida bo'lmasa, bot bloklanmaydi — faqat referal hisoblanmaydi, deb ogohlantiriladi."
+            "botdan foydalanishdan oldin raqamini yuborishi shart (faqat Telegram kontakt tugmasi "
+            "orqali — o'z shaxsiy raqami, boshqa birovniki emas). Chet el raqami ruxsat etilganlar "
+            "ro'yxatida bo'lmasa, bot bloklanmaydi — faqat referal hisoblanmaydi, deb ogohlantiriladi.\n\n"
+            "\U0001F4CB Log kanal — sozlansa, faqat YANGI BUYURTMA yozuvlari (mijoz, mahsulot, to'lov, "
+            "vaqt) shu yerga tushadi — toza buyurtmalar tarixi sifatida. Yordam so'rovlari, referal "
+            "pul yechish/sovg'a so'rovlari va qo'lda tasdiqlash kerak bo'lgan buyurtmalar har doim "
+            "sizning shaxsiy chatingizga (botga) kelaveradi — bu muhim xabarlar tarix ichida yo'qolib "
+            "ketmasligi uchun."
         ),
         "parent": "root",
         "items": [
@@ -781,7 +787,7 @@ SETTINGS_GROUPS: dict[str, dict] = {
             ("edit", "required_channel_url", "\U0001F517 Kanal havolasi (join link)"),
             ("toggle", "phone_gate_enabled", "\U0001F4DE Majburiy telefon raqami"),
             ("phones", None, "☎️ Ruxsat etilgan chet el raqamlari"),
-            ("edit", "log_channel_id", "\U0001F4CB Log kanal (@username/ID)"),
+            ("edit", "log_channel_id", "\U0001F4CB Log kanal — buyurtmalar tarixi (@username/ID)"),
         ],
     },
     "fragment": {

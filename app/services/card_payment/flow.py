@@ -69,9 +69,12 @@ async def complete_matched_payment(
             f"⏸ Yetkazish kutilmoqda — {reason}.",
         )
         # Buttons need their own message so the summary stays readable.
-        from app.services.notify import resolve_notify_targets  # local import avoids a cycle
+        # Needs an admin's action -- always every admin, never the log
+        # channel (log channel is order-history only; see
+        # resolve_order_log_targets' docstring in notify.py).
+        from app.services.notify import _all_admin_ids  # local import avoids a cycle
 
-        for admin_id in await resolve_notify_targets(session):
+        for admin_id in await _all_admin_ids(session):
             try:
                 await bot.send_message(
                     admin_id,
@@ -130,7 +133,7 @@ async def deliver_paid_order(bot: Bot, session: AsyncSession, order: Order, amou
         )
     elif result.needs_manual_message:
         from app.keyboards.admin_kb import admin_write_manual_kb
-        from app.services.notify import resolve_notify_targets
+        from app.services.notify import _all_admin_ids
 
         await notify_admins_text(
             bot,
@@ -138,7 +141,7 @@ async def deliver_paid_order(bot: Bot, session: AsyncSession, order: Order, amou
             await _order_summary(fresh, amount)
             + "\n\n✅ To'lov tasdiqlandi. ✍️ Mahsulotni qo'lda yuborishingiz kerak.",
         )
-        for admin_id in await resolve_notify_targets(session):
+        for admin_id in await _all_admin_ids(session):
             try:
                 await bot.send_message(
                     admin_id, "Xabarni yozish:", reply_markup=admin_write_manual_kb(fresh.id)

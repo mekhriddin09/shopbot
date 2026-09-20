@@ -22,15 +22,9 @@ admin_actions_logger = logging.getLogger("admin_actions")
 
 @router.message(F.reply_to_message)
 async def relay_admin_reply(message: Message, session: AsyncSession) -> None:
-    """Matches by the CHAT the reply was sent in, not the replying admin's
-    own id: in a private admin chat those are the same thing (Telegram
-    chat ids equal user ids there), but this also makes it work correctly
-    when support messages are routed through a shared log channel/group —
-    any admin can reply there, and the lookup still finds the right
-    original message regardless of who taps reply."""
     relay = SupportRelayRepository(session)
     user_telegram_id = await relay.find_user_telegram_id(
-        message.chat.id, message.reply_to_message.message_id
+        message.from_user.id, message.reply_to_message.message_id
     )
     if user_telegram_id is None:
         return  # this reply isn't attached to a support message — ignore

@@ -139,9 +139,11 @@ async def _sweep_stale_stars_orders(bot: Bot, session, orders_repo: OrderReposit
 async def _notify_admins_with_manual_button(
     bot: Bot, session, order_id: int, order_uuid: str, product_name: str
 ) -> None:
-    from app.services.notify import resolve_notify_targets
+    # Needs an admin's action -- always every admin, never the log channel
+    # (log channel is order-history only).
+    from app.services.notify import _all_admin_ids
 
-    ids = await resolve_notify_targets(session)
+    ids = await _all_admin_ids(session)
 
     text = (
         f"💰 Kripto to'lov tasdiqlandi: <code>{order_uuid}</code> ({product_name}).\n"

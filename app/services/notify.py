@@ -39,23 +39,23 @@ def _parse_chat_target(raw: str) -> int | str:
     return int(raw) if stripped.isdigit() else raw
 
 
-async def resolve_notify_targets(session: AsyncSession) -> list[int | str]:
-    """Where admin-facing notifications go: exclusively the configured log
-    channel when one is set (keeps every admin's private chat clear of
-    routine order/support/withdrawal/manual-confirmation noise, per the
-    admin's own request), otherwise every admin (env + DB) as before.
+async def _log_channel_target(session: AsyncSession) -> int | str | None:
+    """The configured log channel, or None if it isn't set.
 
-    Shared by every notify_* helper in this module, plus the handful of
-    call sites elsewhere that used to gather admin ids themselves
-    (app/services/card_payment/flow.py, app/services/crypto_poller.py,
-    app/handlers/user/support.py) — consolidating them here means the log
-    channel takes effect everywhere at once instead of piecemeal."""
+    Per the admin's explicit correction: the log channel is meant to hold a
+    clean, read-only order history (customer + product + payment + time)
+    *alongside* the normal admin notifications — never *instead of* them.
+    Anything that needs a human to actually act on it (approving/rejecting
+    a payment proof, a support message, a referral withdrawal/redemption
+    request, a manual-delivery confirmation, a delivery-failure alert) must
+    always keep landing in every admin's own chat regardless of whether a
+    log channel is set — see `_all_admin_ids`, used everywhere else in this
+    module. This helper is only for the extra, best-effort copy that
+    `notify_admins_new_order` additionally sends to the log channel."""
     from app.repositories.setting_repo import SettingRepository  # local import avoids a cycle
 
     log_channel = (await SettingRepository(session).get("log_channel_id", "")).strip()
-    if log_channel:
-        return [_parse_chat_target(log_channel)]
-    return list(await _all_admin_ids(session))
+    return _parse_chat_target(log_channel) if log_channel else None
 
 
 async def notify_admins_new_order(
@@ -88,7 +88,9 @@ async def notify_admins_new_order(
         f"\U0001F196 Buyurtma: <code>{order.order_uuid}</code>"
         f"{qty_line}{preorder_line}"
     )
-    for admin_id in await resolve_notify_targets(session):
+    # This needs an admin's decision (approve/reject the payment proof) —
+    # always every admin, never *only* the log channel.
+    for admin_id in await _all_admin_ids(session):
         try:
             if is_document:
                 await bot.send_document(
@@ -107,9 +109,25 @@ async def notify_admins_new_order(
         except TelegramAPIError:
             logger.warning("Failed to notify admin %s about order %s", admin_id, order.order_uuid)
 
+    # Additionally, a read-only copy for the order-history log channel, if
+    # one is configured — no action buttons here on purpose: approving or
+    # rejecting the order still only happens from an admin's own chat above.
+    log_target = await _log_channel_target(session)
+    if log_target is not None:
+        try:
+            if is_document:
+                await bot.send_document(log_target, document=proof_file_id, caption=caption)
+            else:
+                await bot.send_photo(log_target, photo=proof_file_id, caption=caption)
+        except TelegramAPIError:
+            logger.warning("Failed to log order %s to log channel", order.order_uuid)
+
 
 async def notify_admins_text(bot: Bot, session: AsyncSession, text: str) -> None:
-    for admin_id in await resolve_notify_targets(session):
+    # Always every admin, never the log channel — this is the generic
+    # "something needs your attention" helper (manual-confirm prompts,
+    # delivery-status updates), not order history.
+    for admin_id in await _all_admin_ids(session):
         try:
             await bot.send_message(admin_id, text)
         except TelegramAPIError:
@@ -170,7 +188,9 @@ async def notify_delivery_failure(
     ]
     text = "\n".join(lines)
 
-    for admin_id in await resolve_notify_targets(session):
+    # A broken delivery needs a human to act on it — always every admin,
+    # never the log channel (see resolve_order_log_targets' docstring).
+    for admin_id in await _all_admin_ids(session):
         try:
             await bot.send_message(admin_id, text, reply_markup=admin_order_detail_kb(order))
         except TelegramAPIError:
@@ -199,7 +219,8 @@ async def notify_admins_referral_withdrawal(
         f"{card_line}"
     )
     kb = admin_referral_withdraw_kb(withdrawal.id)
-    for admin_id in await resolve_notify_targets(session):
+    # Needs action from an admin — always every admin, never the log channel.
+    for admin_id in await _all_admin_ids(session):
         try:
             await bot.send_message(admin_id, text, reply_markup=kb)
         except TelegramAPIError:
@@ -229,7 +250,8 @@ async def notify_admins_referral_redemption(
         f"{note_line}"
     )
     kb = admin_referral_redemption_kb(redemption.id)
-    for admin_id in await resolve_notify_targets(session):
+    # Needs action from an admin — always every admin, never the log channel.
+    for admin_id in await _all_admin_ids(session):
         try:
             await bot.send_message(admin_id, text, reply_markup=kb)
         except TelegramAPIError:
