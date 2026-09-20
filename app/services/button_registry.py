@@ -87,6 +87,12 @@ BUTTON_REGISTRY: dict[str, ButtonDef] = {
     "cancel": ButtonDef("cancel", ButtonType.NEGATIVE, "btn_cancel", "❌", "product", "Bekor qilish"),
     "back": ButtonDef("back", ButtonType.NAVIGATION, "btn_back", "🔙", "product", "Orqaga"),
     "buy_again": ButtonDef("buy_again", ButtonType.POSITIVE, "btn_buy_again", "🔁", "product", "Yana sotib olish"),
+    # Only ever shown INSTEAD of "buy" (see product_detail_kb: in_stock is
+    # False for both) — so stock status colors itself automatically: in
+    # stock -> green "buy", out of stock -> red "preorder"/"notify me",
+    # with no per-product admin toggle needed for the color to make sense.
+    "preorder": ButtonDef("preorder", ButtonType.NEGATIVE, "btn_preorder", "📦", "product", "Oldindan buyurtma (stock yo'q)"),
+    "notify_stock": ButtonDef("notify_stock", ButtonType.NEGATIVE, "btn_notify_stock", "🔔", "product", "Kelganda ogohlantir (stock yo'q)"),
 }
 
 

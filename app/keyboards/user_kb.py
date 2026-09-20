@@ -310,14 +310,13 @@ def product_detail_kb(
             if btn:
                 rows.append([btn])
     elif show_preorder_button:
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=t(lang, "btn_preorder"),
-                    callback_data=ShopCB(action="buy", product_id=product_id, preorder=True).pack(),
-                )
-            ]
-        )
+        # Only ever rendered when in_stock is False -> red by default (see
+        # button_registry.py: "preorder"/"notify_stock" are NEGATIVE), so
+        # out-of-stock reads as a color change automatically, with nothing
+        # to configure per product.
+        preorder_btn = inline_btn("preorder", lang, callback_data=ShopCB(action="buy", product_id=product_id, preorder=True).pack())
+        if preorder_btn:
+            rows.append([preorder_btn])
         if show_crypto:
             for provider_key, label in (crypto_providers or []):
                 rows.append(
@@ -331,23 +330,15 @@ def product_detail_kb(
                     ]
                 )
         if show_stars:
-            rows.append(
-                [
-                    InlineKeyboardButton(
-                        text=t(lang, "btn_buy_stars"),
-                        callback_data=StarsCB(action="buy", product_id=product_id, preorder=True).pack(),
-                    )
-                ]
+            stars_preorder_btn = inline_btn(
+                "buy_stars", lang, callback_data=StarsCB(action="buy", product_id=product_id, preorder=True).pack()
             )
+            if stars_preorder_btn:
+                rows.append([stars_preorder_btn])
     elif show_notify_button:
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=t(lang, "btn_notify_stock"),
-                    callback_data=StockNotifyCB(action="subscribe", product_id=product_id).pack(),
-                )
-            ]
-        )
+        notify_btn = inline_btn("notify_stock", lang, callback_data=StockNotifyCB(action="subscribe", product_id=product_id).pack())
+        if notify_btn:
+            rows.append([notify_btn])
     back_btn = inline_btn("back", lang, callback_data=ShopCB(action="back_to_list").pack())
     if back_btn:
         rows.append([back_btn])
