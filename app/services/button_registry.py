@@ -36,15 +36,18 @@ class ButtonType(str, Enum):
 
 # Telegram Bot API 9.4 InlineKeyboardButton.style only accepts these three
 # values (or omitted entirely for Telegram's own default gray look). Every
-# ButtonType maps down to one of them, `None` meaning "don't set style".
+# ButtonType maps down to one of them, following the ordinary marketing
+# convention the admin asked for: green = positive/"go" action (buy, pay,
+# confirm), red = negative/"stop" action (cancel), blue for everything else
+# — never Telegram's flat default gray, which reads as "disabled".
 STYLE_BY_TYPE: dict[ButtonType, str | None] = {
     ButtonType.PRIMARY: "primary",
     ButtonType.POSITIVE: "success",
     ButtonType.NEGATIVE: "danger",
     ButtonType.WARNING: "danger",
-    ButtonType.NEUTRAL: None,
-    ButtonType.NAVIGATION: None,
-    ButtonType.INFO: None,
+    ButtonType.NEUTRAL: "primary",
+    ButtonType.NAVIGATION: "primary",
+    ButtonType.INFO: "primary",
 }
 
 
@@ -72,10 +75,13 @@ BUTTON_REGISTRY: dict[str, ButtonDef] = {
     "menu_referral": ButtonDef("menu_referral", ButtonType.NEUTRAL, "btn_referral", "🤝", "main_menu", "Referral", "reply"),
     "menu_language": ButtonDef("menu_language", ButtonType.NEUTRAL, "btn_language", "🌐", "main_menu", "Til", "reply"),
     # --- Product / payment (InlineKeyboardMarkup — style + custom emoji supported) ---
-    "buy": ButtonDef("buy", ButtonType.PRIMARY, "btn_buy", "💳", "product", "Sotib olish"),
-    "pay_card": ButtonDef("pay_card", ButtonType.PRIMARY, "btn_pay_card", "💳", "product", "Karta orqali"),
-    "pay_card_auto": ButtonDef("pay_card_auto", ButtonType.PRIMARY, "btn_pay_card_auto", "⚡️", "product", "Karta (avtomatik)"),
-    "buy_stars": ButtonDef("buy_stars", ButtonType.PRIMARY, "btn_buy_stars", "⭐", "product", "Stars orqali"),
+    # Every "buy this / pay this way" button is POSITIVE (green) — it's the
+    # action that makes the sale happen, so it gets the "go" color, not the
+    # neutral blue a generic primary action would get.
+    "buy": ButtonDef("buy", ButtonType.POSITIVE, "btn_buy", "💳", "product", "Sotib olish"),
+    "pay_card": ButtonDef("pay_card", ButtonType.POSITIVE, "btn_pay_card", "💳", "product", "Karta orqali"),
+    "pay_card_auto": ButtonDef("pay_card_auto", ButtonType.POSITIVE, "btn_pay_card_auto", "⚡️", "product", "Karta (avtomatik)"),
+    "buy_stars": ButtonDef("buy_stars", ButtonType.POSITIVE, "btn_buy_stars", "⭐", "product", "Stars orqali"),
     "paid": ButtonDef("paid", ButtonType.POSITIVE, "btn_paid", "✅", "product", "To'ladim"),
     "confirm": ButtonDef("confirm", ButtonType.POSITIVE, "btn_confirm", "✅", "product", "Tasdiqlash"),
     "cancel": ButtonDef("cancel", ButtonType.NEGATIVE, "btn_cancel", "❌", "product", "Bekor qilish"),
