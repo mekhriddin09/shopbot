@@ -68,6 +68,7 @@ _NEW_COLUMNS: list[tuple[str, str, str]] = [
     ("products", "card_manual_confirm", "BOOLEAN NOT NULL DEFAULT 0"),
     ("products", "referral_reward_value", "VARCHAR(32)"),
     ("products", "referral_reward_by_qty", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("referral_withdrawals", "card_note", "TEXT"),
 ]
 
 DEFAULT_SETTINGS: dict[str, str] = {

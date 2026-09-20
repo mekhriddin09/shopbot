@@ -20,6 +20,15 @@ class ReferralRewardStates(StatesGroup):
     waiting_note = State()
 
 
+class ReferralWithdrawStates(StatesGroup):
+    waiting_card = State()
+    """Collecting where to send the money (a card number, most often)
+    before the withdrawal request is actually created — see
+    app/handlers/user/referral.py. Unlike the reward note above, this step
+    is not skippable: the admin can't pay a request out with nowhere to
+    send it."""
+
+
 class RecipientStates(StatesGroup):
     waiting_stars_amount = State()
     """Collecting the @username that Stars/Premium should be delivered to,

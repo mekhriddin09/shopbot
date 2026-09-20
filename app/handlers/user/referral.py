@@ -20,7 +20,7 @@ from app.services.exceptions import InsufficientBalanceError, RewardUnavailableE
 from app.services.notify import notify_admins_referral_redemption
 from app.services.onboarding_service import user_needs_referral_confirmation
 from app.services.referral_service import ReferralService
-from app.states.user_states import ReferralRewardStates
+from app.states.user_states import ReferralRewardStates, ReferralWithdrawStates
 from app.utils.button_filters import menu_button_filter
 from app.utils.formatting import fmt_price
 from app.utils.i18n import t
@@ -124,7 +124,9 @@ async def referral_confirm_from_profile(
 
 
 @router.callback_query(ReferralCB.filter(F.action == "withdraw"))
-async def referral_withdraw(callback: CallbackQuery, session: AsyncSession, user: User, lang: str) -> None:
+async def referral_withdraw(
+    callback: CallbackQuery, session: AsyncSession, user: User, lang: str, state: FSMContext
+) -> None:
     settings_repo = SettingRepository(session)
     withdraw_min = float(await settings_repo.get("referral_withdraw_min", "0") or 0)
     balance = float(user.referral_balance)
@@ -132,15 +134,36 @@ async def referral_withdraw(callback: CallbackQuery, session: AsyncSession, user
         await callback.answer(t(lang, "msg_referral_withdraw_not_enough"), show_alert=True)
         return
 
-    withdrawal = await ReferralRepository(session).create_withdrawal(user.id, balance)
+    # Card number first, request second — admin has nowhere to send the
+    # money without it, so this step isn't skippable the way the referral
+    # shop's free-text note is.
+    await state.set_state(ReferralWithdrawStates.waiting_card)
+    await state.update_data(withdraw_amount=balance)
+    await callback.message.edit_text(t(lang, "msg_referral_withdraw_card_prompt", amount=fmt_price(balance)))
+    await callback.answer()
+
+
+@router.message(ReferralWithdrawStates.waiting_card, F.text)
+async def referral_withdraw_card_received(
+    message: Message, session: AsyncSession, user: User, lang: str, state: FSMContext
+) -> None:
+    card = message.text.strip()
+    data = await state.get_data()
+    # The balance may have kept growing between tapping "withdraw" and
+    # actually typing the card (a fresh referral purchase, say) — use
+    # whatever was captured at that moment, not a re-read now, so the
+    # amount shown to the admin matches what was promised to the user.
+    amount = float(data.get("withdraw_amount", user.referral_balance))
+    await state.clear()
+
+    withdrawal = await ReferralRepository(session).create_withdrawal(user.id, amount, card_note=card)
     from app.services.notify import notify_admins_referral_withdrawal
 
-    await notify_admins_referral_withdrawal(callback.bot, session, withdrawal, user)
-    currency = await settings_repo.get("referral_currency", "UZS")
-    await callback.message.edit_text(
-        t(lang, "msg_referral_withdraw_requested", amount=fmt_price(balance), currency=currency)
+    await notify_admins_referral_withdrawal(message.bot, session, withdrawal, user)
+    currency = await SettingRepository(session).get("referral_currency", "UZS")
+    await message.answer(
+        t(lang, "msg_referral_withdraw_requested", amount=fmt_price(amount), currency=currency)
     )
-    await callback.answer()
 
 
 # ------------------------------------------------------------------

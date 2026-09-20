@@ -154,12 +154,14 @@ async def notify_delivery_failure(
 async def notify_admins_referral_withdrawal(
     bot: Bot, session: AsyncSession, withdrawal: ReferralWithdrawal, user: User
 ) -> None:
+    card_line = f"\n\U0001F4B3 Karta: <code>{withdrawal.card_note}</code>" if withdrawal.card_note else ""
     text = (
         f"\U0001F4B0 <b>Referral pul yechish so'rovi</b>\n\n"
         f"\U0001F464 {user.full_name or '-'} (@{user.username or '-'})\n"
         f"\U0001F194 Telegram ID: <code>{user.telegram_id}</code>\n"
         f"\U0001F4B5 Miqdor: {fmt_price(float(withdrawal.amount))}\n"
         f"\U0001F196 So'rov: <code>{withdrawal.id}</code>"
+        f"{card_line}"
     )
     kb = admin_referral_withdraw_kb(withdrawal.id)
     for admin_id in await _all_admin_ids(session):

@@ -56,8 +56,12 @@ class ReferralRepository:
             "first_rewards": int(first_rewards.scalar_one()),
         }
 
-    async def create_withdrawal(self, user_id: int, amount: float) -> ReferralWithdrawal:
-        withdrawal = ReferralWithdrawal(user_id=user_id, amount=amount, status=ReferralWithdrawalStatus.PENDING)
+    async def create_withdrawal(
+        self, user_id: int, amount: float, card_note: str | None = None
+    ) -> ReferralWithdrawal:
+        withdrawal = ReferralWithdrawal(
+            user_id=user_id, amount=amount, card_note=card_note, status=ReferralWithdrawalStatus.PENDING
+        )
         self.session.add(withdrawal)
         await self.session.commit()
         await self.session.refresh(withdrawal)

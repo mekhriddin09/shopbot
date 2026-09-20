@@ -101,6 +101,7 @@
   "msg_referral_points_received": "🎯 Invite reward: +{amount} {currency}!\n\nSomeone you invited has confirmed their account.",
   "msg_referral_withdraw_not_enough": "⚠️ Not enough balance to withdraw, or this feature is currently disabled.",
   "msg_referral_withdraw_requested": "✅ Your request has been received: {amount} {currency}.\n\nThe admin will contact you shortly.",
+  "msg_referral_withdraw_card_prompt": "💳 To withdraw {amount}, send the card number to receive the payment on:",
   "msg_referral_reward_received": "🎉 Referral reward received: +{amount} {currency}!",
   "msg_referral_withdraw_paid": "✅ Your referral payout ({amount}) has been sent. Thank you!",
   "msg_referral_withdraw_rejected": "❌ Your withdrawal request ({amount}) was rejected. Contact the admin for details.",

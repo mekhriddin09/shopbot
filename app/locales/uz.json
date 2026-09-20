@@ -101,6 +101,7 @@
   "msg_referral_points_received": "🎯 Taklif mukofoti: +{amount} {currency}!\n\nSiz taklif qilgan foydalanuvchi hisobini tasdiqladi.",
   "msg_referral_withdraw_not_enough": "⚠️ Yechish uchun yetarli balans yo'q yoki bu funksiya hozircha o'chirilgan.",
   "msg_referral_withdraw_requested": "✅ So'rovingiz qabul qilindi: {amount} {currency}.\n\nAdmin tez orada bog'lanadi.",
+  "msg_referral_withdraw_card_prompt": "💳 {amount} miqdorini yechish uchun to'lovni qabul qiladigan karta raqamingizni yuboring:",
   "msg_referral_reward_received": "🎉 Referral mukofoti olindi: +{amount} {currency}!",
   "msg_referral_withdraw_paid": "✅ Referral pulingiz ({amount}) to'landi. Rahmat!",
   "msg_referral_withdraw_rejected": "❌ Referral pul yechish so'rovingiz ({amount}) rad etildi. Aniqlik uchun admin bilan bog'laning.",

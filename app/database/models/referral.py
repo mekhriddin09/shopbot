@@ -23,6 +23,11 @@ class ReferralWithdrawal(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    # What the user typed when asked how to send the money (a card number,
+    # most often) — collected right before the request is created (see
+    # app/handlers/user/referral.py) so the admin always has where to pay
+    # without having to message the user back and ask.
+    card_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[ReferralWithdrawalStatus] = mapped_column(
         Enum(ReferralWithdrawalStatus, native_enum=False), default=ReferralWithdrawalStatus.PENDING
     )

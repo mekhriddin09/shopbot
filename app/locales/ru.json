@@ -101,6 +101,7 @@
   "msg_referral_points_received": "🎯 Награда за приглашение: +{amount} {currency}!\n\nПриглашённый вами пользователь подтвердил свой аккаунт.",
   "msg_referral_withdraw_not_enough": "⚠️ Недостаточно баланса для вывода, либо эта функция пока отключена.",
   "msg_referral_withdraw_requested": "✅ Ваш запрос принят: {amount} {currency}.\n\nАдминистратор скоро свяжется с вами.",
+  "msg_referral_withdraw_card_prompt": "💳 Чтобы вывести {amount}, отправьте номер карты, на которую перевести деньги:",
   "msg_referral_reward_received": "🎉 Получено реферальное вознаграждение: +{amount} {currency}!",
   "msg_referral_withdraw_paid": "✅ Ваши реферальные средства ({amount}) выплачены. Спасибо!",
   "msg_referral_withdraw_rejected": "❌ Ваш запрос на вывод ({amount}) отклонён. Свяжитесь с администратором для уточнения.",
