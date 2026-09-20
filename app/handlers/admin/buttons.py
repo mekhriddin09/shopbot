@@ -106,10 +106,6 @@ async def render_button_detail(session: AsyncSession, key: str) -> tuple[str, ob
     status_text = "✅ yoqilgan" if enabled else "\U0001F6AB o'chirilgan"
     lines.append(f"\U0001F4A1 <b>Holati:</b> {status_text}")
 
-    if button_def.surface == "reply":
-        lines.append("")
-        lines.append("ℹ️ Bu asosiy menyu tugmasi — Telegram reply-klaviaturada rang/maxsus emoji ko'rsatilmaydi, faqat matn ishlatiladi.")
-
     return "\n".join(lines), admin_button_detail_kb(key, button_def.group), button_def.group
 
 
@@ -286,8 +282,14 @@ async def button_preview(callback: CallbackQuery, callback_data: AdminButtonCB) 
     await callback.answer()
     for lang in available_languages():
         if button_def.surface == "reply":
+            # Not rendered as a live ReplyKeyboardMarkup here on purpose —
+            # that would replace the admin's own current menu keyboard in
+            # this chat, which is more disruptive than helpful for a quick
+            # preview. Text summary only; open the actual main menu (main
+            # admin screen) to see the real button.
             resolved = resolve_button(key, lang)
-            await callback.message.answer(f"{lang.upper()}: {resolved.text}")
+            style_note = _BUTTON_STYLE_LABELS.get(resolved.style, resolved.style)
+            await callback.message.answer(f"{lang.upper()}: {resolved.text}\nRang: {style_note}")
             continue
         from aiogram.types import InlineKeyboardMarkup
 

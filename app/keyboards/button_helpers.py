@@ -31,10 +31,15 @@ def inline_btn(key: str, lang: str, **extra) -> InlineKeyboardButton | None:
 
 
 def reply_btn(key: str, lang: str) -> KeyboardButton | None:
-    """Same idea for ReplyKeyboardMarkup buttons (main menu). KeyboardButton
-    has no style/custom-emoji fields in the Bot API, so only `text` is
-    used. Returns None when disabled."""
+    """Same idea for ReplyKeyboardMarkup buttons (main menu).
+
+    Bot API 9.4 added *style* and *icon_custom_emoji_id* to KeyboardButton
+    too, not just InlineKeyboardButton (see the official changelog, Feb 9
+    2026) — this used to only set `text` here on the mistaken assumption
+    that reply-keyboard buttons couldn't carry a style, which silently
+    dropped every color/emoji change a main-menu button was given. Fixed to
+    match `inline_btn` above. Returns None when disabled."""
     resolved = resolve_button(key, lang)
     if not resolved.enabled:
         return None
-    return KeyboardButton(text=resolved.text)
+    return KeyboardButton(text=resolved.text, style=resolved.style, icon_custom_emoji_id=resolved.custom_emoji_id)

@@ -59,7 +59,7 @@ class ButtonDef:
     default_emoji: str | None = None  # used only once an admin sets a plain-text translation override (see button_service)
     group: str = "general"
     label: str = ""  # short admin-facing name, e.g. for the Button Manager list (phase 2)
-    surface: str = "inline"  # "inline" (InlineKeyboardButton, supports style/custom emoji) or "reply" (KeyboardButton, text only)
+    surface: str = "inline"  # "inline" (InlineKeyboardButton) or "reply" (KeyboardButton) — both support style/custom emoji since Bot API 9.4; this only decides which button_helpers builder function to call
 
 
 # Phase 1 scope, per the confirmed plan: main menu (reply keyboard) +
