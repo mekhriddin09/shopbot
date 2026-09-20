@@ -500,6 +500,7 @@ def admin_orders_list_kb(
 def admin_orders_menu_kb() -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton(text="⏳ Kutilayotgan", callback_data=AdminOrderListCB(action="pending").pack())],
+        [InlineKeyboardButton(text="\U0001F4B3 To'lov kutilmoqda", callback_data=AdminOrderListCB(action="awaiting").pack())],
         [InlineKeyboardButton(text="✅ Tasdiqlangan", callback_data=AdminOrderListCB(action="approved").pack())],
         [InlineKeyboardButton(text="📦 Yetkazilgan", callback_data=AdminOrderListCB(action="delivered").pack())],
         [InlineKeyboardButton(text="⚠️ Yetkazilmagan", callback_data=AdminOrderListCB(action="failed").pack())],

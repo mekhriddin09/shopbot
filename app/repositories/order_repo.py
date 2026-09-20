@@ -181,6 +181,29 @@ class OrderRepository:
         )
         return int(result.scalar_one())
 
+    async def page_by_statuses(
+        self, statuses: list[OrderStatus], offset: int = 0, limit: int = 8
+    ) -> list[Order]:
+        """Same as `page_by_status`, for a bucket spanning several
+        statuses at once — used for the "kutilmoqda" (awaiting payment)
+        list, which groups every awaiting_* status together so an admin
+        can find a stuck order without knowing its ID up front."""
+        result = await self.session.execute(
+            select(Order)
+            .options(selectinload(Order.product), selectinload(Order.user))
+            .where(Order.status.in_(statuses))
+            .order_by(Order.id.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def count_by_statuses(self, statuses: list[OrderStatus]) -> int:
+        result = await self.session.execute(
+            select(func.count(Order.id)).where(Order.status.in_(statuses))
+        )
+        return int(result.scalar_one())
+
     async def count_all(self) -> int:
         result = await self.session.execute(select(func.count(Order.id)))
         return int(result.scalar_one())

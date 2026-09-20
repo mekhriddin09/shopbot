@@ -45,6 +45,22 @@ _STATUS_MAP = {
     "failed": OrderStatus.FAILED,
     "rejected": OrderStatus.REJECTED,
 }
+
+# A separate bucket, spanning several statuses at once: every order still
+# waiting on its OWN payment confirmation to arrive (screenshot, crypto
+# invoice, card_auto transfer, Stars charge) — as opposed to "pending",
+# which means the payment already arrived and it's the ADMIN who's the
+# bottleneck. Exists so a stuck order (payment confirmed by the provider,
+# but whatever should have advanced its status never ran — see the
+# successful_payment gate bug) can be found by BROWSING instead of
+# requiring its exact ID, which the admin has no way to know if the usual
+# "new order" notification never fired either.
+_AWAITING_STATUSES = [
+    OrderStatus.AWAITING_PROOF,
+    OrderStatus.AWAITING_CRYPTO_PAYMENT,
+    OrderStatus.AWAITING_STARS_PAYMENT,
+    OrderStatus.AWAITING_CARD_PAYMENT,
+]
 # Statuses where the order is approved-but-not-yet-delivered — the admin may
 # still need to push the product through by hand (e.g. API delivery failed,
 # or it's a manual-mode product waiting for its message).
@@ -56,15 +72,18 @@ _STATUS_TITLES = {
     "delivered": "\U0001F4E6 <b>Yetkazilgan</b>",
     "failed": "⚠️ <b>Yetkazilmagan</b>",
     "rejected": "❌ <b>Rad etilgan</b>",
+    "awaiting": "\U0001F4B3 <b>To'lov kutilmoqda</b>",
 }
 
 
 def _status_key(status: OrderStatus) -> str | None:
-    """Reverse of _STATUS_MAP, so a detail screen knows which list to go
-    back to."""
+    """Reverse of _STATUS_MAP (+ the "awaiting" bucket), so a detail
+    screen knows which list to go back to."""
     for key, value in _STATUS_MAP.items():
         if value == status:
             return key
+    if status in _AWAITING_STATUSES:
+        return "awaiting"
     return None
 
 
@@ -245,11 +264,17 @@ ORDERS_PER_PAGE = 8
 
 async def render_orders_list(session: AsyncSession, status_key: str, page: int):
     """(text, keyboard) for one page of a status list."""
-    status = _STATUS_MAP[status_key]
     repo = OrderRepository(session)
-    total = await repo.count_by_status(status)
     page = max(0, page)
-    orders = await repo.page_by_status(status, offset=page * ORDERS_PER_PAGE, limit=ORDERS_PER_PAGE)
+    if status_key == "awaiting":
+        total = await repo.count_by_statuses(_AWAITING_STATUSES)
+        orders = await repo.page_by_statuses(
+            _AWAITING_STATUSES, offset=page * ORDERS_PER_PAGE, limit=ORDERS_PER_PAGE
+        )
+    else:
+        status = _STATUS_MAP[status_key]
+        total = await repo.count_by_status(status)
+        orders = await repo.page_by_status(status, offset=page * ORDERS_PER_PAGE, limit=ORDERS_PER_PAGE)
 
     title = _STATUS_TITLES.get(status_key, status_key)
     if not orders:
@@ -258,12 +283,24 @@ async def render_orders_list(session: AsyncSession, status_key: str, page: int):
         lines = [f"{title} — jami {total} ta", ""]
         for order in orders:
             lines.append(_order_line(order))
+            if status_key == "awaiting":
+                # Which payment this order is stuck waiting on isn't
+                # obvious from the generic order line alone — spell it out,
+                # since this list exists specifically to hunt down stuck
+                # orders.
+                lines.append(f"   {_STATUS_LABELS.get(order.status, order.status.value)}")
             lines.append("")
         text = "\n".join(lines).strip()
         if status_key == "failed":
             text += (
                 "\n\n\U0001F4A1 Sababini (masalan hamyon balansi) bartaraf etgan bo'lsangiz, "
                 "hammasini bitta tugma bilan qayta urinib ko'ring."
+            )
+        elif status_key == "awaiting":
+            text += (
+                "\n\n\U0001F4A1 To'lov haqiqatda o'tgan bo'lsa-yu, buyurtma shu yerda \"osilib\" "
+                "qolgan bo'lsa (masalan Stars/kripto), buyurtmani ochib \"✅ Tasdiqlash va "
+                "yetkazish\" tugmasini bosing — mahsulot qo'lda yetkaziladi."
             )
     return text, admin_orders_list_kb(orders, status_key, page, total, ORDERS_PER_PAGE)
 
@@ -272,7 +309,7 @@ async def render_orders_list(session: AsyncSession, status_key: str, page: int):
 async def list_orders(
     callback: CallbackQuery, callback_data: AdminOrderListCB, session: AsyncSession
 ) -> None:
-    if callback_data.action not in _STATUS_MAP:
+    if callback_data.action not in _STATUS_MAP and callback_data.action != "awaiting":
         await callback.answer()
         return
     text, kb = await render_orders_list(session, callback_data.action, callback_data.page)
