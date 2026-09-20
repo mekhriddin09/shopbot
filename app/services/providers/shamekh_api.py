@@ -38,7 +38,7 @@ import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.config.settings import settings
-from app.services.providers.base import BaseProvider, ProviderResult
+from app.services.providers.base import BaseProvider, ProviderResult, SupplierProduct
 
 logger = logging.getLogger("providers")
 
@@ -134,6 +134,33 @@ class ShamekhApiProvider(BaseProvider):
                 except (TypeError, ValueError):
                     return None
         return None
+
+    async def list_products(self) -> list[SupplierProduct] | None:
+        """Lets the admin panel offer a pick-from-list instead of typing the
+        id from memory. This supplier's /api/products exposes a proper
+        name ("name_en") and price alongside stock_count."""
+        if not await self._resolve_api_key():
+            return None
+        try:
+            resp = await self._get("/api/products")
+            data = resp.json()
+        except Exception as exc:  # noqa: BLE001 - listing must never break the admin panel
+            logger.warning("shamekh_api list_products error: %s", exc)
+            return None
+        if not data.get("ok"):
+            return None
+        out: list[SupplierProduct] = []
+        for item in data.get("products") or []:
+            raw_id = item.get("id")
+            if raw_id is None:
+                continue
+            try:
+                stock = int(item.get("stock_count"))
+            except (TypeError, ValueError):
+                stock = None
+            name = item.get("name_en") or item.get("name") or None
+            out.append(SupplierProduct(id=str(raw_id), name=name, stock=stock))
+        return out
 
     async def fetch(self, *, product_external_ref: str | None, order_uuid: str, recipient: str | None = None) -> ProviderResult:
         if not await self._resolve_api_key():

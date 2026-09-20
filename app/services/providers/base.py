@@ -19,6 +19,20 @@ class ProviderResult:
     error: str | None = None
 
 
+@dataclass(slots=True)
+class SupplierProduct:
+    """One entry from a supplier's own catalog — used to let the admin
+    *pick* a product's `external_product_id` from a live list instead of
+    typing it from memory (see `admin -> product -> Tashqi ID -> Ta'minotchi
+    mahsulotlarini ko'rish`). `name` and `stock` are best-effort: a supplier
+    whose API doesn't expose them (see ResellerApiProvider) just leaves them
+    None, and the admin panel shows the id alone in that case."""
+
+    id: str
+    name: str | None = None
+    stock: int | None = None
+
+
 class BaseProvider(abc.ABC):
     #: unique key stored on Product.provider_key
     key: str = "base"
@@ -69,4 +83,15 @@ class BaseProvider(abc.ABC):
         no pre-purchase stock check). Override in providers whose API
         actually exposes this (see `ResellerApiProvider`). Must never
         raise — return `None` on any error."""
+        return None
+
+    async def list_products(self) -> list[SupplierProduct] | None:
+        """Optional: the supplier's full catalog, so the admin panel can
+        offer "pick from a list" instead of "type the id from memory" when
+        setting a product's Tashqi ID. Default: unsupported (`None`) —
+        the admin panel falls back to manual text entry in that case, same
+        as before this existed. Override in providers whose API exposes a
+        product list (see `ResellerApiProvider`, `ShamekhApiProvider`).
+        Must never raise — return `None` on any error, including a missing
+        API key."""
         return None

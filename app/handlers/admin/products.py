@@ -4,7 +4,7 @@ import logging
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models.enums import DeliveryMode
@@ -42,7 +42,6 @@ FIELD_PROMPTS = {
     "emoji": "Yangi emoji yuboring:",
     "sort_order": "Tartib raqamini yozing (butun son, kichigi tepada turadi):",
     "payment_instructions": "Ushbu mahsulot uchun maxsus to'lov ma'lumotini yozing (bo'sh qoldirish uchun '-' yuboring):",
-    "provider_key": "Provider kalitini kiriting (masalan: reseller_api yoki mock_provider):",
     "external_product_id": (
         "Tashqi provayderdagi ushbu mahsulotning ID'sini yozing "
         "(masalan: gemini). Kerak bo'lmasa '-' yuboring:"
@@ -123,6 +122,12 @@ def render_product_group(product, group: str = "root") -> tuple[str, object]:
         elif kind == "api_only_field":
             if product.delivery_mode == DeliveryMode.API:
                 values.append(f"• {label}: <code>{_short(getattr(product, key, None))}</code>")
+        elif kind == "provider_picker":
+            if product.delivery_mode == DeliveryMode.API:
+                from app.keyboards.admin_kb import _PROVIDER_LABELS  # local import avoids a cycle
+
+                shown = _PROVIDER_LABELS.get(product.provider_key, product.provider_key) if product.provider_key else "—"
+                values.append(f"• {label}: <code>{shown}</code>")
         elif kind == "lang":
             values.append(f"• {label}: {_lang_coverage(product, key)}")
         elif kind == "image":
@@ -274,13 +279,162 @@ async def product_apply_mode(
     new_mode = DeliveryMode(callback_data.field)
     await products.update(product, delivery_mode=new_mode)
 
-    if new_mode == DeliveryMode.API:
-        await state.set_state(AdminInput.waiting_text)
-        await state.update_data(panel_chat_id=callback.message.chat.id, panel_message_id=callback.message.message_id, action="edit_product_field", product_id=product.id, field="provider_key")
-        await show(callback, FIELD_PROMPTS["provider_key"])
+    # Provider selection is its own explicit step now (the "Provider"
+    # button -> provider_kb picker), not auto-chained from here — chaining
+    # used to open a text prompt and then immediately overwrite it with the
+    # group screen in the same breath, so the prompt was never actually
+    # visible long enough to use.
     text, kb = render_product_group(product, "delivery")
     await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer("Yetkazish rejimi yangilandi ✅")
+
+
+_MAX_SUPPLIER_ITEMS = 30
+
+
+def _supplier_products_kb_and_text(product, items: list) -> tuple[str, object]:
+    """Text + keyboard listing a supplier's catalog, so the admin can tap
+    to set `external_product_id` instead of typing an id from memory (and
+    can actually see stock/name while choosing, not just a bare code)."""
+    shown = items[:_MAX_SUPPLIER_ITEMS]
+    lines = [
+        f"\U0001F4CB <b>Ta'minotchi mahsulotlari</b> ({len(items)} ta)",
+        "",
+        "Kerakli mahsulotni tanlang — Tashqi ID avtomatik o'rnatiladi:",
+    ]
+    if len(items) > _MAX_SUPPLIER_ITEMS:
+        lines.append(
+            f"\n⚠️ Faqat birinchi {_MAX_SUPPLIER_ITEMS} tasi ko'rsatilmoqda. Kerakli mahsulot "
+            f"ro'yxatda bo'lmasa, Tashqi ID'ni qo'lda kiriting."
+        )
+
+    rows = []
+    for item in shown:
+        parts = [item.name or item.id]
+        if item.stock is not None:
+            parts.append(f"(qoldiq: {item.stock})")
+        text = " ".join(parts)
+        if len(text) > 60:
+            text = text[:59] + "…"
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=text,
+                    callback_data=AdminProductCB(
+                        action="pick_supplier_product", product_id=product.id, field=item.id
+                    ).pack(),
+                )
+            ]
+        )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="✏️ Qo'lda kiritish",
+                callback_data=AdminProductCB(action="edit_field", product_id=product.id, field="external_product_id").pack(),
+            )
+        ]
+    )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="\U0001F519 Orqaga",
+                callback_data=AdminProductCB(action="group", product_id=product.id, field="delivery").pack(),
+            )
+        ]
+    )
+    return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+@router.callback_query(AdminProductCB.filter(F.action == "set_provider"))
+async def product_set_provider(callback: CallbackQuery, callback_data: AdminProductCB) -> None:
+    from app.keyboards.admin_kb import provider_kb
+
+    await callback.message.edit_reply_markup(reply_markup=provider_kb(callback_data.product_id))
+    await callback.answer()
+
+
+@router.callback_query(AdminProductCB.filter(F.action == "apply_provider"))
+async def product_apply_provider(
+    callback: CallbackQuery, callback_data: AdminProductCB, session: AsyncSession
+) -> None:
+    products = ProductRepository(session)
+    product = await products.get_by_id(callback_data.product_id)
+    if product is None:
+        await callback.answer("Mahsulot topilmadi", show_alert=True)
+        return
+    await products.update(product, provider_key=callback_data.field)
+    admin_actions_logger.info(
+        "product_provider_set id=%s provider=%s admin=%s", product.id, callback_data.field, callback.from_user.id
+    )
+
+    # Jump straight into browsing that supplier's catalog when it supports
+    # one, instead of leaving the admin to type an id from memory.
+    from app.services.providers.registry import get_provider
+
+    provider = get_provider(callback_data.field)
+    items = await provider.list_products() if provider else None
+    if items:
+        text, kb = _supplier_products_kb_and_text(product, items)
+        await callback.message.edit_text(text, reply_markup=kb)
+        await callback.answer("Provider saqlandi ✅")
+        return
+
+    text, kb = render_product_group(product, "delivery")
+    await callback.message.edit_text(text, reply_markup=kb)
+    await callback.answer("Provider saqlandi ✅")
+
+
+@router.callback_query(AdminProductCB.filter(F.action == "browse_supplier"))
+async def product_browse_supplier(
+    callback: CallbackQuery, callback_data: AdminProductCB, session: AsyncSession
+) -> None:
+    product = await ProductRepository(session).get_by_id(callback_data.product_id)
+    if product is None:
+        await callback.answer("Mahsulot topilmadi", show_alert=True)
+        return
+    if not product.provider_key:
+        await callback.answer("Avval Provider tanlang.", show_alert=True)
+        return
+
+    from app.services.providers.registry import get_provider
+
+    provider = get_provider(product.provider_key)
+    if provider is None:
+        await callback.answer("Noma'lum provider.", show_alert=True)
+        return
+
+    await callback.answer("Yuklanmoqda…")
+    items = await provider.list_products()
+    if items is None:
+        await show(
+            callback,
+            "❌ Bu provider ro'yxat berish imkoniyatiga ega emas, yoki ulanish sozlanmagan "
+            "(kalit/manzilni Sozlamalar bo'limida tekshiring). Tashqi ID'ni qo'lda kiriting.",
+        )
+        return
+    if not items:
+        await show(callback, "ℹ️ Ta'minotchida hozircha mahsulot topilmadi (yoki barchasi tugagan).")
+        return
+    text, kb = _supplier_products_kb_and_text(product, items)
+    await show(callback, text, reply_markup=kb)
+
+
+@router.callback_query(AdminProductCB.filter(F.action == "pick_supplier_product"))
+async def product_pick_supplier_product(
+    callback: CallbackQuery, callback_data: AdminProductCB, session: AsyncSession
+) -> None:
+    products = ProductRepository(session)
+    product = await products.get_by_id(callback_data.product_id)
+    if product is None:
+        await callback.answer("Mahsulot topilmadi", show_alert=True)
+        return
+    await products.update(product, external_product_id=callback_data.field)
+    admin_actions_logger.info(
+        "product_external_id_picked id=%s ext_id=%s admin=%s", product.id, callback_data.field, callback.from_user.id
+    )
+    text, kb = render_product_group(product, "delivery")
+    await callback.message.edit_text(text, reply_markup=kb)
+    await callback.answer("Tashqi ID o'rnatildi ✅")
 
 
 @router.callback_query(AdminProductCB.filter(F.action == "toggle_field"))

@@ -31,7 +31,7 @@ import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.config.settings import settings
-from app.services.providers.base import BaseProvider, ProviderResult
+from app.services.providers.base import BaseProvider, ProviderResult, SupplierProduct
 
 logger = logging.getLogger("providers")
 
@@ -129,6 +129,32 @@ class ResellerApiProvider(BaseProvider):
                 except (TypeError, ValueError):
                     return None
         return None
+
+    async def list_products(self) -> list[SupplierProduct] | None:
+        """Lets the admin panel offer a pick-from-list instead of typing the
+        id from memory. This supplier's /v1/products only exposes "id" and
+        "stock_count" (no human name) — see the module docstring."""
+        if not await self._resolve_api_key():
+            return None
+        try:
+            resp = await self._get("/v1/products")
+            data = resp.json()
+        except Exception as exc:  # noqa: BLE001 - listing must never break the admin panel
+            logger.warning("reseller_api list_products error: %s", exc)
+            return None
+        if data.get("status") != "success":
+            return None
+        out: list[SupplierProduct] = []
+        for item in data.get("products") or []:
+            raw_id = item.get("id")
+            if raw_id is None:
+                continue
+            try:
+                stock = int(item.get("stock_count"))
+            except (TypeError, ValueError):
+                stock = None
+            out.append(SupplierProduct(id=str(raw_id), name=None, stock=stock))
+        return out
 
     async def fetch(self, *, product_external_ref: str | None, order_uuid: str) -> ProviderResult:
         if not await self._resolve_api_key():

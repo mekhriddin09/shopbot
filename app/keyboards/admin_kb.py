@@ -127,13 +127,20 @@ PRODUCT_GROUPS: dict[str, dict] = {
         "intro": (
             "Uch rejim bor: ichki inventar (tayyor kodlar), qo'lda (o'zingiz yozasiz), "
             "tashqi API (ta'minotchidan avtomatik olinadi).\n"
-            "Provider va Tashqi ID faqat API rejimida ko'rinadi."
+            "Provider va Tashqi ID faqat API rejimida ko'rinadi.\n\n"
+            "\U0001F511 <b>Provider</b> — ro'yxatdan tanlanadi (Sozlamalar -> Reseller/Shamekh API'da "
+            "kalit va manzil sozlanadi, bu yerda faqat qaysi biri shu mahsulotga xizmat qilishini "
+            "tanlaysiz).\n"
+            "\U0001F194 <b>Tashqi ID</b> — ta'minotchining o'z kataloridagi shu mahsulot raqami/kodi. "
+            "\U0001F4CB tugmasi orqali ta'minotchi kataloridan to'g'ridan-to'g'ri tanlash mumkin "
+            "(qo'lda yozishga hojat qolmaydi, agar provider shuni qo'llab-quvvatlasa)."
         ),
         "parent": "root",
         "items": [
             ("mode", None, "\U0001F504 Yetkazish rejimi"),
-            ("api_only_field", "provider_key", "\U0001F511 Provider"),
+            ("provider_picker", None, "\U0001F511 Provider"),
             ("api_only_field", "external_product_id", "\U0001F194 Tashqi ID"),
+            ("browse_supplier", None, "\U0001F4CB Ta'minotchi mahsulotlarini ko'rish"),
             ("lang", "delivery_instructions", "\U0001F310 Yetkazishdan keyingi xabar"),
         ],
     },
@@ -236,6 +243,12 @@ def admin_product_detail_kb(product: Product, group: str = "root") -> InlineKeyb
         elif kind == "api_only_field":
             if product.delivery_mode == DeliveryMode.API:
                 rows.append([InlineKeyboardButton(text=label, callback_data=cb("edit_field", key))])
+        elif kind == "provider_picker":
+            if product.delivery_mode == DeliveryMode.API:
+                rows.append([InlineKeyboardButton(text=label, callback_data=cb("set_provider"))])
+        elif kind == "browse_supplier":
+            if product.delivery_mode == DeliveryMode.API and product.provider_key:
+                rows.append([InlineKeyboardButton(text=label, callback_data=cb("browse_supplier"))])
         elif kind == "lang":
             rows.append([InlineKeyboardButton(text=label, callback_data=cb("pick_lang_field", key))])
         elif kind == "image":
@@ -286,6 +299,35 @@ def delivery_mode_kb(product_id: int) -> InlineKeyboardMarkup:
                 )
             ]
         )
+    rows.append(
+        [InlineKeyboardButton(text="\U0001F519 Orqaga", callback_data=AdminProductCB(action="open", product_id=product_id).pack())]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+_PROVIDER_LABELS = {
+    "reseller_api": "\U0001F310 Reseller API",
+    "shamekh_api": "\U0001F310 Shamekh API",
+    "fragment": "⭐ Fragment (Stars/Premium)",
+    "mock_provider": "\U0001F9EA Mock (sinov)",
+}
+
+
+def provider_kb(product_id: int) -> InlineKeyboardMarkup:
+    """Pick a registered provider by name instead of typing its key from
+    memory — see `app.services.providers.registry.list_provider_keys()`,
+    the single source of truth for which providers actually exist."""
+    from app.services.providers.registry import list_provider_keys  # local import avoids a cycle
+
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=_PROVIDER_LABELS.get(key, key),
+                callback_data=AdminProductCB(action="apply_provider", product_id=product_id, field=key).pack(),
+            )
+        ]
+        for key in list_provider_keys()
+    ]
     rows.append(
         [InlineKeyboardButton(text="\U0001F519 Orqaga", callback_data=AdminProductCB(action="open", product_id=product_id).pack())]
     )
