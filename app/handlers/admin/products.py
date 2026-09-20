@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from html import escape as html_escape
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -90,10 +91,21 @@ def _lang_coverage(product, field_base: str) -> str:
 
 
 def _short(value, limit: int = 40) -> str:
+    """One-line preview of a field's raw stored value, always wrapped in
+    `<code>...</code>` by callers below. Escaped for HTML: a description
+    edited with rich formatting can legitimately contain real `<b>`/
+    `<tg-emoji>`/etc. tags (see generic_input.py's rich-text conversion),
+    and a plain field like a name can contain an accidental stray "<" or
+    "&" — either way, dropping raw HTML/text straight into `<code>` breaks
+    Telegram's message parsing outright (this was crashing the "Asosiy
+    ma'lumot" screen for any product whose description had been formatted
+    with bold/italic/etc). Escaping shows the true stored text as visible
+    text, which is exactly right for a technical preview like this one."""
     text = " ".join(str(value).split()) if value not in (None, "") else ""
     if not text:
         return "—"
-    return text if len(text) <= limit else text[: limit - 1] + "…"
+    text = text if len(text) <= limit else text[: limit - 1] + "…"
+    return html_escape(text)
 
 
 def _product_summary(product) -> str:
@@ -101,7 +113,7 @@ def _product_summary(product) -> str:
     and whether it's live."""
     visibility = "\U0001F7E2 Faol" if product.is_visible else "\U0001F5C4️ Arxivda (mijozlar ko'rmaydi)"
     return (
-        f"{product_emoji_html(product)} <b>{product.name}</b>\n"
+        f"{product_emoji_html(product)} <b>{html_escape(product.name)}</b>\n"
         f"\U0001F4B5 {fmt_price(float(product.price))} {product.currency} · {_MODE_LABELS[product.delivery_mode]}\n"
         f"{visibility}"
     )

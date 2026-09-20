@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from html import escape as html_escape
 
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
@@ -32,11 +33,19 @@ _LANGS = ("uz", "ru", "en")
 
 
 def _short(value: str, limit: int = 40) -> str:
-    """One-line preview of a possibly long/multi-line setting value."""
+    """One-line preview of a possibly long/multi-line setting value,
+    always wrapped in `<code>...</code>` by callers below. Escaped for
+    HTML: a "lang"-kind setting can be saved with real rich formatting
+    (see `_is_rich_settings_key` / `_rich_text_or_plain` in
+    generic_input.py), and any setting can hold an accidental stray "<" or
+    "&" — either way, unescaped text inside `<code>` breaks message
+    parsing (same bug as the product screen — see products.py's `_short`
+    for the full explanation)."""
     flat = " ".join((value or "").split())
     if not flat:
         return "—"
-    return flat if len(flat) <= limit else flat[: limit - 1] + "…"
+    flat = flat if len(flat) <= limit else flat[: limit - 1] + "…"
+    return html_escape(flat)
 
 
 async def render_settings_group(session: AsyncSession, group: str) -> tuple[str, object]:
@@ -123,7 +132,7 @@ def _mask_secret(value: str) -> str:
         return "(o'rnatilmagan — .env dagi qiymat ishlatiladi)"
     if len(value) <= 4:
         return "*" * len(value)
-    return f"{'*' * (len(value) - 4)}{value[-4:]}"
+    return f"{'*' * (len(value) - 4)}{html_escape(value[-4:])}"
 
 
 @router.callback_query(AdminSettingsCB.filter(F.action == "edit_masked"))

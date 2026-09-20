@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from html import escape as html_escape
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
@@ -48,7 +49,7 @@ async def notify_admins_new_order(
         f"\U0001F6CE️ <b>Yangi buyurtma</b>\n\n"
         f"\U0001F464 {order.user.full_name or '-'} (@{order.user.username or '-'})\n"
         f"\U0001F194 Telegram ID: <code>{order.user.telegram_id}</code>\n"
-        f"\U0001F4E6 Mahsulot: {order.product.name}\n"
+        f"\U0001F4E6 Mahsulot: {html_escape(order.product.name)}\n"
         f"\U0001F4B0 Narxi: {fmt_price(float(order.price_at_purchase))} {order.currency}\n"
         f"\U0001F196 Buyurtma: <code>{order.order_uuid}</code>"
         f"{qty_line}{preorder_line}"

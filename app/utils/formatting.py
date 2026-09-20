@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from html import escape as html_escape
 
 from app.utils.i18n import t
 
@@ -26,8 +27,19 @@ def _localized_field(product, field_base: str, lang: str, legacy_value: str | No
 
 def product_name(product, lang: str) -> str:
     """Localized product name, with fallback: requested language -> the
-    legacy single `name` field (always set) -> any other set language."""
-    return _localized_field(product, "name", lang, product.name) or product.name
+    legacy single `name` field (always set) -> any other set language.
+
+    Escaped for HTML: unlike `description`, a product name is never passed
+    through the rich-text conversion (`_rich_text_or_plain` in
+    generic_input.py) when the admin edits it, so a literal "<", ">" or "&"
+    typed into a name is stored byte-for-byte. Every caller embeds this
+    inside its own HTML markup (typically `<b>{name}</b>`) and sends with
+    `parse_mode=HTML`, so an unescaped stray character here breaks message
+    parsing outright — this used to crash the customer product card (and
+    the admin "Asosiy ma'lumot" screen, which hits the same underlying
+    value) for any product whose name held one of those characters."""
+    name = _localized_field(product, "name", lang, product.name) or product.name
+    return html_escape(name)
 
 
 def product_description(product, lang: str) -> str:

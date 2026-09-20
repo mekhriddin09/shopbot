@@ -70,7 +70,7 @@ def _status_key(status: OrderStatus) -> str | None:
 
 def _order_line(order) -> str:
     return (
-        f"🔹 <b>{order.product.name}</b>\n"
+        f"🔹 <b>{html_escape(order.product.name)}</b>\n"
         f"🆔 <code>{order.order_uuid}</code>\n"
         f"\U0001F464 @{order.user.username or '-'} ({order.user.telegram_id})\n"
         f"\U0001F4B0 {fmt_price(float(order.price_at_purchase))} {order.currency}\n"
@@ -165,7 +165,7 @@ async def render_order_detail(session: AsyncSession, order) -> str:
     return (
         f"\U0001F9FE <b>Buyurtma</b> <code>{order.order_uuid}</code>\n\n"
         f"\U0001F4CC Holat: <b>{_STATUS_LABELS.get(order.status, order.status.value)}</b>\n"
-        f"\U0001F4E6 Mahsulot: {order.product.name if order.product else '-'}{qty_block}\n"
+        f"\U0001F4E6 Mahsulot: {html_escape(order.product.name) if order.product else '-'}{qty_block}\n"
         f"\U0001F4B0 Narxi: {fmt_price(float(order.price_at_purchase))} {order.currency}\n"
         f"\U0001F4B3 To'lov usuli: {order.payment_method.value}"
         f"{expected_block}{preorder_block}\n\n"
