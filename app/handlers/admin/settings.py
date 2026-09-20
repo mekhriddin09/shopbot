@@ -343,6 +343,19 @@ async def settings_test_shamekh(callback: CallbackQuery, session: AsyncSession) 
         )
 
 
+@router.callback_query(AdminSettingsCB.filter(F.action == "button_manager_root"))
+async def settings_open_button_manager(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Entry point into the Button Manager (see app/handlers/admin/buttons.py)
+    from Sozlamalar -> Tugmalar boshqaruvi. Its own "back" button returns to
+    the settings root via AdminSettingsCB, so it's a normal branch of the
+    same settings tree rather than a separate top-level admin section."""
+    from app.handlers.admin.buttons import render_button_root
+
+    text, kb = await render_button_root(session)
+    await show(callback, text, reply_markup=kb)
+    await callback.answer()
+
+
 @router.callback_query(AdminSettingsCB.filter(F.action == "referral_shop"))
 async def settings_open_referral_shop(callback: CallbackQuery, session: AsyncSession) -> None:
     """Referral do'koni now lives inside this settings group instead of its

@@ -206,6 +206,15 @@ class AdminPhoneCB(CallbackData, prefix="aphone"):
     phone_id: int = 0
 
 
+class AdminButtonCB(CallbackData, prefix="abtn"):
+    action: str  # root | group | open | pick_lang_text | edit_text | style_menu | set_style |
+    #              toggle_enabled | emoji_prompt | reset | preview | search_prompt
+    key: str | None = None  # button_registry.BUTTON_REGISTRY key
+    group: str | None = None  # button_registry group name (main_menu | product)
+    lang: str | None = None
+    style: str | None = None
+
+
 class ConfirmCB(CallbackData, prefix="confirm"):
     action: str  # yes | no
     context: str | None = None

@@ -11,6 +11,7 @@ from app.database.models import Product
 from app.database.models.enums import DeliveryMode
 from app.keyboards.callback_data import (
     AdminBroadcastCB,
+    AdminButtonCB,
     AdminInventoryCB,
     AdminOrderListCB,
     AdminPhoneCB,
@@ -663,6 +664,7 @@ SETTINGS_GROUPS: dict[str, dict] = {
             ("group", "delivery", "\U0001F4E6 Yetkazib berish"),
             ("group", "payments", "\U0001F4B3 To'lov usullari"),
             ("group", "referral", "\U0001F91D Referal dasturi"),
+            ("button_manager", None, "\U0001F3A8 Tugmalar boshqaruvi"),
             ("group", "access", "\U0001F512 Kirish nazorati"),
             ("group", "reseller", "\U0001F310 Reseller API"),
             ("group", "shamekh", "\U0001F310 Shamekh API"),
@@ -847,6 +849,8 @@ def admin_settings_menu_kb(group: str = "root") -> InlineKeyboardMarkup:
             cb = AdminSettingsCB(action="test_shamekh", group=group).pack()
         elif kind == "referral_shop":
             cb = AdminSettingsCB(action="referral_shop", group=group).pack()
+        elif kind == "button_manager":
+            cb = AdminButtonCB(action="root").pack()
         else:  # pragma: no cover - guards against a typo'd spec entry
             continue
         rows.append([InlineKeyboardButton(text=label, callback_data=cb)])
@@ -1118,6 +1122,103 @@ def admin_broadcast_confirm_kb() -> InlineKeyboardMarkup:
             ]
         ]
     )
+
+
+# ----------------------------------------------------------------------
+# Button Manager — presentation-only editor for app.services.button_registry
+# entries. Deliberately reads BUTTON_REGISTRY directly (no separate static
+# GROUPS dict here) so the registry stays the single source of truth for
+# which buttons exist — this screen only ever lists/edits what's already
+# there, it can't create a new button or change what one does.
+# ----------------------------------------------------------------------
+
+_BUTTON_GROUP_LABELS = {
+    "main_menu": "\U0001F3E0 Asosiy menyu",
+    "product": "\U0001F6CD️ Mahsulot / to'lov tugmalari",
+}
+
+_BUTTON_STYLE_LABELS = {
+    None: "⚪ Standart (avtomatik)",
+    "primary": "\U0001F535 Primary (ko'k)",
+    "success": "\U0001F7E2 Success (yashil)",
+    "danger": "\U0001F534 Danger (qizil)",
+}
+
+
+def admin_button_root_kb() -> InlineKeyboardMarkup:
+    from app.services.button_registry import list_groups
+
+    rows = [
+        [InlineKeyboardButton(text=_BUTTON_GROUP_LABELS.get(g, g), callback_data=AdminButtonCB(action="group", group=g).pack())]
+        for g in list_groups()
+    ]
+    rows.append([InlineKeyboardButton(text="\U0001F50D Qidirish", callback_data=AdminButtonCB(action="search_prompt").pack())])
+    rows.append(
+        [InlineKeyboardButton(text="\U0001F519 Orqaga", callback_data=AdminSettingsCB(action="group", key="root").pack())]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_button_list_kb(group: str, enabled_by_key: dict[str, bool]) -> InlineKeyboardMarkup:
+    from app.services.button_registry import list_groups
+
+    defs = list_groups().get(group, [])
+    rows = []
+    for d in defs:
+        mark = "✅" if enabled_by_key.get(d.key, True) else "\U0001F6AB"
+        rows.append(
+            [InlineKeyboardButton(text=f"{mark} {d.label or d.key}", callback_data=AdminButtonCB(action="open", key=d.key).pack())]
+        )
+    rows.append([InlineKeyboardButton(text="\U0001F519 Orqaga", callback_data=AdminButtonCB(action="root").pack())])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_button_detail_kb(key: str, group: str) -> InlineKeyboardMarkup:
+    def cb(action: str, **extra) -> str:
+        return AdminButtonCB(action=action, key=key, group=group, **extra).pack()
+
+    rows = [
+        [InlineKeyboardButton(text="✏️ Matn (til bo'yicha)", callback_data=cb("pick_lang_text"))],
+        [InlineKeyboardButton(text="\U0001F3A8 Rang (style)", callback_data=cb("style_menu"))],
+        [InlineKeyboardButton(text="\U0001F600 Emoji o'zgartirish", callback_data=cb("emoji_prompt"))],
+        [InlineKeyboardButton(text="\U0001F441 Ko'rish (preview)", callback_data=cb("preview"))],
+        [InlineKeyboardButton(text="\U0001F504 Yoqish/O'chirish", callback_data=cb("toggle_enabled"))],
+        [InlineKeyboardButton(text="♻️ Standartga qaytarish", callback_data=cb("reset"))],
+        [InlineKeyboardButton(text="\U0001F519 Orqaga", callback_data=AdminButtonCB(action="group", group=group).pack())],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_button_style_pick_kb(key: str, group: str) -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(text=label, callback_data=AdminButtonCB(action="set_style", key=key, group=group, style=style or "_default").pack())]
+        for style, label in _BUTTON_STYLE_LABELS.items()
+    ]
+    rows.append([InlineKeyboardButton(text="\U0001F519 Orqaga", callback_data=AdminButtonCB(action="open", key=key, group=group).pack())])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_button_lang_pick_kb(key: str, group: str) -> InlineKeyboardMarkup:
+    labels = {"uz": "\U0001F1FA\U0001F1FF UZ", "ru": "\U0001F1F7\U0001F1FA RU", "en": "\U0001F1EC\U0001F1E7 EN"}
+    rows = [
+        [
+            InlineKeyboardButton(text=label, callback_data=AdminButtonCB(action="edit_text", key=key, group=group, lang=code).pack())
+            for code, label in labels.items()
+        ],
+        [InlineKeyboardButton(text="\U0001F519 Orqaga", callback_data=AdminButtonCB(action="open", key=key, group=group).pack())],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_button_search_results_kb(keys: list[str]) -> InlineKeyboardMarkup:
+    from app.services.button_registry import get_button_def
+
+    rows = []
+    for key in keys:
+        d = get_button_def(key)
+        rows.append([InlineKeyboardButton(text=(d.label if d else key), callback_data=AdminButtonCB(action="open", key=key).pack())])
+    rows.append([InlineKeyboardButton(text="\U0001F519 Orqaga", callback_data=AdminButtonCB(action="root").pack())])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def confirm_kb(context: str, target_id: int = 0) -> InlineKeyboardMarkup:

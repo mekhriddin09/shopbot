@@ -315,6 +315,85 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
         await _back_to_panel(message, data, "✅ Sozlama yangilandi.\n\n" + group_text, group_kb)
         return
 
+    if action == "button_edit_text":
+        from app.handlers.admin.buttons import render_button_detail
+        from app.repositories.button_repo import ButtonRepository
+        from app.services.button_service import refresh_button_cache
+
+        key, lang = data["key"], data["lang"]
+        button_repo = ButtonRepository(session)
+        if text == "-":
+            # Convention shared with settings_edit/edit_masked: "-" removes
+            # this language's override instead of saving it literally, so
+            # the button falls back to i18n's default text for that language.
+            row = await button_repo.get(key)
+            if row:
+                tr = next((tr for tr in row.translations if tr.language == lang), None)
+                if tr:
+                    await session.delete(tr)
+                    await session.commit()
+        else:
+            await button_repo.set_translation(key, lang, text)
+        await refresh_button_cache()
+        admin_actions_logger.info("button_text_changed key=%s lang=%s admin=%s", key, lang, message.from_user.id)
+        await state.clear()
+        detail_text, kb, _group = await render_button_detail(session, key)
+        await _back_to_panel(message, data, "✅ Matn yangilandi.\n\n" + detail_text, kb)
+        return
+
+    if action == "button_edit_emoji":
+        from app.handlers.admin.buttons import render_button_detail
+        from app.repositories.button_repo import ButtonRepository
+        from app.services.button_service import refresh_button_cache
+
+        key = data["key"]
+        button_repo = ButtonRepository(session)
+        if text == "-":
+            await button_repo.update_presentation(key, custom_emoji_id=None, unicode_emoji=None)
+        else:
+            # A message that carries a custom (Premium) Telegram emoji has a
+            # MessageEntity of type "custom_emoji" — that's the ONLY way to
+            # capture its id; there is no way to type it manually. If none
+            # is present, treat whatever was sent as a plain Unicode emoji.
+            custom_entity = next(
+                (e for e in (message.entities or []) if e.type == "custom_emoji"), None
+            )
+            if custom_entity is not None:
+                await button_repo.update_presentation(
+                    key, custom_emoji_id=custom_entity.custom_emoji_id, unicode_emoji=None
+                )
+            else:
+                await button_repo.update_presentation(key, custom_emoji_id=None, unicode_emoji=text)
+        await refresh_button_cache()
+        admin_actions_logger.info("button_emoji_changed key=%s admin=%s", key, message.from_user.id)
+        await state.clear()
+        detail_text, kb, _group = await render_button_detail(session, key)
+        await _back_to_panel(message, data, "✅ Emoji yangilandi.\n\n" + detail_text, kb)
+        return
+
+    if action == "button_search":
+        from app.handlers.admin.buttons import render_button_root
+        from app.keyboards.admin_kb import admin_button_search_results_kb
+        from app.services.button_registry import BUTTON_REGISTRY
+
+        query = text.strip().lower()
+        await state.clear()
+        matches = [
+            d.key
+            for d in BUTTON_REGISTRY.values()
+            if query in d.key.lower() or query in (d.label or "").lower()
+        ]
+        if not matches:
+            root_text, root_kb = await render_button_root(session)
+            await _back_to_panel(
+                message, data, f"❌ \"{text}\" bo'yicha hech narsa topilmadi.\n\n" + root_text, root_kb
+            )
+            return
+        await _back_to_panel(
+            message, data, f"\U0001F50D \"{text}\" bo'yicha natijalar:", admin_button_search_results_kb(matches)
+        )
+        return
+
     if action == "reject_reason":
         order_id = data["order_id"]
         reason = None if text == "-" else text
