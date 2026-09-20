@@ -72,6 +72,29 @@ class Product(TimestampMixin, Base):
         doc="Whether purchases of this product count toward referral rewards.",
     )
 
+    referral_reward_value: Mapped[str | None] = mapped_column(
+        String(32),
+        nullable=True,
+        doc=(
+            "Per-product referral reward override, same syntax as the global "
+            "settings ('5000' fixed, '2%' percent). Empty/null = inherit the "
+            "global first-order/recurring split. When set, this single value "
+            "replaces both — a per-product reward is a flat business rule, "
+            "not something that behaves differently on repeat purchases."
+        ),
+    )
+    referral_reward_by_qty: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="0",
+        doc=(
+            "Only relevant when referral_reward_value is a percentage: whether "
+            "the percentage is taken of the order quantity (e.g. 2% of 100 "
+            "Stars = 2) instead of the order price in UZS (the default, and "
+            "the only behaviour the global settings support)."
+        ),
+    )
+
     card_auto_enabled: Mapped[bool] = mapped_column(
         Boolean,
         default=False,

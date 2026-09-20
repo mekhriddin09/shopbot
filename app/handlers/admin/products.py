@@ -49,6 +49,13 @@ FIELD_PROMPTS = {
     ),
     "min_order_qty": "Bitta buyurtmada kamida nechta dona sotib olish kerakligini yozing (butun son, masalan: 1):",
     "max_order_qty": "Bitta buyurtmada ko'pi bilan nechta dona sotib olish mumkinligini yozing (butun son, masalan: 10):",
+    "referral_reward_value": (
+        "Ushbu mahsulot uchun referral bonusini yozing:\n"
+        "• Qat'iy summa — masalan: 5000\n"
+        "• Foiz — masalan: 2%\n\n"
+        "Bo'sh qoldirish (umumiy sozlamadagi birinchi/keyingi buyurtma qiymatiga qaytarish) uchun "
+        "'-' yuboring:"
+    ),
     **{
         f"name_{code}": f"Mahsulot nomini {label} tilida yozing. O'chirish uchun '-' yuboring:"
         for code, label in _LANG_LABELS.items()

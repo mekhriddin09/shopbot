@@ -111,22 +111,37 @@ class ReferralService:
 
         delivered_count = await self.orders.count_delivered_by_user(buyer.id)
         is_first = delivered_count <= 1
-
-        if is_first:
-            enabled = await self.settings.get_bool("referral_first_order_enabled", False)
-            raw_value = await self.settings.get("referral_first_order_value", "0")
-        else:
-            enabled = await self.settings.get_bool("referral_recurring_enabled", False)
-            raw_value = await self.settings.get("referral_recurring_value", "0")
-
-        if not enabled:
-            order.referral_rewarded = True
-            await self.session.commit()
-            return
-
-        mode, value = parse_reward_value(raw_value)
         price = float(order.price_at_purchase)
-        reward = round(price * value / 100, 2) if mode == "percent" else round(value, 2)
+
+        product_override = (getattr(order.product, "referral_reward_value", "") or "").strip()
+        if product_override:
+            # An admin-set per-product rule takes over entirely for this
+            # product: same reward whether it's the buyer's first order or
+            # their fifth, and it applies regardless of whether the global
+            # first-order/recurring toggles are even on — setting a reward
+            # here is a deliberate, explicit choice.
+            mode, value = parse_reward_value(product_override)
+            if mode == "percent":
+                by_qty = bool(getattr(order.product, "referral_reward_by_qty", False))
+                base = float(order.quantity or 1) if by_qty else price
+                reward = round(base * value / 100, 2)
+            else:
+                reward = round(value, 2)
+        else:
+            if is_first:
+                enabled = await self.settings.get_bool("referral_first_order_enabled", False)
+                raw_value = await self.settings.get("referral_first_order_value", "0")
+            else:
+                enabled = await self.settings.get_bool("referral_recurring_enabled", False)
+                raw_value = await self.settings.get("referral_recurring_value", "0")
+
+            if not enabled:
+                order.referral_rewarded = True
+                await self.session.commit()
+                return
+
+            mode, value = parse_reward_value(raw_value)
+            reward = round(price * value / 100, 2) if mode == "percent" else round(value, 2)
 
         order.referral_rewarded = True
         order.referral_is_first_reward = is_first

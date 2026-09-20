@@ -187,6 +187,7 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
             "name_uz", "name_ru", "name_en",
             "description_uz", "description_ru", "description_en",
             "delivery_instructions_uz", "delivery_instructions_ru", "delivery_instructions_en",
+            "referral_reward_value",
         ):
             value = None if text == "-" else text
         else:

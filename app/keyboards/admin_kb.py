@@ -77,6 +77,7 @@ TOGGLEABLE_FIELDS = {
     "card_auto_enabled",
     "card_manual_enabled",
     "card_manual_confirm",
+    "referral_reward_by_qty",
 }
 
 PRODUCT_GROUPS: dict[str, dict] = {
@@ -154,7 +155,12 @@ PRODUCT_GROUPS: dict[str, dict] = {
         "title": "\U0001F522 <b>Limit va referral</b>",
         "intro": (
             "Max. soni 1 dan katta bo'lsa, mijozga miqdor tanlash oynasi chiqadi.\n"
-            "Tartib raqami kichik bo'lsa, mahsulot ro'yxatda yuqorida turadi."
+            "Tartib raqami kichik bo'lsa, mahsulot ro'yxatda yuqorida turadi.\n\n"
+            "\U0001F91D Referral mukofoti yoqilgan bo'lsa, mahsulotga o'ziga xos summa/foiz qo'yish "
+            "mumkin — bo'sh qoldirilsa, umumiy sozlamalardagi (birinchi/keyingi buyurtma) qiymat "
+            "ishlatiladi. Foiz kiritilganda (masalan \"2%\"), u narxdan yoki sonidan (necha dona/Stars) "
+            "hisoblanishini pastdagi tugma bilan tanlaysiz — Stars kabi donali mahsulotlarda odatda "
+            "sonidan hisoblash qulayroq (100 Starsga 2%, ya'ni 2 dona bonus)."
         ),
         "parent": "root",
         "items": [
@@ -162,6 +168,8 @@ PRODUCT_GROUPS: dict[str, dict] = {
             ("field", "max_order_qty", "\U0001F53C Max. buyurtma soni"),
             ("field", "sort_order", "\U0001F500 Tartib raqami"),
             ("toggle", "referral_eligible", "\U0001F91D Referral mukofoti"),
+            ("field", "referral_reward_value", "\U0001F4B8 Bonus (summa yoki foiz, masalan 5000 yoki 2%)"),
+            ("toggle", "referral_reward_by_qty", "\U0001F522 Foiz sonidan hisoblansin (narx o'rniga)"),
         ],
     },
 }
