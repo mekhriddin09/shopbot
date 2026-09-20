@@ -38,7 +38,7 @@ _ACTIVE_CHANNEL_STATUSES = {"member", "administrator", "creator"}
 
 async def _show_main_menu(target, session: AsyncSession, user: User, lang: str) -> None:
     settings_repo = SettingRepository(session)
-    welcome = await settings_repo.get(f"welcome_message_{lang}") or await settings_repo.get("welcome_message_en")
+    welcome = await settings_repo.get_localized("welcome_message", lang)
     is_admin = await is_admin_telegram_id(user.telegram_id, session)
     await target.answer(welcome, reply_markup=main_menu_kb(lang, is_admin=is_admin))
 

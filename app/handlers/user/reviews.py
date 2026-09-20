@@ -22,7 +22,7 @@ router = Router(name="user_reviews")
 @router.message(menu_button_filter("menu_reviews"))
 async def show_reviews(message: Message, session: AsyncSession, lang: str) -> None:
     settings_repo = SettingRepository(session)
-    reviews_text = await settings_repo.get(f"reviews_text_{lang}")
+    reviews_text = await settings_repo.get_localized("reviews_text", lang)
     await message.answer(reviews_text or t(lang, "msg_reviews_empty"))
 
     proof_url = await settings_repo.get("proof_channel_url")

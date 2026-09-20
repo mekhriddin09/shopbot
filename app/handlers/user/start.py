@@ -44,8 +44,6 @@ async def cmd_start(
             await ReferralService(session).set_referrer_if_new(user, referrer_id)
 
     settings_repo = SettingRepository(session)
-    welcome = await settings_repo.get(f"welcome_message_{lang}") or await settings_repo.get(
-        "welcome_message_en"
-    )
+    welcome = await settings_repo.get_localized("welcome_message", lang)
     is_admin = await is_admin_telegram_id(user.telegram_id, session)
     await message.answer(welcome, reply_markup=main_menu_kb(lang, is_admin=is_admin))

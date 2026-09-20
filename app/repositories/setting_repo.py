@@ -32,3 +32,29 @@ class SettingRepository:
     async def all(self) -> dict[str, str]:
         result = await self.session.execute(select(Setting))
         return {row.key: row.value for row in result.scalars().all()}
+
+    async def get_localized(self, base_key: str, lang: str, langs: tuple[str, ...] = ("uz", "ru", "en")) -> str:
+        """`{base_key}_{lang}` if the admin filled it in, otherwise
+        whichever other language they DID fill in, in `langs` order.
+
+        Several call sites used to hardcode a single fixed fallback
+        language instead of this (e.g. `get(f"oferta_text_{lang}") or
+        get("oferta_text_uz")`) — harmless for a user whose language
+        already IS that fallback, but for everyone else it meant "admin
+        only wrote the Russian oferta text" left every Uzbek-language user
+        with an empty string and no oferta screen at all (silently skipped
+        — see onboarding_gate.py), instead of falling back to whatever the
+        admin actually wrote. This is the one fallback chain every
+        "lang"-kind setting (oferta_text, welcome_message, reviews_text,
+        support_message, referral_rules, payment_instructions,
+        card_auto_note, ...) should use instead."""
+        value = await self.get(f"{base_key}_{lang}")
+        if (value or "").strip():
+            return value
+        for candidate in langs:
+            if candidate == lang:
+                continue
+            value = await self.get(f"{base_key}_{candidate}")
+            if (value or "").strip():
+                return value
+        return ""

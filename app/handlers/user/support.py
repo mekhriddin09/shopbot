@@ -35,9 +35,7 @@ async def _all_admin_ids(session: AsyncSession) -> set[int]:
 @router.message(menu_button_filter("menu_support"))
 async def show_support(message: Message, session: AsyncSession, lang: str, state: FSMContext) -> None:
     settings_repo = SettingRepository(session)
-    text = await settings_repo.get(f"support_message_{lang}") or await settings_repo.get(
-        "support_message_en"
-    )
+    text = await settings_repo.get_localized("support_message", lang)
     await state.set_state(SupportStates.chatting)
     await message.answer(f"{text}\n\n{t(lang, 'msg_support_type_here')}")
 

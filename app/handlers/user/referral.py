@@ -40,7 +40,7 @@ async def _build_referral_profile(session: AsyncSession, user: User, lang: str, 
     points = float(user.referral_points)
     can_withdraw = withdraw_min > 0 and balance >= withdraw_min
     has_rewards = bool(await ReferralRepository(session).list_active_rewards())
-    rules_text = await settings_repo.get(f"referral_rules_{lang}", "")
+    rules_text = await settings_repo.get_localized("referral_rules", lang)
     has_rules = bool((rules_text or "").strip())
     needs_confirmation = await user_needs_referral_confirmation(session, user)
 
@@ -100,7 +100,7 @@ async def referral_rules(callback: CallbackQuery, session: AsyncSession, lang: s
     # is capped at 200 characters, far too short for real rules text (it
     # was silently truncating admin's text and rendering in a cramped
     # popup instead of a normal, fully readable message).
-    rules_text = await SettingRepository(session).get(f"referral_rules_{lang}", "")
+    rules_text = await SettingRepository(session).get_localized("referral_rules", lang)
     text = (rules_text or "").strip() or t(lang, "msg_referral_rules_empty")
     await callback.message.answer(t(lang, "msg_referral_rules_title") + "\n\n" + text)
     await callback.answer()

@@ -82,9 +82,7 @@ class OnboardingGateMiddleware(BaseMiddleware):
 
         if await settings_repo.get_bool("onboarding_gate_enabled", False):
             if not user.oferta_accepted:
-                offer_text = (
-                    await settings_repo.get(f"oferta_text_{lang}") or await settings_repo.get("oferta_text_uz")
-                )
+                offer_text = await settings_repo.get_localized("oferta_text", lang)
                 if not (offer_text or "").strip():
                     # Admin flipped the gate on but never actually wrote any
                     # oferta text — fail open rather than wall everyone off

@@ -58,12 +58,11 @@ async def _payment_text(session: AsyncSession, order, lang: str) -> str:
         # details the shop already uses, so the flow still works.
         card_block = (
             order.product.payment_instructions
-            or await settings_repo.get(f"payment_instructions_{lang}")
-            or await settings_repo.get("payment_instructions_en")
+            or await settings_repo.get_localized("payment_instructions", lang)
             or ""
         ) + "\n"
 
-    note = (await settings_repo.get(f"card_auto_note_{lang}", "")).strip()
+    note = (await settings_repo.get_localized("card_auto_note", lang)).strip()
     note_block = f"\n\n{note}" if note else ""
 
     minutes = await CardPaymentService(session).timeout_minutes()
