@@ -866,7 +866,21 @@ async def handle_document_as_text_value(message: Message, session: AsyncSession,
 
     key = data["key"]
     group = data.get("group", "root")
-    await SettingRepository(session).set(key, text)
+    # Unlike a typed message (converted through message.html_text, which
+    # always produces balanced, correctly-escaped HTML), a .txt/.md file has
+    # no Telegram formatting entities to preserve — it's plain text. Saving
+    # it verbatim let a stray "<", ">" or "&" the admin typed into the file
+    # (e.g. "narxlar <o'zgarishi mumkin>") slip in as literal unescaped
+    # characters. Every later screen that shows this value renders it with
+    # parse_mode=HTML, so that one stray character broke HTML parsing
+    # everywhere the value was displayed — including the "Joriy qiymat"
+    # preview shown when reopening this same edit screen, which made it
+    # look like the language button had stopped working entirely. Escaping
+    # here (matching what typed input effectively guarantees) is the fix.
+    from html import escape as html_escape
+
+    value = html_escape(text) if _is_rich_settings_key(key) else text
+    await SettingRepository(session).set(key, value)
     admin_actions_logger.info("setting_changed_via_file key=%s chars=%s admin=%s", key, len(text), message.from_user.id)
     await state.clear()
     await message.answer(f"✅ Sozlama fayldan yangilandi ({len(text)} belgi).")
