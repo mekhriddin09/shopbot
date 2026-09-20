@@ -204,17 +204,25 @@ def captcha_kb(options: list[int], correct: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[buttons[:2], buttons[2:]])
 
 
-def shop_list_kb(products: list[Product], lang: str) -> InlineKeyboardMarkup:
+def shop_list_kb(views: list, lang: str) -> InlineKeyboardMarkup:
+    """`views` is a list of `app.services.product_service.ProductView` (not
+    plain `Product`) so each row can be colored by live stock status —
+    green while there's stock, red once it runs out — automatically, with
+    nothing to configure per product. This mirrors the same in-stock/
+    out-of-stock coloring already applied inside a product's own card (see
+    button_registry.py: "buy" is POSITIVE/green, "preorder"/"notify_stock"
+    are NEGATIVE/red)."""
     from app.utils.formatting import product_name  # local import avoids a cycle
 
     rows = [
         [
             InlineKeyboardButton(
-                text=f"{p.emoji} {product_name(p, lang)}",
-                callback_data=ShopCB(action="open", product_id=p.id, fresh=True).pack(),
+                text=f"{view.product.emoji} {product_name(view.product, lang)}",
+                style="success" if view.in_stock else "danger",
+                callback_data=ShopCB(action="open", product_id=view.product.id, fresh=True).pack(),
             )
         ]
-        for p in products
+        for view in views
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

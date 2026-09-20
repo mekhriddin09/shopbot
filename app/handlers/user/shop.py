@@ -77,7 +77,7 @@ async def open_shop(
         return
     # Opening the shop starts a fresh screen; everything after this edits it.
     sent = await message.answer(
-        t(lang, "main_menu_hint"), reply_markup=shop_list_kb([v.product for v in views], lang)
+        t(lang, "main_menu_hint"), reply_markup=shop_list_kb(views, lang)
     )
     await shopscreen.remember(state, sent)
 
@@ -107,7 +107,7 @@ async def back_to_list(callback: CallbackQuery, session: AsyncSession, lang: str
     views = await service.list_shop()
     empty_text = t(lang, "msg_shop_empty") if not views else None
     text = empty_text or t(lang, "main_menu_hint")
-    kb = None if empty_text else shop_list_kb([v.product for v in views], lang)
+    kb = None if empty_text else shop_list_kb(views, lang)
 
     # `state.clear()` above wiped the screen coordinates, so re-anchor on
     # the message this tap came from before redrawing it.
