@@ -133,6 +133,8 @@
   "msg_channel_subscribe_required": "📢 To use the bot, please subscribe to the channel below first, then press \"✅ Check\".",
   "msg_channel_still_not_subscribed": "❌ You're not subscribed to the channel yet. Subscribe and check again.",
   "msg_referral_confirm_intro": "🔒 To confirm you came through a referral link, please share your phone number (protects against spam/fake accounts). Tap the button below.",
+  "msg_phone_required": "📞 Please share your phone number before using the bot. Tap the button below.",
+  "msg_phone_not_eligible_for_referral": "ℹ️ This number doesn't qualify for a referral reward (only Uzbekistan +998 numbers currently count). You can still use the bot freely.",
   "msg_phone_must_be_own": "⚠️ Please share your own phone number, not someone else's contact.",
   "msg_phone_rejected": "❌ Sorry, this number wasn't accepted. Currently only Uzbekistan (+998) numbers are accepted.",
   "msg_captcha_prompt": "🤖 Confirm you're not a robot:\n\n{question}",

@@ -74,6 +74,10 @@ async def _advance_after_gate_step(target, session: AsyncSession, user: User, la
             )
             return
 
+    if await settings_repo.get_bool("phone_gate_enabled", False) and not user.phone_number:
+        await target.answer(t(lang, "msg_phone_required"), reply_markup=request_contact_kb(lang))
+        return
+
     # Confirmation is non-blocking, so show the welcome/menu FIRST (the bot
     # is usable right now regardless), then offer the confirmation once.
     await _show_main_menu(target, session, user, lang)
@@ -119,22 +123,27 @@ async def check_channel(callback: CallbackQuery, session: AsyncSession, user: Us
 
 
 # ------------------------------------------------------------------
-# Referral confirmation: phone + captcha — only for users who came via a
-# referral link, to protect the referrer's stats/rewards from fake accounts.
+# Phone number: the mandatory gate (every user, blocking) and the referral
+# confirmation captcha (referred users only, non-blocking) both flow through
+# here — whichever needs the number, this is the one place it's collected.
 # ------------------------------------------------------------------
 
 
-async def _awaiting_referral_confirmation(message: Message, user: User) -> bool:
+async def _awaiting_phone_number(message: Message, user: User) -> bool:
     """Custom filter (not just an `if` inside the handler) so that a contact
     share from a user who ISN'T in this flow falls through to whatever else
     might want it (e.g. the support relay) instead of being silently
     swallowed here — an aiogram handler that runs and returns `None` counts
     as "handled", so scoping this at the filter level is what actually
-    matters, not an early-return inside the function body."""
-    return bool(user.referred_by_id) and not user.referral_confirmed
+    matters, not an early-return inside the function body.
+
+    A user who already has a phone number on file is never asked again by
+    either flow, so "no phone yet" alone is the right scope for both the
+    mandatory gate and the legacy per-referral prompt."""
+    return not bool(user.phone_number)
 
 
-@router.message(F.contact, _awaiting_referral_confirmation)
+@router.message(F.contact, _awaiting_phone_number)
 async def contact_received(message: Message, session: AsyncSession, user: User, lang: str) -> None:
     contact = message.contact
     if contact.user_id and contact.user_id != message.from_user.id:
@@ -143,17 +152,23 @@ async def contact_received(message: Message, session: AsyncSession, user: User, 
         await message.answer(t(lang, "msg_phone_must_be_own"), reply_markup=request_contact_kb(lang))
         return
 
-    if not await is_phone_allowed(session, contact.phone_number):
-        await message.answer(t(lang, "msg_phone_rejected"))
-        return
-
+    allowed = await is_phone_allowed(session, contact.phone_number)
     await UserRepository(session).set_phone_number(user, normalize_phone(contact.phone_number))
 
-    question, correct, options = generate_captcha()
-    await message.answer(
-        t(lang, "msg_captcha_prompt", question=question),
-        reply_markup=captcha_kb(options, correct),
-    )
+    if not allowed:
+        # Never blocks bot usage — only means this number won't count
+        # toward a referral (if the user was even referred at all).
+        await message.answer(t(lang, "msg_phone_not_eligible_for_referral"))
+
+    if allowed and user.referred_by_id and not user.referral_confirmed:
+        question, correct, options = generate_captcha()
+        await message.answer(
+            t(lang, "msg_captcha_prompt", question=question),
+            reply_markup=captcha_kb(options, correct),
+        )
+        return
+
+    await _advance_after_gate_step(message, session, user, lang)
 
 
 @router.callback_query(CaptchaCB.filter(F.action == "answer"))

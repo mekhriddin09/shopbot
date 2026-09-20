@@ -7,7 +7,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, Update
 
 from app.filters.is_admin import is_admin_telegram_id
-from app.keyboards.user_kb import channel_check_kb, oferta_accept_kb
+from app.keyboards.user_kb import channel_check_kb, oferta_accept_kb, request_contact_kb
 from app.repositories.setting_repo import SettingRepository
 from app.services.onboarding_service import user_needs_referral_confirmation
 from app.utils.i18n import t
@@ -26,21 +26,24 @@ _GATE_CALLBACK_PREFIXES = ("ogate:", "capt:")
 class OnboardingGateMiddleware(BaseMiddleware):
     """Runs the onboarding steps that apply to each non-admin user, in order.
 
-    BLOCKING steps (update never reaches its handler until satisfied), and
-    only while `onboarding_gate_enabled` is on:
-      1. Accept the oferta
-      2. Subscribe to the mandatory channel (if one is configured)
+    BLOCKING steps (update never reaches its handler until satisfied):
+      1. Accept the oferta (only while `onboarding_gate_enabled` is on)
+      2. Subscribe to the mandatory channel, if configured (same toggle)
+      3. Share a phone number — its OWN independent `phone_gate_enabled`
+         toggle, so an admin can require it even with the oferta/channel
+         gate off, and vice versa. Applies to EVERY user, not just referred
+         ones. A phone that isn't on the allowed-countries whitelist is
+         still accepted — see step 4.
 
     NON-BLOCKING step, on its own `referral_verification_enabled` toggle:
-      3. Offer phone + captcha confirmation, once, to users who arrived via
-         someone's referral link. The update proceeds to its handler either
-         way — declining or failing this only means the user doesn't count
-         toward their referrer's invite stats/Ball reward. The bot stays
-         fully usable and they can still refer others themselves.
-
-    Step 3 is scoped to referred users because an organic visitor has no
-    referrer, so demanding their phone number prevents no fraud and only
-    costs conversions.
+      4. Offer captcha confirmation to users who arrived via someone's
+         referral link (their phone is already on file from step 3, or
+         from the legacy per-user prompt if the phone gate is off). The
+         update proceeds to its handler either way — declining or failing
+         this, or having a phone number outside the allowed countries,
+         only means the user doesn't count toward their referrer's invite
+         stats/Ball reward. The bot stays fully usable and they can still
+         refer others themselves.
 
     Blocking uses the same short-circuit-with-bare-`return` pattern already
     used by `UserContextMiddleware` for banned users. Registered last in
@@ -113,7 +116,15 @@ class OnboardingGateMiddleware(BaseMiddleware):
                     await cq.answer()
                 return None
 
-        # Step 3 — referral confirmation. Deliberately NOT a block: it's
+        # Step 3 — mandatory phone number. Independent toggle, applies to
+        # every non-admin user regardless of the oferta/channel gate above.
+        if await settings_repo.get_bool("phone_gate_enabled", False) and not user.phone_number:
+            await target.answer(t(lang, "msg_phone_required"), reply_markup=request_contact_kb(lang))
+            if cq:
+                await cq.answer()
+            return None
+
+        # Step 4 — referral confirmation. Deliberately NOT a block: it's
         # offered once, up front, and then the update continues to its
         # normal handler either way. Failing or ignoring it only costs the
         # user their "counts as a referral" status — the bot itself stays

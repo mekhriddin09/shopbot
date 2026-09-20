@@ -760,7 +760,6 @@ SETTINGS_GROUPS: dict[str, dict] = {
             ("toggle", "referral_confirm_reward_enabled", "\U0001F3AF Taklif mukofoti"),
             ("edit", "referral_confirm_reward_value", "✏️ Har bir tasdiq uchun ball"),
             ("toggle", "referral_verification_enabled", "\U0001F4DE Tasdiqlash (telefon+captcha)"),
-            ("phones", None, "☎️ Ruxsat etilgan chet el raqamlari"),
         ],
     },
     "access": {
@@ -769,7 +768,10 @@ SETTINGS_GROUPS: dict[str, dict] = {
             "Yoqilsa, foydalanuvchi botdan foydalanishdan oldin oferta matniga rozilik beradi "
             "va majburiy kanalga obuna bo'ladi. Adminlar bu tekshiruvdan ozod.\n"
             "⚠️ Oferta matni bo'sh bo'lsa, tizim xavfsizlik uchun hech kimni bloklamaydi.\n"
-            "⚠️ Bot majburiy kanalda administrator bo'lishi shart."
+            "⚠️ Bot majburiy kanalda administrator bo'lishi shart.\n\n"
+            "📞 Telefon raqami — yoqilsa, HAR BIR foydalanuvchi (nafaqat referal orqali kelganlar) "
+            "botdan foydalanishdan oldin raqamini yuborishi shart. Chet el raqami ruxsat etilganlar "
+            "ro'yxatida bo'lmasa, bot bloklanmaydi — faqat referal hisoblanmaydi, deb ogohlantiriladi."
         ),
         "parent": "root",
         "items": [
@@ -777,6 +779,9 @@ SETTINGS_GROUPS: dict[str, dict] = {
             ("lang", "oferta_text", "\U0001F4C4 Oferta matni"),
             ("edit", "required_channel", "\U0001F4E2 Majburiy kanal (@username/ID)"),
             ("edit", "required_channel_url", "\U0001F517 Kanal havolasi (join link)"),
+            ("toggle", "phone_gate_enabled", "\U0001F4DE Majburiy telefon raqami"),
+            ("phones", None, "☎️ Ruxsat etilgan chet el raqamlari"),
+            ("edit", "log_channel_id", "\U0001F4CB Log kanal (@username/ID)"),
         ],
     },
     "fragment": {
@@ -884,7 +889,7 @@ def admin_phone_whitelist_kb(entries: list) -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text="\U0001F519 Orqaga",
-                callback_data=AdminSettingsCB(action="group", key="referral_points").pack(),
+                callback_data=AdminSettingsCB(action="group", key="access").pack(),
             )
         ]
     )
