@@ -47,6 +47,55 @@ router.message.filter(IsAdmin())
 
 admin_actions_logger = logging.getLogger("admin_actions")
 
+# Fields the admin fills in that are genuinely free-form text shown to
+# customers inside a message (not a button label, URL, id, or number) — for
+# these we keep whatever bold/italic/underline/strikethrough/spoiler/code/
+# link/custom-emoji formatting the admin applied using Telegram's own
+# formatting toolbar, instead of collapsing it down to plain text. See
+# `_rich_text_or_plain()` below for how that's captured.
+_RICH_PRODUCT_FIELDS = {
+    "description",
+    "description_uz", "description_ru", "description_en",
+    "delivery_instructions",
+    "delivery_instructions_uz", "delivery_instructions_ru", "delivery_instructions_en",
+    "payment_instructions",
+}
+
+
+def _is_rich_settings_key(key: str) -> bool:
+    """True for any settings key that's a per-language "lang"-kind field
+    (welcome_message_uz, oferta_text_ru, ...) — see SETTINGS_GROUPS in
+    app/keyboards/admin_kb.py. Those are always freeform customer-facing
+    text; "edit"/"masked" kind settings (URLs, card numbers, API keys,
+    connection ids, numeric timeouts) are deliberately excluded — an "&" or
+    "<" inside e.g. a URL must survive byte-for-byte, not get HTML-escaped."""
+    from app.keyboards.admin_kb import SETTINGS_GROUPS
+
+    for suffix in ("_uz", "_ru", "_en"):
+        if key.endswith(suffix):
+            base = key[: -len(suffix)]
+            for spec in SETTINGS_GROUPS.values():
+                for kind, item_key, _label in spec["items"]:
+                    if kind == "lang" and item_key == base:
+                        return True
+    return False
+
+
+def _rich_text_or_plain(message: Message, plain_text: str, *, rich: bool) -> str:
+    """Returns `plain_text` unchanged, or the same message re-rendered as
+    HTML from its actual Telegram formatting entities (bold/italic/
+    underline/strikethrough/spoiler/code/pre/links/custom emoji) when
+    `rich` is True. Every one of these fields is later sent back out with
+    `parse_mode=HTML` (see main.py), so this is the one conversion point
+    that makes "whatever formatting the admin typed" survive into "what the
+    customer actually sees" instead of arriving as flattened plain text."""
+    if not rich:
+        return plain_text
+    try:
+        return (message.html_text or plain_text).strip()
+    except Exception:  # noqa: BLE001 - a decoration bug must never block saving
+        return plain_text
+
 
 async def _reflect_delivery_on_admin_card(bot, data: dict, order) -> None:
     """Edit the *original* admin notification (the payment proof photo/
@@ -189,7 +238,9 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
             "delivery_instructions_uz", "delivery_instructions_ru", "delivery_instructions_en",
             "referral_reward_value",
         ):
-            value = None if text == "-" else text
+            value = None if text == "-" else _rich_text_or_plain(message, text, rich=field in _RICH_PRODUCT_FIELDS)
+        elif field == "description":
+            value = _rich_text_or_plain(message, text, rich=True)
         else:
             value = text
 
@@ -302,7 +353,8 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
                 message, data, "↩️ Bekor qilindi, qiymat o'zgartirilmadi.\n\n" + group_text, group_kb
             )
             return
-        await SettingRepository(session).set(key, text)
+        value = _rich_text_or_plain(message, text, rich=_is_rich_settings_key(key))
+        await SettingRepository(session).set(key, value)
         admin_actions_logger.info("setting_changed key=%s admin=%s", key, message.from_user.id)
         await state.clear()
 
@@ -435,13 +487,31 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
         audience = data.get("audience")
         product_id = data.get("product_id", 0)
         recipients = await _resolve_recipients(session, audience, product_id)
-        await state.update_data(action="broadcast_awaiting_confirm", message_text=text)
-        preview = text if len(text) <= 500 else text[:500] + "…"
-        await message.answer(
-            f"\U0001F4E2 Ushbu xabar <b>{len(recipients)}</b> ta foydalanuvchiga yuboriladi:\n\n"
-            f"{preview}\n\nTasdiqlaysizmi?",
-            reply_markup=admin_broadcast_confirm_kb(),
-        )
+        rich_text = _rich_text_or_plain(message, text, rich=True)
+        await state.update_data(action="broadcast_awaiting_confirm", message_text=rich_text)
+        # Truncating a plain string is safe; truncating `rich_text` at an
+        # arbitrary character offset can slice through an HTML tag (e.g.
+        # "...<b>Chegirma" with no closing tag) and make the preview itself
+        # fail to send. Preview shows the actual formatting only when it's
+        # short enough to go through whole; otherwise falls back to a plain
+        # truncated summary — the real, unmodified rich_text is still what
+        # gets broadcast on confirm either way.
+        preview = rich_text if len(rich_text) <= 500 else text[:500] + "…"
+        try:
+            await message.answer(
+                f"\U0001F4E2 Ushbu xabar <b>{len(recipients)}</b> ta foydalanuvchiga yuboriladi:\n\n"
+                f"{preview}\n\nTasdiqlaysizmi?",
+                reply_markup=admin_broadcast_confirm_kb(),
+            )
+        except TelegramAPIError:
+            # Malformed/unbalanced formatting in the preview itself — fall
+            # back to a plain-text preview so the admin can still confirm.
+            await message.answer(
+                f"\U0001F4E2 Ushbu xabar <b>{len(recipients)}</b> ta foydalanuvchiga yuboriladi (formatlash "
+                f"preview'da ko'rsatib bo'lmadi, lekin xabarning o'zi formatlash bilan yuboriladi):\n\n"
+                f"{text[:500]}\n\nTasdiqlaysizmi?",
+                reply_markup=admin_broadcast_confirm_kb(),
+            )
         return
 
     if action == "broadcast_awaiting_confirm":
@@ -450,9 +520,10 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
 
     if action == "manual_deliver":
         order_id = data["order_id"]
+        delivery_text = _rich_text_or_plain(message, text, rich=True)
         delivery = DeliveryService(session)
         try:
-            order = await delivery.deliver_manual_message(order_id, message.from_user.id, text)
+            order = await delivery.deliver_manual_message(order_id, message.from_user.id, delivery_text)
         except InvalidOrderStateError as exc:
             await message.answer(str(exc))
             await state.clear()
@@ -461,7 +532,7 @@ async def handle_text_input(message: Message, session: AsyncSession, state: FSMC
         lang = order.user.language
         await message.bot.send_message(
             order.user.telegram_id,
-            build_delivered_message(lang, order, text),
+            build_delivered_message(lang, order, delivery_text),
             reply_markup=buy_again_kb(lang, order.product_id),
         )
         from app.services.referral_service import ReferralService  # local import avoids a cycle
