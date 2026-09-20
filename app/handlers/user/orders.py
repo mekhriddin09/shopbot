@@ -9,6 +9,7 @@ from app.database.models import Order, User
 from app.keyboards.callback_data import MyOrdersPageCB
 from app.keyboards.user_kb import my_orders_page_kb
 from app.repositories.order_repo import OrderRepository
+from app.utils.button_filters import menu_button_filter
 from app.utils.formatting import fmt_datetime, fmt_price, product_name
 from app.utils.i18n import t
 
@@ -39,7 +40,7 @@ def _page_text(lang: str, orders: list[Order], page: int, total_pages: int) -> s
     return body
 
 
-@router.message(F.text.in_({t(l, "btn_my_orders") for l in ("uz", "ru", "en")}))
+@router.message(menu_button_filter("menu_my_orders"))
 async def my_orders(message: Message, session: AsyncSession, user: User, lang: str) -> None:
     orders = await OrderRepository(session).list_by_user(user.id, limit=200)
     if not orders:

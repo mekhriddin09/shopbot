@@ -20,6 +20,7 @@ from app.middlewares.error_handling import ErrorHandlingMiddleware
 from app.middlewares.onboarding_gate import OnboardingGateMiddleware
 from app.middlewares.throttling import ThrottlingMiddleware
 from app.middlewares.user_context import UserContextMiddleware
+from app.services.button_service import refresh_button_cache
 from app.services.card_payment.sweeper import card_expiry_loop
 from app.services.crypto_poller import crypto_poller_loop
 from app.utils.logging_config import setup_logging
@@ -32,6 +33,11 @@ async def main() -> None:
     logger.info("Starting Telegram Digital Product Sales Bot...")
 
     await bootstrap_database()
+    # Loads any admin-set Button Manager overrides (text/style/emoji/
+    # enabled) into the in-process cache that resolve_button() reads
+    # synchronously from every keyboard build. Missing/empty table just
+    # means "no overrides yet" — see button_service.refresh_button_cache.
+    await refresh_button_cache()
 
     bot = Bot(
         token=settings.BOT_TOKEN,

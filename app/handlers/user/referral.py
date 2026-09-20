@@ -21,6 +21,7 @@ from app.services.notify import notify_admins_referral_redemption
 from app.services.onboarding_service import user_needs_referral_confirmation
 from app.services.referral_service import ReferralService
 from app.states.user_states import ReferralRewardStates
+from app.utils.button_filters import menu_button_filter
 from app.utils.formatting import fmt_price
 from app.utils.i18n import t
 
@@ -70,7 +71,7 @@ async def _build_referral_profile(session: AsyncSession, user: User, lang: str, 
     return text, kb
 
 
-@router.message(F.text.in_({t(l, "btn_referral") for l in ("uz", "ru", "en")}))
+@router.message(menu_button_filter("menu_referral"))
 async def referral_menu(message: Message, session: AsyncSession, user: User, lang: str) -> None:
     if not await SettingRepository(session).get_bool("referral_enabled", False):
         await message.answer(t(lang, "msg_referral_disabled"))

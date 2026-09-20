@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from aiogram import F, Router
+from aiogram import Router
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,12 +9,13 @@ from app.filters.is_admin import is_admin_telegram_id
 from app.keyboards.callback_data import LangCB
 from app.keyboards.user_kb import language_kb, main_menu_kb
 from app.repositories.user_repo import UserRepository
+from app.utils.button_filters import menu_button_filter
 from app.utils.i18n import available_languages, t
 
 router = Router(name="user_language")
 
 
-@router.message(F.text.in_({t(l, "btn_language") for l in ("uz", "ru", "en")}))
+@router.message(menu_button_filter("menu_language"))
 async def choose_language(message: Message, lang: str) -> None:
     await message.answer(t(lang, "msg_choose_language"), reply_markup=language_kb())
 

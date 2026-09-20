@@ -24,6 +24,7 @@ from app.keyboards.callback_data import (
     StarsCB,
     StockNotifyCB,
 )
+from app.keyboards.button_helpers import inline_btn, reply_btn
 from app.utils.formatting import fmt_price
 from app.utils.i18n import t
 
@@ -39,10 +40,17 @@ def main_menu_kb(lang: str, is_admin: bool = False) -> ReplyKeyboardMarkup:
     # button was the original design and it didn't work: users simply
     # ignored it (the shop kept working without it), so almost nobody ever
     # confirmed and referrer stats stayed empty.
+    def row(*keys: str) -> list[KeyboardButton]:
+        return [btn for btn in (reply_btn(k, lang) for k in keys) if btn is not None]
+
     rows = [
-        [KeyboardButton(text=t(lang, "btn_shop")), KeyboardButton(text=t(lang, "btn_my_orders"))],
-        [KeyboardButton(text=t(lang, "btn_reviews")), KeyboardButton(text=t(lang, "btn_support"))],
-        [KeyboardButton(text=t(lang, "btn_referral")), KeyboardButton(text=t(lang, "btn_language"))],
+        r
+        for r in (
+            row("menu_shop", "menu_my_orders"),
+            row("menu_reviews", "menu_support"),
+            row("menu_referral", "menu_language"),
+        )
+        if r
     ]
     if is_admin:
         # Only ever shown to telegram IDs that pass IsAdmin — regular users
@@ -235,47 +243,36 @@ def product_detail_kb(
             # Automatic card verification: the customer transfers a unique
             # amount and the bot recognises it from the bank alert. Listed
             # first because it's the fastest path for the customer.
-            rows.append(
-                [
-                    InlineKeyboardButton(
-                        text=t(lang, "btn_pay_card_auto"),
-                        callback_data=(
-                            CardAutoCB(action="buy", product_id=product_id, qty=fixed_qty).pack()
-                            if fixed_qty
-                            else QtyCB(action="show", product_id=product_id, flow="cardauto").pack()
-                            if max_order_qty > 1
-                            else CardAutoCB(action="buy", product_id=product_id).pack()
-                        ),
-                    )
-                ]
+            btn = inline_btn(
+                "pay_card_auto",
+                lang,
+                callback_data=(
+                    CardAutoCB(action="buy", product_id=product_id, qty=fixed_qty).pack()
+                    if fixed_qty
+                    else QtyCB(action="show", product_id=product_id, flow="cardauto").pack()
+                    if max_order_qty > 1
+                    else CardAutoCB(action="buy", product_id=product_id).pack()
+                ),
             )
-        buy_label = t(lang, "btn_pay_card") if (show_crypto or show_stars) else t(lang, "btn_buy")
+            if btn:
+                rows.append([btn])
+        buy_key = "pay_card" if (show_crypto or show_stars) else "buy"
         if not show_card_manual:
             # Receipt-based payment switched off for this product: the whole
             # point of such a product is that nobody looks at screenshots.
             pass
         elif fixed_qty:
-            rows.append(
-                [
-                    InlineKeyboardButton(
-                        text=buy_label,
-                        callback_data=ShopCB(action="buy", product_id=product_id, qty=fixed_qty).pack(),
-                    )
-                ]
-            )
+            btn = inline_btn(buy_key, lang, callback_data=ShopCB(action="buy", product_id=product_id, qty=fixed_qty).pack())
+            if btn:
+                rows.append([btn])
         elif max_order_qty > 1:
-            rows.append(
-                [
-                    InlineKeyboardButton(
-                        text=buy_label,
-                        callback_data=QtyCB(action="show", product_id=product_id, flow="card").pack(),
-                    )
-                ]
-            )
+            btn = inline_btn(buy_key, lang, callback_data=QtyCB(action="show", product_id=product_id, flow="card").pack())
+            if btn:
+                rows.append([btn])
         else:
-            rows.append(
-                [InlineKeyboardButton(text=buy_label, callback_data=ShopCB(action="buy", product_id=product_id).pack())]
-            )
+            btn = inline_btn(buy_key, lang, callback_data=ShopCB(action="buy", product_id=product_id).pack())
+            if btn:
+                rows.append([btn])
         if show_crypto:
             # One button per configured crypto provider (CryptoBot / xRocket) —
             # both can be active at once, the customer just picks whichever
@@ -307,23 +304,11 @@ def product_detail_kb(
             # Telegram's own native Stars payment — no external provider, so
             # just one button (unlike crypto, which can have several).
             if max_order_qty > 1:
-                rows.append(
-                    [
-                        InlineKeyboardButton(
-                            text=t(lang, "btn_buy_stars"),
-                            callback_data=QtyCB(action="show", product_id=product_id, flow="stars").pack(),
-                        )
-                    ]
-                )
+                btn = inline_btn("buy_stars", lang, callback_data=QtyCB(action="show", product_id=product_id, flow="stars").pack())
             else:
-                rows.append(
-                    [
-                        InlineKeyboardButton(
-                            text=t(lang, "btn_buy_stars"),
-                            callback_data=StarsCB(action="buy", product_id=product_id).pack(),
-                        )
-                    ]
-                )
+                btn = inline_btn("buy_stars", lang, callback_data=StarsCB(action="buy", product_id=product_id).pack())
+            if btn:
+                rows.append([btn])
     elif show_preorder_button:
         rows.append(
             [
@@ -363,9 +348,9 @@ def product_detail_kb(
                 )
             ]
         )
-    rows.append(
-        [InlineKeyboardButton(text=t(lang, "btn_back"), callback_data=ShopCB(action="back_to_list").pack())]
-    )
+    back_btn = inline_btn("back", lang, callback_data=ShopCB(action="back_to_list").pack())
+    if back_btn:
+        rows.append([back_btn])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -387,10 +372,12 @@ def qty_picker_kb(
         rows.append(
             [InlineKeyboardButton(text=str(v), callback_data=cb("set", v)) for v in quick_values]
         )
-    rows.append([InlineKeyboardButton(text=t(lang, "btn_confirm"), callback_data=cb("confirm"))])
-    rows.append(
-        [InlineKeyboardButton(text=t(lang, "btn_back"), callback_data=ShopCB(action="open", product_id=product_id).pack())]
-    )
+    confirm_btn = inline_btn("confirm", lang, callback_data=cb("confirm"))
+    if confirm_btn:
+        rows.append([confirm_btn])
+    back_btn = inline_btn("back", lang, callback_data=ShopCB(action="open", product_id=product_id).pack())
+    if back_btn:
+        rows.append([back_btn])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -538,23 +525,24 @@ def referral_reward_skip_note_kb(lang: str, reward_id: int) -> InlineKeyboardMar
 
 
 def payment_kb(lang: str, product_id: int, qty: int = 1, preorder: bool = False) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=t(lang, "btn_paid"),
-                    callback_data=ShopCB(action="paid", product_id=product_id, qty=qty, preorder=preorder).pack(),
-                )
-            ],
-            [InlineKeyboardButton(text=t(lang, "btn_back"), callback_data=ShopCB(action="open", product_id=product_id).pack())],
-        ]
+    rows = []
+    paid_btn = inline_btn(
+        "paid", lang, callback_data=ShopCB(action="paid", product_id=product_id, qty=qty, preorder=preorder).pack()
     )
+    if paid_btn:
+        rows.append([paid_btn])
+    back_btn = inline_btn("back", lang, callback_data=ShopCB(action="open", product_id=product_id).pack())
+    if back_btn:
+        rows.append([back_btn])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def cancel_kb(lang: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text=t(lang, "btn_cancel"), callback_data=ShopCB(action="back_to_list").pack())]]
-    )
+    rows = []
+    cancel_button = inline_btn("cancel", lang, callback_data=ShopCB(action="back_to_list").pack())
+    if cancel_button:
+        rows.append([cancel_button])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def buy_again_kb(lang: str, product_id: int) -> InlineKeyboardMarkup:
@@ -566,15 +554,14 @@ def buy_again_kb(lang: str, product_id: int) -> InlineKeyboardMarkup:
     amount prompt, if the product needs one) — a repeat purchase in one tap
     instead of Shop -> find the product again.
     """
+    rows = []
+    again_btn = inline_btn(
+        "buy_again", lang, callback_data=ShopCB(action="open", product_id=product_id, fresh=True).pack()
+    )
+    if again_btn:
+        rows.append([again_btn])
     return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=t(lang, "btn_buy_again"),
-                    callback_data=ShopCB(action="open", product_id=product_id, fresh=True).pack(),
-                )
-            ]
-        ]
+        inline_keyboard=rows
     )
 
 

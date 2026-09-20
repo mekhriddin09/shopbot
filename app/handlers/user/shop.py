@@ -40,6 +40,7 @@ from app.services.order_service import OrderService
 from app.services.product_service import ProductService
 from app.states.user_states import PurchaseStates
 from app.utils import shopscreen
+from app.utils.button_filters import menu_button_filter
 from app.utils.formatting import build_delivered_message, fmt_price, product_description, product_name
 from app.utils.i18n import t
 
@@ -65,7 +66,7 @@ def _product_card_text(lang: str, product, stock: int) -> str:
     )
 
 
-@router.message(F.text.in_({t(l, "btn_shop") for l in ("uz", "ru", "en")}))
+@router.message(menu_button_filter("menu_shop"))
 async def open_shop(
     message: Message, session: AsyncSession, lang: str, state: FSMContext
 ) -> None:
