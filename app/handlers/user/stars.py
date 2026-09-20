@@ -223,6 +223,15 @@ async def successful_payment(message: Message, session: AsyncSession, lang: str)
             reply_markup=buy_again_kb(lang, order.product_id),
         )
         await ReferralService(session).credit_for_delivered_order(order, message.bot)
+        # This is a push-based, fully automatic payment — no admin ever saw
+        # a "new order" notification for it (unlike card/manual proof, or
+        # the balance-payment approval flow), so without this the admin
+        # would have no idea a Stars sale happened at all.
+        from app.services.notify import notify_admins_order_delivered
+
+        fresh_order = await orders.get_by_id(order.id)
+        if fresh_order is not None:
+            await notify_admins_order_delivered(message.bot, session, fresh_order)
     elif result.needs_manual_message:
         await message.answer(t(lang, "msg_crypto_confirmed_manual_pending"))
         from app.services.crypto_poller import _notify_admins_with_manual_button

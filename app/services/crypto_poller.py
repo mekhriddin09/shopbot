@@ -108,6 +108,14 @@ async def _poll_once(bot: Bot) -> None:
                     reply_markup=buy_again_kb(lang, order.product_id),
                 )
                 await ReferralService(session).credit_for_delivered_order(order, bot)
+                # Same gap as Stars: crypto is fully automatic and push/poll
+                # based, so without this an admin never sees any
+                # notification at all for a successful crypto sale.
+                from app.services.notify import notify_admins_order_delivered
+
+                fresh_order = await orders_repo.get_by_id(order.id)
+                if fresh_order is not None:
+                    await notify_admins_order_delivered(bot, session, fresh_order)
             elif result.needs_manual_message:
                 # Crypto payment confirmed, but this product is delivered
                 # manually — give admins a one-tap way to write the message.

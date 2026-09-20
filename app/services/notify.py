@@ -31,12 +31,19 @@ async def _all_admin_ids(session: AsyncSession) -> set[int]:
 
 def _parse_chat_target(raw: str) -> int | str:
     """A log-channel ID as the admin typed it: numeric ("-1001234567890")
-    or an @username. `send_message`/`send_photo` accept both directly, but
-    only the numeric form should be coerced to `int` — an @username must
-    stay a string."""
+    or a @username. `send_message`/`send_photo` accept both directly, but
+    only the numeric form should be coerced to `int` — a username must
+    stay a string, and Telegram requires it prefixed with "@" or the send
+    fails outright (a bare "mychannel" is NOT accepted). Admins very
+    commonly paste/type a channel's username without the leading "@" —
+    unlike the numeric channel id case, there's no ambiguity in adding it
+    back, so this is done defensively rather than silently failing every
+    send to that channel."""
     raw = raw.strip()
     stripped = raw[1:] if raw.startswith("-") else raw
-    return int(raw) if stripped.isdigit() else raw
+    if stripped.isdigit():
+        return int(raw)
+    return raw if raw.startswith("@") else f"@{raw}"
 
 
 async def _log_channel_target(session: AsyncSession) -> int | str | None:
@@ -256,3 +263,65 @@ async def notify_admins_referral_redemption(
             await bot.send_message(admin_id, text, reply_markup=kb)
         except TelegramAPIError:
             logger.warning("Failed to notify admin %s about referral redemption %s", admin_id, redemption.id)
+
+
+async def notify_admins_balance_order(bot: Bot, session: AsyncSession, order: Order, user: User) -> None:
+    """A purchase paid from the customer's own referral cash balance still
+    waits for an admin's approve/reject tap, exactly like a manual card
+    payment — the balance itself was earned through the referral program,
+    so it gets the same human check rather than auto-delivering. Uses the
+    same approve/reject buttons (OrderCB) as every other pending order, so
+    tapping them runs through the normal admin/orders.py approval flow
+    unchanged; a reject additionally refunds the balance (see
+    DeliveryService.reject_order)."""
+    currency_repo_value = order.currency
+    text = (
+        f"\U0001F4B0 <b>Referal balansidan to'lov</b>\n\n"
+        f"\U0001F464 {user.full_name or '-'} (@{user.username or '-'})\n"
+        f"\U0001F194 Telegram ID: <code>{user.telegram_id}</code>\n"
+        f"\U0001F4E6 Mahsulot: {html_escape(order.product.name)}\n"
+        f"\U0001F4B5 Summa (balansdan yechildi): {fmt_price(float(order.price_at_purchase))} {currency_repo_value}\n"
+        f"\U0001F196 Buyurtma: <code>{order.order_uuid}</code>\n\n"
+        f"Tasdiqlansa — yetkaziladi. Rad etilsa — summa mijozning balansiga qaytariladi."
+    )
+    kb = admin_order_action_kb(order.id)
+    # Needs action from an admin — always every admin, never the log channel.
+    for admin_id in await _all_admin_ids(session):
+        try:
+            await bot.send_message(admin_id, text, reply_markup=kb)
+        except TelegramAPIError:
+            logger.warning("Failed to notify admin %s about balance order %s", admin_id, order.order_uuid)
+
+
+async def notify_admins_order_delivered(bot: Bot, session: AsyncSession, order: Order) -> None:
+    """Fired once an order that never needed admin approval (Telegram
+    Stars, crypto, card_auto) finishes auto-delivering. There's nothing to
+    approve here — it's a plain confirmation — but every admin should still
+    see it: previously Stars/crypto payments that auto-delivered
+    successfully produced NO admin-facing message at all (only a failure
+    or a needs-manual-message notified anyone), which from the admin's
+    side looked exactly like nothing had happened. Sent to every admin
+    always, plus a copy to the log channel (order history) if one is
+    configured — same dual-send shape as notify_admins_new_order."""
+    text = (
+        f"✅ <b>Buyurtma avtomatik yetkazildi</b>\n\n"
+        f"\U0001F464 {order.user.full_name or '-'} (@{order.user.username or '-'})\n"
+        f"\U0001F194 Telegram ID: <code>{order.user.telegram_id}</code>\n"
+        f"\U0001F4E6 Mahsulot: {html_escape(order.product.name)}\n"
+        f"\U0001F4B0 Narxi: {fmt_price(float(order.price_at_purchase))} {order.currency}\n"
+        f"\U0001F4B3 To'lov usuli: {order.payment_method.value}\n"
+        f"\U0001F551 Vaqti: {fmt_datetime(order.created_at)}\n"
+        f"\U0001F196 Buyurtma: <code>{order.order_uuid}</code>"
+    )
+    for admin_id in await _all_admin_ids(session):
+        try:
+            await bot.send_message(admin_id, text)
+        except TelegramAPIError:
+            logger.warning("Failed to notify admin %s about delivered order %s", admin_id, order.order_uuid)
+
+    log_target = await _log_channel_target(session)
+    if log_target is not None:
+        try:
+            await bot.send_message(log_target, text)
+        except TelegramAPIError:
+            logger.warning("Failed to log delivered order %s to log channel", order.order_uuid)

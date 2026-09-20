@@ -94,6 +94,7 @@
   "msg_balance_disabled": "❌ Paying with referral balance is currently disabled.",
   "msg_balance_payment_confirmed_alert": "✅ Paid from balance",
   "msg_balance_confirmed_manual_pending": "✅ Payment accepted! Your item will be sent by the admin shortly.",
+  "msg_balance_confirmed_awaiting_admin": "✅ Payment was deducted from your balance. Your order is awaiting admin approval — it'll be reviewed shortly.",
   "msg_balance_cancelled": "🛑 Cancelled.",
   "msg_support_type_here": "✍️ Type your question here — the admin will reply. To exit, choose another section from the menu.",
   "msg_support_sent": "✅ Your message has been sent. The admin will reply shortly.",

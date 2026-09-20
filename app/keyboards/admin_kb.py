@@ -788,6 +788,7 @@ SETTINGS_GROUPS: dict[str, dict] = {
             ("toggle", "phone_gate_enabled", "\U0001F4DE Majburiy telefon raqami"),
             ("phones", None, "☎️ Ruxsat etilgan chet el raqamlari"),
             ("edit", "log_channel_id", "\U0001F4CB Log kanal — buyurtmalar tarixi (@username/ID)"),
+            ("test_log_channel", None, "\U0001F50C Log kanalni tekshirish"),
         ],
     },
     "fragment": {
@@ -864,6 +865,8 @@ def admin_settings_menu_kb(group: str = "root") -> InlineKeyboardMarkup:
             cb = AdminSettingsCB(action="test_reseller", group=group).pack()
         elif kind == "test_shamekh":
             cb = AdminSettingsCB(action="test_shamekh", group=group).pack()
+        elif kind == "test_log_channel":
+            cb = AdminSettingsCB(action="test_log_channel", group=group).pack()
         elif kind == "referral_shop":
             cb = AdminSettingsCB(action="referral_shop", group=group).pack()
         elif kind == "button_manager":

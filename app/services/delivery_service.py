@@ -19,11 +19,12 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Order
-from app.database.models.enums import DeliveryMode, OrderStatus
+from app.database.models.enums import DeliveryMode, OrderStatus, PaymentMethod
 from app.repositories.inventory_repo import InventoryRepository
 from app.repositories.order_repo import OrderRepository
 from app.repositories.provider_log_repo import ProviderLogRepository
 from app.repositories.setting_repo import SettingRepository
+from app.repositories.user_repo import UserRepository
 from app.services.exceptions import DeliveryFailedError, InvalidOrderStateError
 from app.services.providers.registry import get_provider
 from app.utils.locks import lock_for
@@ -283,5 +284,23 @@ class DeliveryService:
             # time — no-op if this order's product isn't INVENTORY mode or
             # nothing was reserved.
             await self.inventory.release_reservation(order.id)
+
+            # A referral-balance order already had the price deducted from
+            # the customer's balance at purchase time (unlike card/crypto,
+            # where money only ever reaches the shop after admin approval,
+            # or never passes through the bot at all) — so rejecting it
+            # must give that money back, or the customer is charged for
+            # nothing.
+            if order.payment_method == PaymentMethod.BALANCE:
+                buyer = await UserRepository(self.session).get_by_id(order.user_id)
+                if buyer is not None:
+                    await UserRepository(self.session).adjust_referral_balance(
+                        buyer, float(order.price_at_purchase)
+                    )
+                    order_logger.info(
+                        "order_rejected_balance_refunded id=%s user=%s amount=%s",
+                        order.order_uuid, order.user_id, order.price_at_purchase,
+                    )
+
             order_logger.info("order_rejected id=%s admin=%s reason=%s", order.order_uuid, admin_id, reason)
             return order

@@ -352,6 +352,41 @@ async def settings_test_shamekh(callback: CallbackQuery, session: AsyncSession) 
         )
 
 
+@router.callback_query(AdminSettingsCB.filter(F.action == "test_log_channel"))
+async def settings_test_log_channel(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Sends one real test message to the configured log channel right now
+    and shows exactly what Telegram said — "chat not found" (wrong id/
+    username), "bot is not a member" (bot never added), "not enough
+    rights" (added but not as admin/no post permission), or success. The
+    log channel silently doing nothing gives an admin no way to tell which
+    of those it is without this."""
+    from aiogram.exceptions import TelegramAPIError
+
+    from app.services.notify import _log_channel_target
+
+    raw = (await SettingRepository(session).get("log_channel_id", "")).strip()
+    if not raw:
+        await callback.answer("Avval log kanal ID/username kiriting.", show_alert=True)
+        return
+
+    await callback.answer("Tekshirilmoqda…")
+    target = await _log_channel_target(session)
+    try:
+        await callback.bot.send_message(
+            target, f"\U0001F50C Test xabari — log kanal to'g'ri sozlangan.\n\n<code>{html_escape(raw)}</code>"
+        )
+    except TelegramAPIError as exc:
+        await show(
+            callback,
+            f"❌ Log kanalga yuborib bo'lmadi:\n<code>{html_escape(str(exc))}</code>\n\n"
+            f"Tekshiring: (1) bot shu kanalga QO'SHILGANMI, (2) bot ADMIN qilinganmi "
+            f"(xabar yuborish huquqi bilan), (3) ID/username to'g'ri kiritilganmi "
+            f"(masalan <code>@kanal_username</code> yoki <code>-100...</code> raqamli ID).",
+        )
+        return
+    await show(callback, "✅ Test xabari log kanalga muvaffaqiyatli yuborildi.")
+
+
 @router.callback_query(AdminSettingsCB.filter(F.action == "button_manager_root"))
 async def settings_open_button_manager(callback: CallbackQuery, session: AsyncSession) -> None:
     """Entry point into the Button Manager (see app/handlers/admin/buttons.py)

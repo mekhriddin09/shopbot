@@ -94,6 +94,7 @@
   "msg_balance_disabled": "❌ Referal balansidan to'lash hozircha o'chirilgan.",
   "msg_balance_payment_confirmed_alert": "✅ Balansdan to'landi",
   "msg_balance_confirmed_manual_pending": "✅ To'lov qabul qilindi! Mahsulotingiz admin tomonidan tez orada yuboriladi.",
+  "msg_balance_confirmed_awaiting_admin": "✅ To'lov balansingizdan yechildi. Buyurtmangiz admin tasdiqlashini kutmoqda — tez orada ko'rib chiqiladi.",
   "msg_balance_cancelled": "🛑 Bekor qilindi.",
   "msg_support_type_here": "✍️ Savolingizni shu yerga yozing — admin javob beradi. Chiqish uchun menyudan boshqa bo'limni tanlang.",
   "msg_support_sent": "✅ Xabaringiz yuborildi. Admin tez orada javob beradi.",

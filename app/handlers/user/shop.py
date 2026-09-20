@@ -827,13 +827,20 @@ async def balance_confirm(
                 return
 
         await UserRepository(session).adjust_referral_balance(fresh_user, -price)
+        # Unlike other instant-confirmed methods, a referral-balance
+        # purchase still waits for an admin to approve it before anything
+        # is delivered — per the admin's explicit request, since the
+        # balance itself was earned through the referral program and
+        # deserves the same human check as a manual card payment. See
+        # DeliveryService.reject_order for the matching balance refund if
+        # the admin rejects it.
         order = await OrderRepository(session).create(
             user_id=user.id,
             product_id=product.id,
             price=price,
             currency=product.currency,
             payment_method=PaymentMethod.BALANCE,
-            status=OrderStatus.APPROVED,
+            status=OrderStatus.PENDING_APPROVAL,
             quantity=qty,
         )
         from app.handlers.user.recipient import attach_recipient  # local import avoids a cycle
@@ -852,28 +859,10 @@ async def balance_confirm(
                 await callback.answer(t(lang, "msg_out_of_stock"), show_alert=True)
                 return
 
-    from app.services.delivery_service import DeliveryService
+    full_order = await OrderRepository(session).get_by_id(order.id)
+    from app.services.notify import notify_admins_balance_order
 
-    delivery = DeliveryService(session)
-    try:
-        result = await delivery.deliver_new_order(order.id)
-    except (InvalidOrderStateError, DeliveryFailedError) as exc:
-        await callback.answer(exc.localized(lang), show_alert=True)
-        return
+    await notify_admins_balance_order(callback.bot, session, full_order, user)
 
-    if result.delivered_now and result.payload:
-        await callback.message.answer(
-            build_delivered_message(lang, order, result.payload),
-            reply_markup=buy_again_kb(lang, order.product_id),
-        )
-        from app.services.referral_service import ReferralService
-
-        await ReferralService(session).credit_for_delivered_order(order, callback.bot)
-    elif result.needs_manual_message:
-        from app.services.crypto_poller import _notify_admins_with_manual_button
-
-        await callback.message.answer(t(lang, "msg_balance_confirmed_manual_pending"))
-        await _notify_admins_with_manual_button(
-            callback.bot, session, order.id, order.order_uuid, order.product.name
-        )
+    await callback.message.answer(t(lang, "msg_balance_confirmed_awaiting_admin"))
     await callback.answer(t(lang, "msg_balance_payment_confirmed_alert"))
