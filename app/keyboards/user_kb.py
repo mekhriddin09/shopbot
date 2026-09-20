@@ -8,6 +8,7 @@ from aiogram.types import (
 from app.database.models import Product
 from app.keyboards.base_buttons import InlineKeyboardButton, KeyboardButton
 from app.keyboards.callback_data import (
+    BalanceCB,
     CaptchaCB,
     CardAutoCB,
     RecipientCB,
@@ -240,6 +241,7 @@ def product_detail_kb(
     show_card_auto: bool = False,
     fixed_qty: int | None = None,
     show_card_manual: bool = True,
+    show_balance: bool = False,
 ) -> InlineKeyboardMarkup:
     """`fixed_qty` skips the quantity picker and bakes the amount into every
     payment button — used by custom-amount products (e.g. "I want 137
@@ -315,6 +317,19 @@ def product_detail_kb(
                 btn = inline_btn("buy_stars", lang, callback_data=QtyCB(action="show", product_id=product_id, flow="stars").pack())
             else:
                 btn = inline_btn("buy_stars", lang, callback_data=StarsCB(action="buy", product_id=product_id).pack())
+            if btn:
+                rows.append([btn])
+        if show_balance:
+            # Only offered when the customer's referral balance already
+            # covers the full price (checked by the caller before setting
+            # `show_balance=True` — see app.handlers.user.shop). No qty
+            # picker: this reuses `fixed_qty` when one applies (a
+            # custom-amount product), otherwise a flat qty of 1, keeping
+            # the "does my balance cover it" check simple and exact.
+            btn = inline_btn(
+                "pay_balance", lang,
+                callback_data=BalanceCB(action="buy", product_id=product_id, qty=fixed_qty or 1).pack(),
+            )
             if btn:
                 rows.append([btn])
     elif show_preorder_button:

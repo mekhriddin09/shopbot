@@ -82,6 +82,7 @@ BUTTON_REGISTRY: dict[str, ButtonDef] = {
     "pay_card": ButtonDef("pay_card", ButtonType.POSITIVE, "btn_pay_card", "💳", "product", "Karta orqali"),
     "pay_card_auto": ButtonDef("pay_card_auto", ButtonType.POSITIVE, "btn_pay_card_auto", "⚡️", "product", "Karta (avtomatik)"),
     "buy_stars": ButtonDef("buy_stars", ButtonType.POSITIVE, "btn_buy_stars", "⭐", "product", "Stars orqali"),
+    "pay_balance": ButtonDef("pay_balance", ButtonType.POSITIVE, "btn_pay_balance", "💰", "product", "Referal balansidan"),
     "paid": ButtonDef("paid", ButtonType.POSITIVE, "btn_paid", "✅", "product", "To'ladim"),
     "confirm": ButtonDef("confirm", ButtonType.POSITIVE, "btn_confirm", "✅", "product", "Tasdiqlash"),
     "cancel": ButtonDef("cancel", ButtonType.NEGATIVE, "btn_cancel", "❌", "product", "Bekor qilish"),

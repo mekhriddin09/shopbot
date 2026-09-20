@@ -103,6 +103,25 @@ class DeliveryService:
             )
             return await self._run_delivery(order)
 
+    async def deliver_new_order(self, order_id: int) -> ApprovalResult:
+        """For payment methods that are confirmed synchronously in the same
+        handler call that created the order (currently: paying with the
+        customer's own referral balance — see
+        app.handlers.user.shop.balance_buy) — there is no external
+        "awaiting X payment" window to wait out, so the order is created
+        already `APPROVED` and this goes straight to delivery. Still takes
+        the same per-order lock as every other entry point here, purely so
+        a double-tap on the confirmation button can't run delivery twice."""
+        async with lock_for(f"order:{order_id}"):
+            order = await self.orders.get_by_id(order_id)
+            if order is None:
+                raise InvalidOrderStateError("msg_order_not_found")
+            if order.status != OrderStatus.APPROVED:
+                raise InvalidOrderStateError(
+                    "msg_order_already_reviewed", status=order.status.value
+                )
+            return await self._run_delivery(order)
+
     async def retry_delivery(self, order_id: int) -> ApprovalResult:
         """Re-attempt automatic delivery for an order that already failed.
 

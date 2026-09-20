@@ -33,6 +33,7 @@ class PaymentMethod(str, enum.Enum):
     CARD_AUTO = "card_auto"  # card transfer of a unique amount, auto-verified from CardXabar alerts
     CRYPTO = "crypto"        # CryptoBot / xRocket invoice, auto-confirmed
     STARS = "stars"          # Telegram Stars (native Telegram payments), auto-confirmed
+    BALANCE = "balance"      # paid from the customer's own referral cash balance, auto-confirmed
 
 
 class CardTransactionStatus(str, enum.Enum):

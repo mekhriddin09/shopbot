@@ -11,9 +11,9 @@ from aiogram.types import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Product, User
-from app.database.models.enums import OrderStatus, PaymentMethod
+from app.database.models.enums import DeliveryMode, OrderStatus, PaymentMethod
 from app.keyboards.base_buttons import InlineKeyboardButton
-from app.keyboards.callback_data import CryptoCB, QtyCB, RecipientCB, ShopCB, StockNotifyCB
+from app.keyboards.callback_data import BalanceCB, CryptoCB, QtyCB, RecipientCB, ShopCB, StockNotifyCB
 from app.keyboards.user_kb import (
     buy_again_kb,
     cancel_kb,
@@ -29,8 +29,10 @@ from app.repositories.order_repo import OrderRepository
 from app.repositories.product_repo import ProductRepository
 from app.repositories.setting_repo import SettingRepository
 from app.repositories.stock_waiter_repo import StockWaiterRepository
+from app.repositories.user_repo import UserRepository
 from app.services.crypto.registry import available_crypto_providers, get_crypto_provider
 from app.services.exceptions import (
+    DeliveryFailedError,
     InvalidOrderStateError,
     OutOfStockError,
     ProductUnavailableError,
@@ -49,6 +51,7 @@ from app.utils.formatting import (
     product_name,
 )
 from app.utils.i18n import t
+from app.utils.locks import lock_for
 
 router = Router(name="user_shop")
 
@@ -126,6 +129,7 @@ async def build_product_card(
     session: AsyncSession,
     product_id: int,
     lang: str,
+    user: User,
     recipient: str | None = None,
     stars_amount: int | None = None,
     recipient_name: str | None = None,
@@ -209,6 +213,20 @@ async def build_product_card(
         text += "\n\n" + t(lang, "msg_recipient_choose")
         return text, recipient_choice_kb(lang, view.product.id), view.product.image_file_id
 
+    # Referral-balance payment: only offered when the balance already
+    # covers the FULL price (no partial/combined payment — see
+    # BalanceCB/balance_buy) so the check has to use the exact quantity
+    # that button will actually charge: the custom-Stars amount when this
+    # is a custom-amount product, otherwise a flat 1 (this payment method
+    # doesn't offer a qty picker, see product_detail_kb).
+    balance_enabled = await settings_repo.get_bool("referral_balance_payment_enabled", False)
+    balance_qty = stars_amount if custom else 1
+    show_balance = (
+        balance_enabled
+        and view.in_stock
+        and float(user.referral_balance) >= float(view.product.price) * balance_qty
+    )
+
     kb = product_detail_kb(
         lang,
         view.product.id,
@@ -216,6 +234,7 @@ async def build_product_card(
         show_crypto=show_crypto,
         crypto_providers=crypto_providers,
         show_stars=show_stars,
+        show_balance=show_balance,
         max_order_qty=view.product.max_order_qty,
         show_notify_button=show_notify,
         show_preorder_button=preorder_enabled,
@@ -251,6 +270,7 @@ async def render_product_card(
     session: AsyncSession,
     product_id: int,
     lang: str,
+    user: User,
     recipient: str | None = None,
     stars_amount: int | None = None,
     recipient_name: str | None = None,
@@ -258,7 +278,7 @@ async def render_product_card(
 ) -> None:
     """Draw the product card on the customer's single shop screen."""
     built = await build_product_card(
-        session, product_id, lang, recipient, stars_amount, recipient_name
+        session, product_id, lang, user, recipient, stars_amount, recipient_name
     )
     if built is None:
         await target.answer(t(lang, "msg_product_not_found"))
@@ -280,6 +300,7 @@ async def open_product(
     callback: CallbackQuery,
     callback_data: ShopCB,
     session: AsyncSession,
+    user: User,
     lang: str,
     state: FSMContext,
 ) -> None:
@@ -301,6 +322,7 @@ async def open_product(
         session,
         callback_data.product_id,
         lang,
+        user,
         await get_chosen_recipient(state),
         await get_chosen_stars_amount(state, callback_data.product_id),
         await get_recipient_name(state),
@@ -696,3 +718,162 @@ async def crypto_check(callback: CallbackQuery, callback_data: CryptoCB, session
             callback.bot, session, order.id, order.order_uuid, order.product.name
         )
     await callback.answer(t(lang, "msg_crypto_payment_confirmed_alert"))
+
+
+# ------------------------------------------------------------------
+# Pay with the customer's own referral cash balance (BalanceCB) — only
+# offered when the balance already covers the full price (see
+# build_product_card's `show_balance` computation); no partial/combined
+# payment, and this is separate from the curated "referral shop" catalog —
+# this lets the balance be spent on any real product in the normal shop.
+# ------------------------------------------------------------------
+
+
+@router.callback_query(BalanceCB.filter(F.action == "buy"))
+async def balance_buy(
+    callback: CallbackQuery, callback_data: BalanceCB, session: AsyncSession, user: User, lang: str
+) -> None:
+    from app.keyboards.button_helpers import inline_btn
+
+    settings_repo = SettingRepository(session)
+    if not await settings_repo.get_bool("referral_balance_payment_enabled", False):
+        await callback.answer(t(lang, "msg_balance_disabled"), show_alert=True)
+        return
+    product = await ProductRepository(session).get_by_id(callback_data.product_id)
+    if product is None or not product.is_visible:
+        await callback.answer(t(lang, "msg_product_not_found"), show_alert=True)
+        return
+    if await ProductService(session).stock_shortfall(product):
+        await callback.answer(t(lang, "msg_out_of_stock"), show_alert=True)
+        return
+
+    qty = max(1, callback_data.qty)
+    price = float(product.price) * qty
+    if float(user.referral_balance) < price:
+        # Balance may have moved since the card was drawn (another
+        # purchase, an admin adjustment) — re-check before showing the
+        # confirmation screen, not just when the button was rendered.
+        await callback.answer(t(lang, "msg_balance_insufficient"), show_alert=True)
+        return
+
+    currency = await settings_repo.get("referral_currency", "UZS")
+    confirm_btn = inline_btn(
+        "confirm", lang,
+        callback_data=BalanceCB(action="confirm", product_id=product.id, qty=qty).pack(),
+    )
+    cancel_btn = inline_btn(
+        "cancel", lang,
+        callback_data=BalanceCB(action="cancel", product_id=product.id).pack(),
+    )
+    await callback.message.answer(
+        t(
+            lang, "msg_balance_confirm_prompt",
+            name=product_name(product, lang),
+            amount=fmt_price(price),
+            currency=currency,
+            balance=fmt_price(float(user.referral_balance)),
+        ),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[b] for b in (confirm_btn, cancel_btn) if b]),
+    )
+    await callback.answer()
+
+
+@router.callback_query(BalanceCB.filter(F.action == "cancel"))
+async def balance_cancel(callback: CallbackQuery, lang: str) -> None:
+    # The confirm prompt is its own message (not an edit of the product
+    # card), so cancelling just removes it — nothing else changed yet.
+    try:
+        await callback.message.delete()
+    except TelegramBadRequest:
+        pass
+    await callback.answer(t(lang, "msg_balance_cancelled"))
+
+
+@router.callback_query(BalanceCB.filter(F.action == "confirm"))
+async def balance_confirm(
+    callback: CallbackQuery,
+    callback_data: BalanceCB,
+    session: AsyncSession,
+    user: User,
+    lang: str,
+    state: FSMContext,
+) -> None:
+    settings_repo = SettingRepository(session)
+    if not await settings_repo.get_bool("referral_balance_payment_enabled", False):
+        await callback.answer(t(lang, "msg_balance_disabled"), show_alert=True)
+        return
+    product = await ProductRepository(session).get_by_id(callback_data.product_id)
+    if product is None or not product.is_visible:
+        await callback.answer(t(lang, "msg_product_not_found"), show_alert=True)
+        return
+
+    qty = max(1, callback_data.qty)
+    price = float(product.price) * qty
+
+    async with lock_for(f"user_balance:{user.id}"):
+        # Re-fetch fresh under the lock — this is the one point of no
+        # return where money actually leaves the balance, so it must not
+        # trust a `user` object that may already be stale (another
+        # purchase, an admin adjustment, or a second tap racing this one).
+        fresh_user = await UserRepository(session).get_by_id(user.id)
+        if fresh_user is None or float(fresh_user.referral_balance) < price:
+            await callback.answer(t(lang, "msg_balance_insufficient"), show_alert=True)
+            return
+
+        if product.delivery_mode == DeliveryMode.INVENTORY:
+            stock = await ProductRepository(session).available_stock(product.id)
+            if stock < qty:
+                await callback.answer(t(lang, "msg_out_of_stock"), show_alert=True)
+                return
+
+        await UserRepository(session).adjust_referral_balance(fresh_user, -price)
+        order = await OrderRepository(session).create(
+            user_id=user.id,
+            product_id=product.id,
+            price=price,
+            currency=product.currency,
+            payment_method=PaymentMethod.BALANCE,
+            status=OrderStatus.APPROVED,
+            quantity=qty,
+        )
+        from app.handlers.user.recipient import attach_recipient  # local import avoids a cycle
+
+        await attach_recipient(session, order, state)
+
+        if product.delivery_mode == DeliveryMode.INVENTORY:
+            reserved = await InventoryRepository(session).reserve_many(product.id, order.id, qty)
+            if reserved is None:
+                # Extremely rare race: stock vanished between the check
+                # above and actually reserving it. Refund immediately —
+                # nothing was ever delivered, so there's nothing else to
+                # unwind.
+                await UserRepository(session).adjust_referral_balance(fresh_user, price)
+                await OrderRepository(session).set_status(order, OrderStatus.CANCELLED)
+                await callback.answer(t(lang, "msg_out_of_stock"), show_alert=True)
+                return
+
+    from app.services.delivery_service import DeliveryService
+
+    delivery = DeliveryService(session)
+    try:
+        result = await delivery.deliver_new_order(order.id)
+    except (InvalidOrderStateError, DeliveryFailedError) as exc:
+        await callback.answer(exc.localized(lang), show_alert=True)
+        return
+
+    if result.delivered_now and result.payload:
+        await callback.message.answer(
+            build_delivered_message(lang, order, result.payload),
+            reply_markup=buy_again_kb(lang, order.product_id),
+        )
+        from app.services.referral_service import ReferralService
+
+        await ReferralService(session).credit_for_delivered_order(order, callback.bot)
+    elif result.needs_manual_message:
+        from app.services.crypto_poller import _notify_admins_with_manual_button
+
+        await callback.message.answer(t(lang, "msg_balance_confirmed_manual_pending"))
+        await _notify_admins_with_manual_button(
+            callback.bot, session, order.id, order.order_uuid, order.product.name
+        )
+    await callback.answer(t(lang, "msg_balance_payment_confirmed_alert"))

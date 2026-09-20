@@ -147,7 +147,7 @@ async def _verify_and_store(
 
 
 async def _show_payment_options(
-    target, session: AsyncSession, product_id: int, lang: str, state: FSMContext
+    target, session: AsyncSession, product_id: int, lang: str, state: FSMContext, user: User
 ) -> None:
     """Re-render the product card now that the recipient (and, for
     custom-amount products, the quantity) is known.
@@ -163,6 +163,7 @@ async def _show_payment_options(
         session,
         product_id,
         lang,
+        user,
         await get_chosen_recipient(state),
         await get_chosen_stars_amount(state, product_id),
         await get_recipient_name(state),
@@ -193,7 +194,7 @@ async def recipient_myself(
         return
 
     if await _verify_and_store(callback.message, session, state, lang, product, user.username):
-        await _show_payment_options(callback.message, session, product.id, lang, state)
+        await _show_payment_options(callback.message, session, product.id, lang, state, user)
     await callback.answer()
 
 
@@ -231,7 +232,7 @@ async def custom_stars_amount_prompt(
 
 @router.message(RecipientStates.waiting_stars_amount, F.text)
 async def custom_stars_amount_received(
-    message: Message, session: AsyncSession, lang: str, state: FSMContext
+    message: Message, session: AsyncSession, lang: str, state: FSMContext, user: User
 ) -> None:
     data = await state.get_data()
     product = await ProductRepository(session).get_by_id(data.get(_AMOUNT_PRODUCT_KEY) or 0)
@@ -258,7 +259,7 @@ async def custom_stars_amount_received(
     await state.set_state(None)
     logger.info("custom_stars_amount product=%s amount=%s", product.id, amount)
     await shopscreen.delete_input(message)
-    await _show_payment_options(message, session, product.id, lang, state)
+    await _show_payment_options(message, session, product.id, lang, state, user)
 
 
 @router.callback_query(RecipientCB.filter(F.action == "change"))
@@ -278,7 +279,7 @@ async def recipient_change(
 
 @router.message(RecipientStates.waiting_username, F.text)
 async def recipient_username_received(
-    message: Message, session: AsyncSession, lang: str, state: FSMContext
+    message: Message, session: AsyncSession, lang: str, state: FSMContext, user: User
 ) -> None:
     """Only active while RecipientStates.waiting_username is set — the
     state filter is applied at registration time below."""
@@ -294,7 +295,7 @@ async def recipient_username_received(
     if await _verify_and_store(message, session, state, lang, product, message.text):
         await state.set_state(None)
         await shopscreen.delete_input(message)
-        await _show_payment_options(message, session, product.id, lang, state)
+        await _show_payment_options(message, session, product.id, lang, state, user)
 
 
 __all__ = [

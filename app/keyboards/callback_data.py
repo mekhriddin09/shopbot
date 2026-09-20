@@ -81,6 +81,17 @@ class StarsCB(CallbackData, prefix="stars"):
     preorder: bool = False
 
 
+class BalanceCB(CallbackData, prefix="bal"):
+    """Paying with the customer's own referral cash balance — see
+    app.handlers.user.shop.balance_buy. Intentionally no `preorder`
+    (out-of-stock products aren't offered this payment method, same as
+    the underlying InventoryRepository check that gates it)."""
+
+    action: str  # buy | confirm | cancel
+    product_id: int = 0
+    qty: int = 1
+
+
 class AdminMenuCB(CallbackData, prefix="amenu"):
     action: str  # products | inventory | orders | stats | settings | admins
 

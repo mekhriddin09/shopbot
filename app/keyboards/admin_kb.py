@@ -736,6 +736,11 @@ SETTINGS_GROUPS: dict[str, dict] = {
             ("toggle", "referral_enabled", "\U0001F91D Referal tizimi (umumiy)"),
             ("edit", "referral_currency", "\U0001F4B1 Valyuta nomi (xarid mukofoti uchun)"),
             ("edit", "referral_withdraw_min", "\U0001F4B0 Min. pul yechish miqdori"),
+            (
+                "toggle",
+                "referral_balance_payment_enabled",
+                "\U0001F6D2 Balansdan mahsulot sotib olish (narxni to'liq qoplasa)",
+            ),
             ("group", "referral_points", "\U0001F3AF Ball (taklif uchun)"),
             ("lang", "referral_rules", "\U0001F4DC Referal qoidalari matni"),
             ("referral_shop", None, "\U0001F381 Referal do'koni (sovg'alar)"),
