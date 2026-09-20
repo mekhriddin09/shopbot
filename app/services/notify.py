@@ -16,7 +16,7 @@ from app.keyboards.admin_kb import (
     admin_referral_withdraw_kb,
 )
 from app.repositories.admin_repo import AdminRepository
-from app.utils.formatting import fmt_price
+from app.utils.formatting import fmt_datetime, fmt_price
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,35 @@ async def _all_admin_ids(session: AsyncSession) -> set[int]:
     for admin in await admins.list_active():
         ids.add(admin.telegram_id)
     return ids
+
+
+def _parse_chat_target(raw: str) -> int | str:
+    """A log-channel ID as the admin typed it: numeric ("-1001234567890")
+    or an @username. `send_message`/`send_photo` accept both directly, but
+    only the numeric form should be coerced to `int` — an @username must
+    stay a string."""
+    raw = raw.strip()
+    stripped = raw[1:] if raw.startswith("-") else raw
+    return int(raw) if stripped.isdigit() else raw
+
+
+async def resolve_notify_targets(session: AsyncSession) -> list[int | str]:
+    """Where admin-facing notifications go: exclusively the configured log
+    channel when one is set (keeps every admin's private chat clear of
+    routine order/support/withdrawal/manual-confirmation noise, per the
+    admin's own request), otherwise every admin (env + DB) as before.
+
+    Shared by every notify_* helper in this module, plus the handful of
+    call sites elsewhere that used to gather admin ids themselves
+    (app/services/card_payment/flow.py, app/services/crypto_poller.py,
+    app/handlers/user/support.py) — consolidating them here means the log
+    channel takes effect everywhere at once instead of piecemeal."""
+    from app.repositories.setting_repo import SettingRepository  # local import avoids a cycle
+
+    log_channel = (await SettingRepository(session).get("log_channel_id", "")).strip()
+    if log_channel:
+        return [_parse_chat_target(log_channel)]
+    return list(await _all_admin_ids(session))
 
 
 async def notify_admins_new_order(
@@ -45,16 +74,21 @@ async def notify_admins_new_order(
     mangle non-image documents)."""
     preorder_line = "\n⏳ <b>OLDINDAN BUYURTMA</b> (mahsulot hozircha stokda yo'q)" if order.is_preorder else ""
     qty_line = f"\n\U0001F522 Miqdor: {order.quantity} dona" if order.quantity and order.quantity > 1 else ""
+    # Everything an admin needs about this order (who, what, how much, how
+    # they paid, when) in one message — so the admin chat/log channel
+    # doesn't turn into a scattered trail of half-messages per order.
     caption = (
         f"\U0001F6CE️ <b>Yangi buyurtma</b>\n\n"
         f"\U0001F464 {order.user.full_name or '-'} (@{order.user.username or '-'})\n"
         f"\U0001F194 Telegram ID: <code>{order.user.telegram_id}</code>\n"
         f"\U0001F4E6 Mahsulot: {html_escape(order.product.name)}\n"
         f"\U0001F4B0 Narxi: {fmt_price(float(order.price_at_purchase))} {order.currency}\n"
+        f"\U0001F4B3 To'lov usuli: {order.payment_method.value}\n"
+        f"\U0001F551 Vaqti: {fmt_datetime(order.created_at)}\n"
         f"\U0001F196 Buyurtma: <code>{order.order_uuid}</code>"
         f"{qty_line}{preorder_line}"
     )
-    for admin_id in await _all_admin_ids(session):
+    for admin_id in await resolve_notify_targets(session):
         try:
             if is_document:
                 await bot.send_document(
@@ -75,7 +109,7 @@ async def notify_admins_new_order(
 
 
 async def notify_admins_text(bot: Bot, session: AsyncSession, text: str) -> None:
-    for admin_id in await _all_admin_ids(session):
+    for admin_id in await resolve_notify_targets(session):
         try:
             await bot.send_message(admin_id, text)
         except TelegramAPIError:
@@ -136,7 +170,7 @@ async def notify_delivery_failure(
     ]
     text = "\n".join(lines)
 
-    for admin_id in await _all_admin_ids(session):
+    for admin_id in await resolve_notify_targets(session):
         try:
             await bot.send_message(admin_id, text, reply_markup=admin_order_detail_kb(order))
         except TelegramAPIError:
@@ -165,7 +199,7 @@ async def notify_admins_referral_withdrawal(
         f"{card_line}"
     )
     kb = admin_referral_withdraw_kb(withdrawal.id)
-    for admin_id in await _all_admin_ids(session):
+    for admin_id in await resolve_notify_targets(session):
         try:
             await bot.send_message(admin_id, text, reply_markup=kb)
         except TelegramAPIError:
@@ -195,7 +229,7 @@ async def notify_admins_referral_redemption(
         f"{note_line}"
     )
     kb = admin_referral_redemption_kb(redemption.id)
-    for admin_id in await _all_admin_ids(session):
+    for admin_id in await resolve_notify_targets(session):
         try:
             await bot.send_message(admin_id, text, reply_markup=kb)
         except TelegramAPIError:

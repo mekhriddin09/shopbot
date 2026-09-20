@@ -12,24 +12,16 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config.settings import settings as cfg
 from app.database.models import User
-from app.repositories.admin_repo import AdminRepository
 from app.repositories.setting_repo import SettingRepository
 from app.repositories.support_repo import SupportRelayRepository
+from app.services.notify import resolve_notify_targets
 from app.states.user_states import SupportStates
 from app.utils.button_filters import menu_button_filter, menu_button_key_for_text
 from app.utils.i18n import t
 
 router = Router(name="user_support")
 security_logger = logging.getLogger("security")
-
-
-async def _all_admin_ids(session: AsyncSession) -> set[int]:
-    ids = set(cfg.admin_ids)
-    for admin in await AdminRepository(session).list_active():
-        ids.add(admin.telegram_id)
-    return ids
 
 
 @router.message(menu_button_filter("menu_support"))
@@ -52,8 +44,8 @@ async def relay_to_admins(
         await _dispatch_menu_button(menu_key, message, session, user, lang, state)
         return
 
-    admin_ids = await _all_admin_ids(session)
-    if not admin_ids:
+    targets = await resolve_notify_targets(session)
+    if not targets:
         await message.answer(t(lang, "msg_error_generic"))
         return
 
@@ -63,19 +55,25 @@ async def relay_to_admins(
         f"\U0001F194 <code>{user.telegram_id}</code>\n\n"
     )
     relay_repo = SupportRelayRepository(session)
-    for admin_id in admin_ids:
+    for target in targets:
         try:
             sent = None
             if message.text:
-                sent = await message.bot.send_message(admin_id, header + message.text)
+                sent = await message.bot.send_message(target, header + message.text)
             else:
                 # Forward media/documents/etc. as-is, with a header first.
-                await message.bot.send_message(admin_id, header.rstrip())
-                sent = await message.copy_to(admin_id)
+                await message.bot.send_message(target, header.rstrip())
+                sent = await message.copy_to(target)
             if sent is not None:
-                await relay_repo.create(user.telegram_id, admin_id, sent.message_id)
+                # Store the *resolved* numeric chat id from Telegram's own
+                # response, not our local `target` — that's the only thing
+                # that works whether `target` was an admin's private chat,
+                # a numeric log-channel id, or an @username (Telegram
+                # always echoes back the real chat id in `sent.chat.id`,
+                # and that's what a reply's `message.chat.id` will match).
+                await relay_repo.create(user.telegram_id, sent.chat.id, sent.message_id)
         except TelegramAPIError:
-            security_logger.warning("Failed to relay support message to admin %s", admin_id)
+            security_logger.warning("Failed to relay support message to %s", target)
 
     await message.answer(t(lang, "msg_support_sent"))
 

@@ -139,12 +139,9 @@ async def _sweep_stale_stars_orders(bot: Bot, session, orders_repo: OrderReposit
 async def _notify_admins_with_manual_button(
     bot: Bot, session, order_id: int, order_uuid: str, product_name: str
 ) -> None:
-    from app.config.settings import settings as cfg
-    from app.repositories.admin_repo import AdminRepository
+    from app.services.notify import resolve_notify_targets
 
-    ids = set(cfg.admin_ids)
-    for admin in await AdminRepository(session).list_active():
-        ids.add(admin.telegram_id)
+    ids = await resolve_notify_targets(session)
 
     text = (
         f"💰 Kripto to'lov tasdiqlandi: <code>{order_uuid}</code> ({product_name}).\n"
