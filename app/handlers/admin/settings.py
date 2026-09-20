@@ -343,6 +343,21 @@ async def settings_test_shamekh(callback: CallbackQuery, session: AsyncSession) 
         )
 
 
+@router.callback_query(AdminSettingsCB.filter(F.action == "referral_shop"))
+async def settings_open_referral_shop(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Referral do'koni now lives inside this settings group instead of its
+    own main-menu button — see admin_kb.py:admin_main_menu_kb. Reuses the
+    same list screen/keyboard the dedicated router builds; its own "back"
+    button (admin_referral_rewards_list_kb) returns here."""
+    from app.handlers.admin.referral_rewards import REWARDS_LIST_TEXT
+    from app.keyboards.admin_kb import admin_referral_rewards_list_kb
+    from app.repositories.referral_repo import ReferralRepository
+
+    rewards = await ReferralRepository(session).list_all_rewards()
+    await show(callback, REWARDS_LIST_TEXT, reply_markup=admin_referral_rewards_list_kb(rewards))
+    await callback.answer()
+
+
 def _label_for(key: str) -> str:
     """Human label for a settings key, taken from whichever group lists it
     (see SETTINGS_GROUPS) — no separate label dict to keep in sync."""

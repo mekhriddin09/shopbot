@@ -8,12 +8,11 @@ import logging
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.filters.is_admin import IsAdmin
 from app.keyboards.admin_kb import (
-    ADMIN_BTN_REFERRAL_REWARDS,
     admin_referral_reward_detail_kb,
     admin_referral_rewards_list_kb,
     confirm_delete_reward_kb,
@@ -55,22 +54,13 @@ def _reward_summary(reward) -> str:
     )
 
 
-@router.message(F.text == ADMIN_BTN_REFERRAL_REWARDS)
-async def referral_rewards_menu(message: Message, session: AsyncSession) -> None:
-    rewards = await ReferralRepository(session).list_all_rewards()
-    await message.answer(
-        "\U0001F381 Referral do'koni — mijozlar o'z referral balansini shu sovg'alarga almashtirishlari mumkin:",
-        reply_markup=admin_referral_rewards_list_kb(rewards),
-    )
+REWARDS_LIST_TEXT = "\U0001F381 Referral do'koni — mijozlar o'z referral balansini shu sovg'alarga almashtirishlari mumkin:"
 
 
 @router.callback_query(AdminReferralRewardCB.filter(F.action == "list"))
 async def referral_rewards_list_cb(callback: CallbackQuery, session: AsyncSession) -> None:
     rewards = await ReferralRepository(session).list_all_rewards()
-    await callback.message.edit_text(
-        "\U0001F381 Referral do'koni — mijozlar o'z referral balansini shu sovg'alarga almashtirishlari mumkin:",
-        reply_markup=admin_referral_rewards_list_kb(rewards),
-    )
+    await callback.message.edit_text(REWARDS_LIST_TEXT, reply_markup=admin_referral_rewards_list_kb(rewards))
     await callback.answer()
 
 

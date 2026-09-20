@@ -31,18 +31,19 @@ ADMIN_BTN_ORDERS = "\U0001F4E5 Buyurtmalar"
 ADMIN_BTN_STATS = "\U0001F4CA Statistika"
 ADMIN_BTN_SETTINGS = "⚙️ Sozlamalar"
 ADMIN_BTN_BROADCAST = "\U0001F4E2 Xabar yuborish"
-ADMIN_BTN_REFERRAL_REWARDS = "\U0001F381 Referral do'koni"
 ADMIN_BTN_USERS = "\U0001F464 Foydalanuvchilar"
 ADMIN_BTN_EXIT = "\U0001F6AA Admin paneldan chiqish"
 
 
 def admin_main_menu_kb() -> ReplyKeyboardMarkup:
+    # Referral do'koni no longer gets its own row — it now lives inside
+    # Sozlamalar -> Referal dasturi, alongside the rest of the referral
+    # program's settings, instead of sitting apart from them.
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=ADMIN_BTN_PRODUCTS), KeyboardButton(text=ADMIN_BTN_ORDERS)],
             [KeyboardButton(text=ADMIN_BTN_STATS), KeyboardButton(text=ADMIN_BTN_SETTINGS)],
-            [KeyboardButton(text=ADMIN_BTN_BROADCAST), KeyboardButton(text=ADMIN_BTN_REFERRAL_REWARDS)],
-            [KeyboardButton(text=ADMIN_BTN_USERS)],
+            [KeyboardButton(text=ADMIN_BTN_BROADCAST), KeyboardButton(text=ADMIN_BTN_USERS)],
             [KeyboardButton(text=ADMIN_BTN_EXIT)],
         ],
         resize_keyboard=True,
@@ -678,35 +679,21 @@ SETTINGS_GROUPS: dict[str, dict] = {
     "referral": {
         "title": "\U0001F91D <b>Referal dasturi</b>",
         "intro": (
-            "Ikkita mustaqil mukofot turi bor — pastdagi ikki bo'limda alohida sozlanadi:\n\n"
-            "\U0001F4B5 <b>Sotuv mukofoti</b> — taklif qilingan odam <b>xarid qilganda</b> beriladi. "
-            "Pul sifatida yechib olish mumkin.\n"
-            "\U0001F3AF <b>Ball</b> — taklif qilingan odam <b>tasdiqdan o'tganda</b> beriladi. "
-            "Faqat referal do'konida sarflanadi, pul sifatida yechilmaydi."
+            "Bu yerda umumiy qoidalar, Ball (taklif mukofoti) va referal do'koni boshqariladi.\n\n"
+            "\U0001F4B5 <b>Xarid mukofoti</b> (taklif qilingan odam xarid qilganda beriladigan summa/foiz) "
+            "endi har bir mahsulotning o'zida sozlanadi: Mahsulotlar -> mahsulot -> Limit va referral. "
+            "Shu yerda faqat umumiy yoqish/o'chirish qoladi.\n"
+            "\U0001F3AF <b>Ball</b> — taklif qilingan odam <b>tasdiqdan o'tganda</b> beriladi (umumiy, "
+            "mahsulotga bog'liq emas). Faqat referal do'konida sarflanadi, pul sifatida yechilmaydi."
         ),
         "parent": "root",
         "items": [
             ("toggle", "referral_enabled", "\U0001F91D Referal tizimi (umumiy)"),
-            ("group", "referral_sales", "\U0001F4B5 Sotuv mukofoti (xarid uchun)"),
+            ("edit", "referral_currency", "\U0001F4B1 Valyuta nomi (xarid mukofoti uchun)"),
+            ("edit", "referral_withdraw_min", "\U0001F4B0 Min. pul yechish miqdori"),
             ("group", "referral_points", "\U0001F3AF Ball (taklif uchun)"),
             ("lang", "referral_rules", "\U0001F4DC Referal qoidalari matni"),
-        ],
-    },
-    "referral_sales": {
-        "title": "\U0001F4B5 <b>Sotuv mukofoti</b>",
-        "intro": (
-            "Taklif qilingan odam xarid qilganda taklif qilgan odamga beriladi.\n"
-            "Miqdorni qat'iy summa (<code>5000</code>) yoki foiz (<code>5%</code>) sifatida yozish mumkin.\n"
-            "Eslatma: mukofot faqat mahsulot sahifasida \"Referral: yoqilgan\" bo'lsa beriladi."
-        ),
-        "parent": "referral",
-        "items": [
-            ("toggle", "referral_first_order_enabled", "\U0001F381 1-buyurtma mukofoti"),
-            ("edit", "referral_first_order_value", "✏️ 1-buyurtma miqdori"),
-            ("toggle", "referral_recurring_enabled", "\U0001F501 Doimiy mukofot"),
-            ("edit", "referral_recurring_value", "✏️ Doimiy mukofot miqdori"),
-            ("edit", "referral_currency", "\U0001F4B1 Valyuta nomi"),
-            ("edit", "referral_withdraw_min", "\U0001F4B0 Min. pul yechish miqdori"),
+            ("referral_shop", None, "\U0001F381 Referal do'koni (sovg'alar)"),
         ],
     },
     "referral_points": {
@@ -816,6 +803,8 @@ def admin_settings_menu_kb(group: str = "root") -> InlineKeyboardMarkup:
             cb = AdminSettingsCB(action="test_reseller", group=group).pack()
         elif kind == "test_shamekh":
             cb = AdminSettingsCB(action="test_shamekh", group=group).pack()
+        elif kind == "referral_shop":
+            cb = AdminSettingsCB(action="referral_shop", group=group).pack()
         else:  # pragma: no cover - guards against a typo'd spec entry
             continue
         rows.append([InlineKeyboardButton(text=label, callback_data=cb)])
@@ -879,6 +868,11 @@ def admin_referral_rewards_list_kb(rewards: list) -> InlineKeyboardMarkup:
     ]
     rows.append(
         [InlineKeyboardButton(text="➕ Yangi sovg'a", callback_data=AdminReferralRewardCB(action="add").pack())]
+    )
+    # Lives inside Sozlamalar -> Referal dasturi now (not its own main-menu
+    # button anymore), so "back" returns there instead of leaving a dead end.
+    rows.append(
+        [InlineKeyboardButton(text="\U0001F519 Orqaga", callback_data=AdminSettingsCB(action="group", key="referral").pack())]
     )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
