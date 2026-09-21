@@ -177,6 +177,20 @@ async def render_order_detail(session: AsyncSession, order) -> str:
                 f"(karta ***{matched.card_last4 or '-'}, {fmt_datetime(matched.created_at)})"
             )
 
+    # If Telegram actually charged the customer's Stars (this gets set the
+    # instant `successful_payment` arrives, before delivery is attempted),
+    # show it even if the order later ended up CANCELLED — that combination
+    # means the customer was genuinely charged after our own timeout sweep
+    # had already released the order, and needs a manual rescue.
+    stars_charge_block = ""
+    if getattr(order, "stars_charge_id", None):
+        paid_but_cancelled = (
+            "\n⚠️ <b>Mijoz Stars orqali to'lagan, lekin buyurtma bekor bo'lgan — qo'lda tekshiring!</b>"
+            if order.status == OrderStatus.CANCELLED
+            else ""
+        )
+        stars_charge_block = f"\n⭐ Stars to'lov ID: <code>{order.stars_charge_id}</code>{paid_but_cancelled}"
+
     reason_block = f"\n\U0001F4DD Sabab: {html_escape(order.rejection_reason)}" if order.rejection_reason else ""
     qty_block = f" × {order.quantity}" if order.quantity and order.quantity > 1 else ""
     preorder_block = "\n⏳ <b>Oldindan buyurtma</b>" if order.is_preorder else ""
@@ -187,7 +201,7 @@ async def render_order_detail(session: AsyncSession, order) -> str:
         f"\U0001F4E6 Mahsulot: {html_escape(order.product.name) if order.product else '-'}{qty_block}\n"
         f"\U0001F4B0 Narxi: {fmt_price(float(order.price_at_purchase))} {order.currency}\n"
         f"\U0001F4B3 To'lov usuli: {order.payment_method.value}"
-        f"{expected_block}{preorder_block}\n\n"
+        f"{expected_block}{stars_charge_block}{preorder_block}\n\n"
         f"\U0001F464 Mijoz: {order.user.full_name if order.user else '-'} "
         f"(@{order.user.username if order.user and order.user.username else '-'})\n"
         f"\U0001F194 <code>{order.user.telegram_id if order.user else '-'}</code>\n"

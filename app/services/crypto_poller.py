@@ -15,6 +15,7 @@ from aiogram import Bot
 
 from app.config.settings import settings
 from app.database.engine import async_session_maker
+from app.database.models.enums import OrderStatus
 from app.keyboards.admin_kb import admin_write_manual_kb
 from app.keyboards.user_kb import buy_again_kb
 from app.repositories.order_repo import OrderRepository
@@ -26,6 +27,7 @@ from app.services.order_service import OrderService
 from app.services.referral_service import ReferralService
 from app.utils.formatting import build_delivered_message
 from app.utils.i18n import t
+from app.utils.locks import lock_for
 
 logger = logging.getLogger("providers")
 order_logger = logging.getLogger("orders")
@@ -127,12 +129,31 @@ async def _sweep_stale_stars_orders(bot: Bot, session, orders_repo: OrderReposit
     API call to poll like with crypto, Telegram just sends a
     `successful_payment` update the moment the user pays. So the only job
     here is the same abandoned-invoice timeout as crypto: release any
-    reserved stock for Stars invoices nobody ever paid."""
+    reserved stock for Stars invoices nobody ever paid.
+
+    Uses its own STARS_PAYMENT_TIMEOUT_MINUTES (longer than crypto's) since
+    a Stars invoice never shows the customer any expiry, unlike a crypto
+    invoice's visible countdown — a short shared timeout meant a customer
+    who simply took their time deciding could still tap "Pay" after we'd
+    already cancelled the order and released its reserved stock.
+
+    Also takes the same per-order lock DeliveryService.auto_deliver_stars
+    uses (`lock_for`) before cancelling, so this can never race an
+    in-flight successful_payment that's already mid-delivery for the same
+    order — whichever gets the lock first, the other sees the now-updated
+    status and correctly no-ops."""
     pending = await orders_repo.list_awaiting_stars_payment()
     for order in pending:
-        if _age_minutes(order.created_at) < settings.CRYPTO_PAYMENT_TIMEOUT_MINUTES:
+        if _age_minutes(order.created_at) < settings.STARS_PAYMENT_TIMEOUT_MINUTES:
             continue
-        cancelled = await OrderService(session).cancel_pending(order.id)
+        async with lock_for(f"order:{order.id}"):
+            # Re-check under the lock: a delivery that started just before
+            # we acquired it may have already moved this order past
+            # AWAITING_STARS_PAYMENT.
+            fresh = await orders_repo.get_by_id(order.id)
+            if fresh is None or fresh.status != OrderStatus.AWAITING_STARS_PAYMENT:
+                continue
+            cancelled = await OrderService(session).cancel_pending(order.id)
         if cancelled:
             order_logger.info("stars_payment_timeout order=%s", order.order_uuid)
             try:

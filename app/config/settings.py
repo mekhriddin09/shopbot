@@ -48,6 +48,17 @@ class Settings(BaseSettings):
     # stock — otherwise an abandoned invoice would hold a code hostage
     # forever (see crypto_poller.py).
     CRYPTO_PAYMENT_TIMEOUT_MINUTES: float = 10.0
+    # Telegram Stars invoices get their own, longer timeout: unlike a crypto
+    # invoice (which shows the customer a countdown/expiry), a Stars invoice
+    # message never indicates it will expire, so a customer who takes their
+    # time deciding can easily exceed a short window and then still tap
+    # "Pay" -- if our side has already cancelled the order and released its
+    # reserved stock by then, Telegram's pre-checkout step correctly
+    # declines the charge, but it looks to the customer like "I paid and
+    # got nothing" even though they were, in that case, not actually
+    # charged. A longer window makes this far less likely to be hit in
+    # normal use.
+    STARS_PAYMENT_TIMEOUT_MINUTES: float = 30.0
 
     # --- External reseller API (Mode 3 delivery) ---
     RESELLER_API_BASE_URL: str = "http://2.26.230.116:8080"
