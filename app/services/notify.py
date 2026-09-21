@@ -49,16 +49,17 @@ def _parse_chat_target(raw: str) -> int | str:
 async def _log_channel_target(session: AsyncSession) -> int | str | None:
     """The configured log channel, or None if it isn't set.
 
-    Per the admin's explicit correction: the log channel is meant to hold a
-    clean, read-only order history (customer + product + payment + time)
-    *alongside* the normal admin notifications — never *instead of* them.
-    Anything that needs a human to actually act on it (approving/rejecting
-    a payment proof, a support message, a referral withdrawal/redemption
-    request, a manual-delivery confirmation, a delivery-failure alert) must
+    Per the admin's explicit instructions: the log channel is a clean,
+    read-only order-history database — every order, manual or auto, ends up
+    there. Anything that needs a human to actually act on it (approving/
+    rejecting a payment proof or balance order, a support message, a
+    referral withdrawal/redemption request, a delivery-failure alert) must
     always keep landing in every admin's own chat regardless of whether a
     log channel is set — see `_all_admin_ids`, used everywhere else in this
-    module. This helper is only for the extra, best-effort copy that
-    `notify_admins_new_order` additionally sends to the log channel."""
+    module. A plain confirmation with nothing to act on (an auto-delivered
+    Stars/crypto/card_auto order — see `notify_admins_order_delivered`)
+    goes ONLY to the log channel, falling back to every admin only if no
+    log channel is configured at all."""
     from app.repositories.setting_repo import SettingRepository  # local import avoids a cycle
 
     log_channel = (await SettingRepository(session).get("log_channel_id", "")).strip()
@@ -285,24 +286,34 @@ async def notify_admins_balance_order(bot: Bot, session: AsyncSession, order: Or
         f"Tasdiqlansa — yetkaziladi. Rad etilsa — summa mijozning balansiga qaytariladi."
     )
     kb = admin_order_action_kb(order.id)
-    # Needs action from an admin — always every admin, never the log channel.
+    # Needs action from an admin — always every admin.
     for admin_id in await _all_admin_ids(session):
         try:
             await bot.send_message(admin_id, text, reply_markup=kb)
         except TelegramAPIError:
             logger.warning("Failed to notify admin %s about balance order %s", admin_id, order.order_uuid)
 
+    # Also a plain read-only copy to the log channel (order history), same
+    # as every other new-order event — see notify_admins_new_order.
+    log_target = await _log_channel_target(session)
+    if log_target is not None:
+        try:
+            await bot.send_message(log_target, text)
+        except TelegramAPIError:
+            logger.warning("Failed to log balance order %s to log channel", order.order_uuid)
+
 
 async def notify_admins_order_delivered(bot: Bot, session: AsyncSession, order: Order) -> None:
     """Fired once an order that never needed admin approval (Telegram
     Stars, crypto, card_auto) finishes auto-delivering. There's nothing to
-    approve here — it's a plain confirmation — but every admin should still
-    see it: previously Stars/crypto payments that auto-delivered
-    successfully produced NO admin-facing message at all (only a failure
-    or a needs-manual-message notified anyone), which from the admin's
-    side looked exactly like nothing had happened. Sent to every admin
-    always, plus a copy to the log channel (order history) if one is
-    configured — same dual-send shape as notify_admins_new_order."""
+    approve here — it's a plain confirmation, pure order history — so per
+    the admin's explicit instruction it now goes ONLY to the log channel,
+    never to every admin's own chat (that chat is reserved for things that
+    actually need a human: manual/proof payments awaiting approval,
+    support messages, referral withdrawal/redemption requests). If no log
+    channel is configured yet, it falls back to notifying every admin
+    directly — otherwise a successful sale would be completely invisible
+    with nothing configured to catch it."""
     text = (
         f"✅ <b>Buyurtma avtomatik yetkazildi</b>\n\n"
         f"\U0001F464 {order.user.full_name or '-'} (@{order.user.username or '-'})\n"
@@ -313,15 +324,18 @@ async def notify_admins_order_delivered(bot: Bot, session: AsyncSession, order: 
         f"\U0001F551 Vaqti: {fmt_datetime(order.created_at)}\n"
         f"\U0001F196 Buyurtma: <code>{order.order_uuid}</code>"
     )
-    for admin_id in await _all_admin_ids(session):
-        try:
-            await bot.send_message(admin_id, text)
-        except TelegramAPIError:
-            logger.warning("Failed to notify admin %s about delivered order %s", admin_id, order.order_uuid)
-
     log_target = await _log_channel_target(session)
     if log_target is not None:
         try:
             await bot.send_message(log_target, text)
         except TelegramAPIError:
             logger.warning("Failed to log delivered order %s to log channel", order.order_uuid)
+        return
+
+    # No log channel configured — fall back to every admin so this isn't
+    # silently lost.
+    for admin_id in await _all_admin_ids(session):
+        try:
+            await bot.send_message(admin_id, text)
+        except TelegramAPIError:
+            logger.warning("Failed to notify admin %s about delivered order %s", admin_id, order.order_uuid)

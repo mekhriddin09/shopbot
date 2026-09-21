@@ -203,7 +203,7 @@ async def _back_to_panel(message: Message, data: dict, text: str, reply_markup=N
 
 
 
-@router.message(AdminInput.waiting_text, F.text)
+@router.message(AdminInput.waiting_text, F.text, ~F.reply_to_message)
 async def handle_text_input(message: Message, session: AsyncSession, state: FSMContext, user: User) -> None:
     data = await state.get_data()
     action = data.get("action")
