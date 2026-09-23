@@ -30,6 +30,7 @@ from app.services.exceptions import DeliveryFailedError, InvalidOrderStateError
 from app.services.referral_service import ReferralService
 from app.utils.formatting import build_delivered_message, product_name
 from app.utils.i18n import t
+from app.utils.locks import lock_for
 
 router = Router(name="user_stars")
 
@@ -155,6 +156,35 @@ async def stars_cancel(callback: CallbackQuery, callback_data: StarsCB, session:
     await callback.answer()
 
 
+async def _try_revive_cancelled_order(session: AsyncSession, order) -> bool:
+    """The customer's Stars invoice message stays payable in Telegram
+    indefinitely, regardless of our own internal state — if our abandoned-
+    invoice sweep (or the customer's own "Cancel" tap) already moved this
+    order to CANCELLED before they finally tapped "Pay", the honest thing
+    to do is fulfil it anyway if we still can, rather than reject a
+    customer who is right now handing over real Stars. Re-reserves
+    inventory (if this product uses reserved codes) and, if that
+    succeeds, flips the order back to AWAITING_STARS_PAYMENT so the rest
+    of the flow proceeds exactly as normal. Returns False only if
+    fulfilment genuinely isn't possible any more (e.g. the last reserved
+    code was already claimed by someone else in the meantime)."""
+    products = ProductRepository(session)
+    product = await products.get_by_id(order.product_id)
+    if product is None:
+        return False
+
+    if not order.is_preorder and product.delivery_mode.value == "inventory":
+        inventory = InventoryRepository(session)
+        reserved = await inventory.reserve_many(product.id, order.id, order.quantity or 1)
+        if reserved is None:
+            # Genuinely nothing left to sell — can't revive this one.
+            return False
+
+    await OrderRepository(session).set_status(order, OrderStatus.AWAITING_STARS_PAYMENT)
+    order_logger.info("stars_order_revived id=%s", order.order_uuid)
+    return True
+
+
 @router.pre_checkout_query()
 async def pre_checkout(pre_checkout_query: PreCheckoutQuery, session: AsyncSession) -> None:
     """Telegram calls this right before charging the user — we have 10
@@ -168,11 +198,26 @@ async def pre_checkout(pre_checkout_query: PreCheckoutQuery, session: AsyncSessi
         order_id = None
         error = "Invalid order reference."
 
-    order = await OrderRepository(session).get_by_id(order_id) if order_id else None
+    orders_repo = OrderRepository(session)
+    order = await orders_repo.get_by_id(order_id) if order_id else None
+    if order is None:
+        error = error or "Order not found."
+    elif order.status == OrderStatus.CANCELLED:
+        # Our own timeout sweep (or the customer's earlier "Cancel" tap)
+        # already closed this order out, but they're paying anyway right
+        # now — try to bring it back to life instead of declining a real
+        # payment. See `_try_revive_cancelled_order`. Re-fetched under the
+        # lock in case a delivery/cancellation is concurrently in flight.
+        async with lock_for(f"order:{order.id}"):
+            order = await orders_repo.get_by_id(order.id)
+            if order is not None and order.status == OrderStatus.CANCELLED:
+                await _try_revive_cancelled_order(session, order)
+                order = await orders_repo.get_by_id(order.id)
+
     if order is None:
         error = error or "Order not found."
     elif order.status != OrderStatus.AWAITING_STARS_PAYMENT:
-        error = "This order is no longer awaiting payment."
+        error = error or "This order is no longer awaiting payment."
     elif int(order.price_at_purchase) != pre_checkout_query.total_amount:
         error = "Price mismatch, please start over."
 
