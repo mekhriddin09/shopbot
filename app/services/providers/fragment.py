@@ -480,10 +480,15 @@ class FragmentProvider(BaseProvider):
 
         try:
             async with client as c:
+                # show_sender=False: Fragment defaults to showing the
+                # paying account's own name/profile to the recipient as
+                # "gifted by ...". The shop's Fragment account is the
+                # admin's own personal account, so every gift was leaking
+                # their identity to the customer — always send anonymously.
                 if kind == "stars":
-                    result = await c.purchase_stars(handle, amount)
+                    result = await c.purchase_stars(handle, amount, show_sender=False)
                 else:
-                    result = await c.purchase_premium(handle, amount)
+                    result = await c.purchase_premium(handle, amount, show_sender=False)
         except Exception as exc:  # noqa: BLE001 - see module docstring: breakage is expected
             name = type(exc).__name__
             logger.error(
