@@ -432,6 +432,66 @@ async def product_browse_supplier(
     await show(callback, text, reply_markup=kb)
 
 
+@router.callback_query(AdminProductCB.filter(F.action == "check_fragment_price"))
+async def product_check_fragment_price(
+    callback: CallbackQuery, callback_data: AdminProductCB, session: AsyncSession
+) -> None:
+    """Live Fragment price for THIS product's own Tashqi ID (stars:N or
+    premium:N), not the fixed "stars:50" the Sozlamalar connection-test
+    button always uses — lets the admin actually check their margin for
+    whatever they configured, Premium included."""
+    product = await ProductRepository(session).get_by_id(callback_data.product_id)
+    if product is None:
+        await callback.answer("Mahsulot topilmadi", show_alert=True)
+        return
+    if product.provider_key != "fragment":
+        await callback.answer("Bu tugma faqat Fragment provideri uchun.", show_alert=True)
+        return
+    if not product.external_product_id:
+        await callback.answer("Avval Tashqi ID'ni kiriting (masalan stars:100 yoki premium:3).", show_alert=True)
+        return
+
+    import asyncio
+
+    from app.services.providers.fragment import FragmentProvider, parse_external_ref
+
+    parsed = parse_external_ref(product.external_product_id)
+    if parsed is None:
+        await callback.answer(
+            "Tashqi ID formati noto'g'ri. Kutilgan: stars:100 yoki premium:3/6/12.", show_alert=True
+        )
+        return
+
+    await callback.answer("Tekshirilmoqda…")
+    provider = FragmentProvider()
+    try:
+        ok, price, error = await asyncio.wait_for(
+            provider.get_price(product.external_product_id), timeout=30
+        )
+    except asyncio.TimeoutError:
+        ok, price, error = False, None, "30 soniyada javob bo'lmadi."
+    except Exception as exc:  # noqa: BLE001
+        ok, price, error = False, None, f"{type(exc).__name__}: {exc}"
+
+    kind, amount = parsed
+    label = f"{amount} Stars" if kind == "stars" else f"Premium {amount} oy"
+    text, kb = render_product_group(product, "delivery")
+
+    if not ok:
+        result_line = f"\n\n\U0001F4B1 <b>{label}</b> — ❌ Xatolik:\n<code>{error}</code>"
+    elif price is None:
+        result_line = f"\n\n\U0001F4B1 <b>{label}</b> — narx topilmadi."
+    else:
+        margin_line = ""
+        if kind == "stars" and product.price_stars:
+            margin_line = f"\n\U0001F4B5 Sizning narxingiz: {product.price_stars} Stars"
+        elif kind == "premium" and product.price:
+            margin_line = f"\n\U0001F4B5 Sizning narxingiz: {fmt_price(float(product.price))} UZS"
+        result_line = f"\n\n\U0001F4B1 <b>{label}</b> — Fragment narxi: <b>{price} TON</b>{margin_line}"
+
+    await show(callback, text + result_line, reply_markup=kb)
+
+
 @router.callback_query(AdminProductCB.filter(F.action == "pick_supplier_product"))
 async def product_pick_supplier_product(
     callback: CallbackQuery, callback_data: AdminProductCB, session: AsyncSession

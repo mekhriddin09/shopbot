@@ -141,6 +141,7 @@ PRODUCT_GROUPS: dict[str, dict] = {
             ("provider_picker", None, "\U0001F511 Provider"),
             ("api_only_field", "external_product_id", "\U0001F194 Tashqi ID"),
             ("browse_supplier", None, "\U0001F4CB Ta'minotchi mahsulotlarini ko'rish"),
+            ("check_fragment_price", None, "\U0001F4B1 Jonli narxni ko'rish (Fragment)"),
             ("lang", "delivery_instructions", "\U0001F310 Yetkazishdan keyingi xabar"),
         ],
     },
@@ -251,6 +252,9 @@ def admin_product_detail_kb(product: Product, group: str = "root") -> InlineKeyb
         elif kind == "browse_supplier":
             if product.delivery_mode == DeliveryMode.API and product.provider_key:
                 rows.append([InlineKeyboardButton(text=label, callback_data=cb("browse_supplier"))])
+        elif kind == "check_fragment_price":
+            if product.delivery_mode == DeliveryMode.API and product.provider_key == "fragment":
+                rows.append([InlineKeyboardButton(text=label, callback_data=cb("check_fragment_price"))])
         elif kind == "lang":
             rows.append([InlineKeyboardButton(text=label, callback_data=cb("pick_lang_field", key))])
         elif kind == "image":
