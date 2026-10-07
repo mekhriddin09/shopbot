@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+from html import escape as html_escape
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -21,6 +22,7 @@ from app.repositories.product_repo import ProductRepository
 from app.repositories.stock_waiter_repo import StockWaiterRepository
 from app.services.stock_notify_service import notify_all_waiters
 from app.states.admin_states import AdminInput
+from app.utils.formatting import fmt_datetime
 from app.utils.screen import show
 
 router = Router(name="admin_inventory")
@@ -28,13 +30,72 @@ router.message.filter(IsAdmin())
 router.callback_query.filter(IsAdmin())
 
 
+async def _inventory_summary(session: AsyncSession, product_id: int) -> str:
+    """Splits "unused" into what customers can actually buy vs. what's held
+    by a pending order — the old single "unused" number counted both, so
+    the panel could say 4 while customers saw the product as sold out."""
+    free, reserved, used = await InventoryRepository(session).count_breakdown(product_id)
+    lines = [
+        "\U0001F4E6 <b>Inventar</b>",
+        "",
+        f"\U0001F7E2 Sotuvda (mijozlar ko'radi): <b>{free}</b>",
+        f"\U0001F512 Band (to'lanayotgan buyurtmalarga ajratilgan): <b>{reserved}</b>",
+        f"✅ Sotilgan (yetkazilgan): <b>{used}</b>",
+    ]
+    if reserved:
+        lines += [
+            "",
+            "ℹ️ Band kodlar mijozga hali yuborilmagan. Ular to'lov kutilayotgan yoki tasdiqlanishi "
+            "kerak bo'lgan buyurtmalarga ajratilgan — \U0001F512 tugmasi orqali qaysi buyurtmalar "
+            "ekanini ko'ring.",
+        ]
+    return "\n".join(lines)
+
+
 @router.callback_query(AdminInventoryCB.filter(F.action == "menu"))
 async def inventory_menu(callback: CallbackQuery, callback_data: AdminInventoryCB, session: AsyncSession) -> None:
-    unused = await InventoryRepository(session).count_unused(callback_data.product_id)
     await callback.message.edit_text(
-        f"\U0001F4E6 Inventar\nMavjud (ishlatilmagan) kodlar: {unused}",
+        await _inventory_summary(session, callback_data.product_id),
         reply_markup=admin_inventory_menu_kb(callback_data.product_id),
     )
+    await callback.answer()
+
+
+_HOLDER_STATUS_LABELS = {
+    "awaiting_proof": "chek kutilmoqda (mijoz hali chek yubormagan)",
+    "awaiting_card_payment": "karta to'lovi kutilmoqda",
+    "awaiting_crypto_payment": "kripto to'lov kutilmoqda",
+    "awaiting_stars_payment": "Stars to'lov kutilmoqda",
+    "pending_approval": "⚠️ chek yuborilgan — SIZNING tasdig'ingiz kutilmoqda",
+    "approved": "⚠️ tasdiqlangan, lekin yetkazilmagan",
+}
+
+
+@router.callback_query(AdminInventoryCB.filter(F.action == "reserved"))
+async def inventory_reserved(callback: CallbackQuery, callback_data: AdminInventoryCB, session: AsyncSession) -> None:
+    rows = await InventoryRepository(session).list_reserved_with_orders(callback_data.product_id)
+    if not rows:
+        await callback.answer("Band kodlar yo'q — hammasi sotuvda.", show_alert=True)
+        return
+    lines = [f"\U0001F512 <b>Band kodlar ({len(rows)})</b>", ""]
+    for code, order in rows[:30]:
+        if order is None:
+            lines.append(f"• <code>{html_escape(code.code[:40])}</code> — buyurtma topilmadi (avtomatik bo'shatiladi)")
+            continue
+        status = _HOLDER_STATUS_LABELS.get(order.status.value, order.status.value)
+        lines.append(
+            f"• <code>{order.order_uuid}</code> — {status}\n"
+            f"   \U0001F4C5 {fmt_datetime(order.created_at)}"
+        )
+    if len(rows) > 30:
+        lines.append(f"\n... va yana {len(rows) - 30} ta")
+    lines += [
+        "",
+        "Buyurtma ID'sini Buyurtmalar → ID bo'yicha qidirish orqali ochib, tasdiqlang yoki rad eting. "
+        "Chek yubormagan mijozlarning kodlari 1 soatdan keyin avtomatik sotuvga qaytadi; tugagan "
+        "(bekor/rad) buyurtmalardagi kodlar esa darhol qaytadi.",
+    ]
+    await show(callback, "\n".join(lines), reply_markup=admin_inventory_menu_kb(callback_data.product_id))
     await callback.answer()
 
 
@@ -98,9 +159,16 @@ async def inventory_view(callback: CallbackQuery, callback_data: AdminInventoryC
     if not codes:
         await callback.answer("Ishlatilmagan kodlar yo'q", show_alert=True)
         return
-    preview = "\n".join(c.code for c in codes[:30])
+    preview = "\n".join(
+        html_escape(c.code) + ("   \U0001F512 band" if c.is_reserved else "") for c in codes[:30]
+    )
     more = f"\n... va yana {len(codes) - 30} ta" if len(codes) > 30 else ""
-    await show(callback, f"\U0001F4CB Ishlatilmagan kodlar ({len(codes)}):\n\n<code>{preview}</code>{more}")
+    await show(
+        callback,
+        f"\U0001F4CB Ishlatilmagan kodlar ({len(codes)}):\n"
+        f"\U0001F512 belgisi — buyurtmaga ajratilgan, mijozlarga sotuvda ko'rinmaydi.\n\n"
+        f"<code>{preview}</code>{more}",
+    )
     await callback.answer()
 
 
@@ -175,9 +243,8 @@ async def inventory_confirm_delete_selected(
     count = await InventoryRepository(session).delete_codes(list(selected))
     await state.update_data(**{_selected_key(callback_data.product_id): []})
     await callback.answer(f"✅ {count} ta kod o'chirildi")
-    unused = await InventoryRepository(session).count_unused(callback_data.product_id)
     await callback.message.edit_text(
-        f"\U0001F4E6 Inventar\nMavjud (ishlatilmagan) kodlar: {unused}",
+        await _inventory_summary(session, callback_data.product_id),
         reply_markup=admin_inventory_menu_kb(callback_data.product_id),
     )
 
@@ -205,7 +272,7 @@ async def inventory_confirm_delete_all(
     await state.update_data(**{_selected_key(callback_data.product_id): []})
     await callback.answer(f"✅ {count} ta kod o'chirildi")
     await callback.message.edit_text(
-        f"\U0001F4E6 Inventar\nMavjud (ishlatilmagan) kodlar: 0",
+        await _inventory_summary(session, callback_data.product_id),
         reply_markup=admin_inventory_menu_kb(callback_data.product_id),
     )
 

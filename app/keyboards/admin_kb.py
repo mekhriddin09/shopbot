@@ -356,6 +356,7 @@ def admin_inventory_menu_kb(product_id: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="➕ Bitta kod qo'shish", callback_data=AdminInventoryCB(action="add_one", product_id=product_id).pack())],
         [InlineKeyboardButton(text="\U0001F4E5 Ko'p kod import qilish", callback_data=AdminInventoryCB(action="bulk", product_id=product_id).pack())],
         [InlineKeyboardButton(text="\U0001F4CB Kodlarni ko'rish", callback_data=AdminInventoryCB(action="view", product_id=product_id).pack())],
+        [InlineKeyboardButton(text="\U0001F512 Band kodlar (qaysi buyurtmada)", callback_data=AdminInventoryCB(action="reserved", product_id=product_id).pack())],
         [InlineKeyboardButton(text="\U0001F5D1️ Kod o'chirish", callback_data=AdminInventoryCB(action="pick_delete", product_id=product_id).pack())],
         [InlineKeyboardButton(text="\U0001F4E4 Eksport qilish", callback_data=AdminInventoryCB(action="export", product_id=product_id).pack())],
         [InlineKeyboardButton(text="\U0001F514 Kutayotganlar", callback_data=AdminStockWaitersCB(action="list", product_id=product_id).pack())],

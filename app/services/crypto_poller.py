@@ -59,6 +59,7 @@ async def _poll_once(bot: Bot) -> None:
     async with async_session_maker() as session:
         orders_repo = OrderRepository(session)
         await _sweep_stale_stars_orders(bot, session, orders_repo)
+        await _sweep_leaked_reservations(session)
 
         pending = await orders_repo.list_awaiting_crypto_payment()
         if not pending:
@@ -122,6 +123,31 @@ async def _poll_once(bot: Bot) -> None:
                 # Crypto payment confirmed, but this product is delivered
                 # manually — give admins a one-tap way to write the message.
                 await _notify_admins_with_manual_button(bot, session, order.id, order.order_uuid, order.product.name)
+
+
+async def _sweep_leaked_reservations(session) -> None:
+    """Give stuck inventory codes back to the shop.
+
+    Customers only see a product as in stock if it has codes that are
+    unused AND unreserved, so every reservation that never gets finalized
+    or released is a code silently withdrawn from sale (the admin panel
+    still counted it as "unused", which is how the panel could show 4
+    codes while customers saw "sold out"). Two kinds of leak are cleaned:
+      - reservations held by an order that's already finished (cancelled,
+        rejected, failed, delivered) or no longer exists — pure leaks;
+      - reservations held by a card order still waiting for a receipt
+        after STALE_PROOF_RESERVATION_MINUTES — customers who walked away
+        without pressing Cancel.
+    Each id is logged so the release is traceable."""
+    from app.repositories.inventory_repo import InventoryRepository
+
+    inventory = InventoryRepository(session)
+    orphans = await inventory.release_orphan_reservations()
+    if orphans:
+        order_logger.info("reservations_released_orphan count=%s", orphans)
+    stale = await inventory.release_stale_proof_reservations(settings.STALE_PROOF_RESERVATION_MINUTES)
+    if stale:
+        order_logger.info("reservations_released_stale_proof orders=%s", stale)
 
 
 async def _sweep_stale_stars_orders(bot: Bot, session, orders_repo: OrderRepository) -> None:

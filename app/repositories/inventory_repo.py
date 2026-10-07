@@ -68,6 +68,131 @@ class InventoryRepository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    async def count_breakdown(self, product_id: int) -> tuple[int, int, int]:
+        """(free, reserved, used) for one product.
+
+        `count_unused` lumps free and reserved together, which is exactly
+        why the admin panel could say "4 unused codes" while customers saw
+        the product as sold out: customers only ever see *free* stock
+        (unused AND not reserved), so 4 codes sitting in reservations for
+        stale/abandoned orders looked like stock to the admin and like
+        nothing to everyone else."""
+        result = await self.session.execute(
+            select(InventoryCode.is_used, InventoryCode.is_reserved, func.count(InventoryCode.id))
+            .where(InventoryCode.product_id == product_id)
+            .group_by(InventoryCode.is_used, InventoryCode.is_reserved)
+        )
+        free = reserved = used = 0
+        for is_used, is_reserved, cnt in result.all():
+            if is_used:
+                used += int(cnt)
+            elif is_reserved:
+                reserved += int(cnt)
+            else:
+                free += int(cnt)
+        return free, reserved, used
+
+    async def list_reserved_with_orders(self, product_id: int) -> list[tuple[InventoryCode, "Order | None"]]:
+        """Every reserved-but-unused code for this product, with the order
+        holding it (None if the reservation points at nothing)."""
+        from app.database.models import Order
+
+        result = await self.session.execute(
+            select(InventoryCode, Order)
+            .outerjoin(Order, Order.id == InventoryCode.reserved_by_order_id)
+            .where(
+                InventoryCode.product_id == product_id,
+                InventoryCode.is_used.is_(False),
+                InventoryCode.is_reserved.is_(True),
+            )
+            .order_by(InventoryCode.id)
+        )
+        return [(code, order) for code, order in result.all()]
+
+    async def release_orphan_reservations(self) -> int:
+        """Release every reservation whose holding order can never deliver
+        it any more: the order is gone, or it's already in a terminal state
+        (cancelled / rejected / failed / delivered). A reservation in that
+        state is purely a leak — nothing will ever finalize or release it —
+        so freeing it is always safe."""
+        from app.database.models import Order
+        from app.database.models.enums import OrderStatus
+
+        holding = (
+            OrderStatus.AWAITING_PROOF,
+            OrderStatus.AWAITING_CRYPTO_PAYMENT,
+            OrderStatus.AWAITING_STARS_PAYMENT,
+            OrderStatus.AWAITING_CARD_PAYMENT,
+            OrderStatus.PENDING_APPROVAL,
+            OrderStatus.APPROVED,
+        )
+        result = await self.session.execute(
+            select(InventoryCode)
+            .outerjoin(Order, Order.id == InventoryCode.reserved_by_order_id)
+            .where(
+                InventoryCode.is_used.is_(False),
+                InventoryCode.is_reserved.is_(True),
+                (Order.id.is_(None)) | (Order.status.not_in(holding)),
+            )
+        )
+        items = list(result.scalars().all())
+        for item in items:
+            item.is_reserved = False
+            item.reserved_by_order_id = None
+        if items:
+            await self.session.commit()
+        return len(items)
+
+    async def release_stale_proof_reservations(self, older_than_minutes: float) -> list[int]:
+        """Release reservations held by orders still in AWAITING_PROOF (the
+        customer tapped "I'll pay by card" but never sent a receipt) for
+        longer than `older_than_minutes`. Unlike crypto/Stars/card-auto,
+        this state had no timeout at all, so every customer who simply
+        walked away kept a code locked forever.
+
+        The order itself is deliberately left alone (not cancelled): if the
+        customer does send a receipt later, OrderService.submit_payment_proof
+        re-reserves, and approval falls back to claiming any free code
+        anyway. Returns the affected order ids."""
+        from datetime import timedelta
+
+        from app.database.models import Order
+        from app.database.models.enums import OrderStatus
+
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=older_than_minutes)
+        result = await self.session.execute(
+            select(InventoryCode, Order)
+            .join(Order, Order.id == InventoryCode.reserved_by_order_id)
+            .where(
+                InventoryCode.is_used.is_(False),
+                InventoryCode.is_reserved.is_(True),
+                Order.status == OrderStatus.AWAITING_PROOF,
+            )
+        )
+        released_orders: set[int] = set()
+        for item, order in result.all():
+            created = order.created_at
+            if created is not None and created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            if created is not None and created > cutoff:
+                continue
+            item.is_reserved = False
+            item.reserved_by_order_id = None
+            released_orders.add(order.id)
+        if released_orders:
+            await self.session.commit()
+        return sorted(released_orders)
+
+    async def has_reservation(self, order_id: int) -> bool:
+        result = await self.session.execute(
+            select(func.count(InventoryCode.id)).where(
+                InventoryCode.reserved_by_order_id == order_id,
+                InventoryCode.is_used.is_(False),
+                InventoryCode.is_reserved.is_(True),
+            )
+        )
+        return int(result.scalar_one()) > 0
+
     async def count_unused(self, product_id: int) -> int:
         result = await self.session.execute(
             select(func.count(InventoryCode.id)).where(

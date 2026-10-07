@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     # charged. A longer window makes this far less likely to be hit in
     # normal use.
     STARS_PAYMENT_TIMEOUT_MINUTES: float = 30.0
+    # An order waiting for a card-payment receipt (AWAITING_PROOF) gives
+    # its reserved inventory code back to the shop after this long without
+    # a receipt. The order itself stays open — a late receipt re-reserves.
+    STALE_PROOF_RESERVATION_MINUTES: float = 60.0
 
     # --- External reseller API (Mode 3 delivery) ---
     RESELLER_API_BASE_URL: str = "http://2.26.230.116:8080"

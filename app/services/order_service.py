@@ -144,6 +144,19 @@ class OrderService:
             instructions_snapshot=instructions_snapshot,
         )
         await self.orders.set_status(order, OrderStatus.PENDING_APPROVAL)
+
+        # If this order's reservation was released while it sat waiting for
+        # a receipt (see InventoryRepository.release_stale_proof_reservations),
+        # try to hold stock again now that the customer has actually paid.
+        # Best-effort: if nothing is free, approval still falls back to
+        # claiming any code that is free by then.
+        if (
+            not order.is_preorder
+            and order.product is not None
+            and order.product.delivery_mode == DeliveryMode.INVENTORY
+            and not await self.inventory.has_reservation(order.id)
+        ):
+            await self.inventory.reserve_many(order.product_id, order.id, order.quantity or 1)
         payment_logger.info(
             "payment_proof_submitted order=%s user_id=%s", order.order_uuid, order.user_id
         )
